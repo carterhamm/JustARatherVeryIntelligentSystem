@@ -1,0 +1,51 @@
+
+======================================================================
+🤖 J.A.R.V.I.S. VOICE CLONING TRAINING SYSTEM 🤖
+======================================================================
+
+📁 Source folder: /Users/mr.stark/Downloads/J.A.R.V.I.S. Resources/J.A.R.V.I.S. Voice FIles/ElevenLabs-Upscaled3x
+📁 Output base: /Users/mr.stark/Downloads/JustARatherVeryIntelligentSystem/jarvis_voice_training
+📁 Processed audio: /Users/mr.stark/Downloads/JustARatherVeryIntelligentSystem/jarvis_voice_training/processed_audio_22050hz
+📁 Model output: /Users/mr.stark/Downloads/JustARatherVeryIntelligentSystem/jarvis_voice_training/trained_model
+
+======================================================================
+
+🚀 Starting J.A.R.V.I.S. voice cloning pipeline...
+
+🎵 STEP 1: AUDIO PREPROCESSING 🎵
+
+📊 Found 21 audio files
+
+🔍 Analyzing audio files...
+  ✓ chunk_21.wav: 35.47s @ 144000Hz
+  ✓ chunk_20.wav: 35.25s @ 144000Hz
+  ✓ chunk_18.wav: 35.66s @ 144000Hz
+  ✓ chunk_19.wav: 35.63s @ 144000Hz
+  ✓ chunk_1.wav: 37.80s @ 144000Hz
+  ✓ chunk_2.wav: 39.54s @ 144000Hz
+  ✓ chunk_3.wav: 38.97s @ 144000Hz
+  ✓ chunk_7.wav: 42.29s @ 144000Hz
+  ✓ chunk_6.wav: 41.34s @ 144000Hz
+  ✓ chunk_4.wav: 34.03s @ 144000Hz
+  ✓ chunk_5.wav: 45.43s @ 144000Hz
+  ✓ chunk_22_16_stitched.wav: 36.55s @ 144000Hz
+  ✓ chunk_8.wav: 42.16s @ 144000Hz
+  ✓ chunk_9.wav: 47.87s @ 144000Hz
+  ✓ chunk_17.wav: 36.38s @ 144000Hz
+  ✓ chunk_14.wav: 37.47s @ 144000Hz
+  ✓ chunk_15.wav: 39.77s @ 144000Hz
+  ✓ chunk_11.wav: 41.60s @ 144000Hz
+  ✓ chunk_10.wav: 47.23s @ 144000Hz
+  ✓ chunk_12.wav: 31.92s @ 144000Hz
+  ✓ chunk_13.wav: 37.75s @ 144000Hz
+
+📈 Total audio duration: 820.11 seconds (13.67 minutes)
+🎉 Excellent! Plenty of audio data for high-quality training
+
+======================================================================
+🔧 PROCESSING AUDIO FILES
+======================================================================
+
+Target: 22050Hz, Mono, Normalized
+
+  [█░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 4.8% | 1/21 files | ETA: 31s  [███░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 9.5% | 2/21 files | ETA: 28s  [█████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 14.3% | 3/21 files | ETA: 26s  [███████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 19.0% | 4/21 files | ETA: 24s  [█████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 23.8% | 5/21 files | ETA: 23s  [███████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 28.6% | 6/21 files | ETA: 22s  [█████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░] 33.3% | 7/21 files | ETA: 20s  [███████████████░░░░░░░░░░░░░░░░░░░░░░░░░] 38.1% | 8/21 files | ETA: 19s  [█████████████████░░░░░░░░░░░░░░░░░░░░░░░] 42.9% | 9/21 files | ETA: 18s  [███████████████████░░░░░░░░░░░░░░░░░░░░░] 47.6% | 10/21 files | ETA: 16s  [████████████████████░░░░░░░░░░░░░░░░░░░░] 52.4% | 11/21 files | ETA: 15s  [██████████████████████░░░░░░░░░░░░░░░░░░] 57.1% | 12/21 files | ETA: 13s  [████████████████████████░░░░░░░░░░░░░░░░] 61.9% | 13/21 files | ETA: 12s  [██████████████████████████░░░░░░░░░░░░░░] 66.7% | 14/21 files | ETA: 11s  [████████████████████████████░░░░░░░░░░░░] 71.4% | 15/21 files | ETA: 9s  [██████████████████████████████░░░░░░░░░░] 76.2% | 16/21 files | ETA: 8s  [████████████████████████████████░░░░░░░░] 81.0% | 17/21 files | ETA: 6s
