@@ -51,7 +51,8 @@ echo "========================================================================"
 echo ""
 
 # Run training script (use Python from venv)
-"$VENV_DIR/bin/python" "$SCRIPT_DIR/jarvis_voice_trainer.py" 2>&1 | tee "$LOG_FILE"
+# Redirect all output to log file (no tee to avoid tty issues in background)
+"$VENV_DIR/bin/python" "$SCRIPT_DIR/jarvis_voice_trainer.py" > "$LOG_FILE" 2>&1
 
 # Deactivate virtual environment
 deactivate
