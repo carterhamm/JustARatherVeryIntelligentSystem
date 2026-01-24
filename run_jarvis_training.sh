@@ -12,12 +12,16 @@ LOG_FILE="$SCRIPT_DIR/jarvis_training_output.log"
 echo "🤖 J.A.R.V.I.S. Voice Training Launcher 🤖"
 echo "========================================================================"
 
-# Create virtual environment if it doesn't exist
-if [ ! -d "$VENV_DIR" ]; then
-    echo "📦 Creating Python virtual environment..."
-    python3 -m venv "$VENV_DIR"
-    echo "✅ Virtual environment created!"
+# Remove old venv if it exists with wrong Python version
+if [ -d "$VENV_DIR" ]; then
+    echo "🧹 Removing old virtual environment..."
+    rm -rf "$VENV_DIR"
 fi
+
+# Create virtual environment with Python 3.11 (required for Coqui TTS)
+echo "📦 Creating Python 3.11 virtual environment..."
+python3.11 -m venv "$VENV_DIR"
+echo "✅ Virtual environment created with Python 3.11!"
 
 # Activate virtual environment
 echo "🔧 Activating virtual environment..."
@@ -46,8 +50,8 @@ echo "🚀 STARTING TRAINING"
 echo "========================================================================"
 echo ""
 
-# Run training script
-python "$SCRIPT_DIR/jarvis_voice_trainer.py" 2>&1 | tee "$LOG_FILE"
+# Run training script (use Python from venv)
+"$VENV_DIR/bin/python" "$SCRIPT_DIR/jarvis_voice_trainer.py" 2>&1 | tee "$LOG_FILE"
 
 # Deactivate virtual environment
 deactivate
