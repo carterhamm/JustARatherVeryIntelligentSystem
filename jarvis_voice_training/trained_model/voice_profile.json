@@ -1,0 +1,17 @@
+{
+  "model": "xtts_v2",
+  "reference_audio": [
+    "/Users/mr.stark/Downloads/JustARatherVeryIntelligentSystem/jarvis_voice_training/processed_audio_22050hz/chunk_21.wav",
+    "/Users/mr.stark/Downloads/JustARatherVeryIntelligentSystem/jarvis_voice_training/processed_audio_22050hz/chunk_20.wav",
+    "/Users/mr.stark/Downloads/JustARatherVeryIntelligentSystem/jarvis_voice_training/processed_audio_22050hz/chunk_18.wav",
+    "/Users/mr.stark/Downloads/JustARatherVeryIntelligentSystem/jarvis_voice_training/processed_audio_22050hz/chunk_19.wav",
+    "/Users/mr.stark/Downloads/JustARatherVeryIntelligentSystem/jarvis_voice_training/processed_audio_22050hz/chunk_1.wav",
+    "/Users/mr.stark/Downloads/JustARatherVeryIntelligentSystem/jarvis_voice_training/processed_audio_22050hz/chunk_2.wav",
+    "/Users/mr.stark/Downloads/JustARatherVeryIntelligentSystem/jarvis_voice_training/processed_audio_22050hz/chunk_3.wav",
+    "/Users/mr.stark/Downloads/JustARatherVeryIntelligentSystem/jarvis_voice_training/processed_audio_22050hz/chunk_7.wav",
+    "/Users/mr.stark/Downloads/JustARatherVeryIntelligentSystem/jarvis_voice_training/processed_audio_22050hz/chunk_6.wav",
+    "/Users/mr.stark/Downloads/JustARatherVeryIntelligentSystem/jarvis_voice_training/processed_audio_22050hz/chunk_4.wav"
+  ],
+  "sample_rate": 22050,
+  "created_at": "1769279522.398473"
+}

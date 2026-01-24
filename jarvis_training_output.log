@@ -48,4 +48,112 @@
 
 Target: 22050Hz, Mono, Normalized
 
-  [█░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 4.8% | 1/21 files | ETA: 31s  [███░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 9.5% | 2/21 files | ETA: 28s  [█████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 14.3% | 3/21 files | ETA: 26s  [███████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 19.0% | 4/21 files | ETA: 24s  [█████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 23.8% | 5/21 files | ETA: 23s  [███████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 28.6% | 6/21 files | ETA: 22s  [█████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░] 33.3% | 7/21 files | ETA: 20s  [███████████████░░░░░░░░░░░░░░░░░░░░░░░░░] 38.1% | 8/21 files | ETA: 19s  [█████████████████░░░░░░░░░░░░░░░░░░░░░░░] 42.9% | 9/21 files | ETA: 18s  [███████████████████░░░░░░░░░░░░░░░░░░░░░] 47.6% | 10/21 files | ETA: 16s  [████████████████████░░░░░░░░░░░░░░░░░░░░] 52.4% | 11/21 files | ETA: 15s  [██████████████████████░░░░░░░░░░░░░░░░░░] 57.1% | 12/21 files | ETA: 13s  [████████████████████████░░░░░░░░░░░░░░░░] 61.9% | 13/21 files | ETA: 12s  [██████████████████████████░░░░░░░░░░░░░░] 66.7% | 14/21 files | ETA: 11s  [████████████████████████████░░░░░░░░░░░░] 71.4% | 15/21 files | ETA: 9s  [██████████████████████████████░░░░░░░░░░] 76.2% | 16/21 files | ETA: 8s  [████████████████████████████████░░░░░░░░] 81.0% | 17/21 files | ETA: 6s
+  [█░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 4.8% | 1/21 files | ETA: 27s  [███░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 9.5% | 2/21 files | ETA: 26s  [█████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 14.3% | 3/21 files | ETA: 25s  [███████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 19.0% | 4/21 files | ETA: 23s  [█████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 23.8% | 5/21 files | ETA: 22s  [███████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 28.6% | 6/21 files | ETA: 21s  [█████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░] 33.3% | 7/21 files | ETA: 20s  [███████████████░░░░░░░░░░░░░░░░░░░░░░░░░] 38.1% | 8/21 files | ETA: 19s  [█████████████████░░░░░░░░░░░░░░░░░░░░░░░] 42.9% | 9/21 files | ETA: 18s  [███████████████████░░░░░░░░░░░░░░░░░░░░░] 47.6% | 10/21 files | ETA: 16s  [████████████████████░░░░░░░░░░░░░░░░░░░░] 52.4% | 11/21 files | ETA: 15s  [██████████████████████░░░░░░░░░░░░░░░░░░] 57.1% | 12/21 files | ETA: 14s  [████████████████████████░░░░░░░░░░░░░░░░] 61.9% | 13/21 files | ETA: 12s  [██████████████████████████░░░░░░░░░░░░░░] 66.7% | 14/21 files | ETA: 11s  [████████████████████████████░░░░░░░░░░░░] 71.4% | 15/21 files | ETA: 9s  [██████████████████████████████░░░░░░░░░░] 76.2% | 16/21 files | ETA: 8s  [████████████████████████████████░░░░░░░░] 81.0% | 17/21 files | ETA: 6s  [██████████████████████████████████░░░░░░] 85.7% | 18/21 files | ETA: 5s  [████████████████████████████████████░░░░] 90.5% | 19/21 files | ETA: 3s  [██████████████████████████████████████░░] 95.2% | 20/21 files | ETA: 2s  [████████████████████████████████████████] 100.0% | 21/21 files | ETA: 0s/Users/mr.stark/Downloads/JustARatherVeryIntelligentSystem/jarvis_venv/lib/python3.11/site-packages/jieba/_compat.py:18: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  import pkg_resources
+🚀 Starting XTTS-v2 Training...
+🎯 Model: XTTS-v2 (State-of-the-art voice cloning)
+
+📁 Audio directory: /Users/mr.stark/Downloads/JustARatherVeryIntelligentSystem/jarvis_voice_training/processed_audio_22050hz
+📁 Output directory: /Users/mr.stark/Downloads/JustARatherVeryIntelligentSystem/jarvis_voice_training/trained_model
+📁 Logs directory: /Users/mr.stark/Downloads/JustARatherVeryIntelligentSystem/jarvis_voice_training/logs
+
+🎵 Found 21 audio files for training
+
+🔧 Initializing XTTS-v2 model...
+ > tts_models/multilingual/multi-dataset/xtts_v2 is already downloaded.
+ > Using model: xtts
+✅ Model loaded successfully!
+🖥️  Running on: CPU
+⚠️  WARNING: Training on CPU will be SLOW. Consider using GPU for faster training.
+
+======================================================================
+🎓 FINE-TUNING ON JARVIS VOICE
+======================================================================
+
+💾 Preparing voice profile...
+✅ Using 10 reference samples for voice profile
+
+💾 Voice profile saved to: /Users/mr.stark/Downloads/JustARatherVeryIntelligentSystem/jarvis_voice_training/trained_model/voice_profile.json
+
+======================================================================
+🧪 TESTING VOICE SYNTHESIS
+======================================================================
+
+📝 Test text: 'Good evening, sir. J.A.R.V.I.S. online and ready for your commands.'
+🔊 Generating audio...
+
+ > Text splitted to sentences.
+['Good evening, sir.', 'J.A.R.V.I.S. online and ready for your commands.']
+ > Processing time: 9.617163896560669
+ > Real-time factor: 1.3422781036001288
+✅ Test audio generated: /Users/mr.stark/Downloads/JustARatherVeryIntelligentSystem/jarvis_voice_training/trained_model/test_synthesis.wav
+🎉 Voice cloning setup complete!
+
+======================================================================
+🎊 TRAINING COMPLETE! 🎊
+======================================================================
+
+📦 Voice model ready at: /Users/mr.stark/Downloads/JustARatherVeryIntelligentSystem/jarvis_voice_training/trained_model
+📄 Profile: /Users/mr.stark/Downloads/JustARatherVeryIntelligentSystem/jarvis_voice_training/trained_model/voice_profile.json
+🎵 Test audio: /Users/mr.stark/Downloads/JustARatherVeryIntelligentSystem/jarvis_voice_training/trained_model/test_synthesis.wav
+
+
+
+
+======================================================================
+✨ PREPROCESSING COMPLETE ✨
+======================================================================
+
+✅ Successfully processed: 21/21 files
+⏱️  Time elapsed: 32.33s
+📁 Output folder: /Users/mr.stark/Downloads/JustARatherVeryIntelligentSystem/jarvis_voice_training/processed_audio_22050hz
+
+
+======================================================================
+🔧 STEP 2: VERIFYING COQUI TTS
+======================================================================
+
+📦 Checking for Coqui TTS installation...
+✅ TTS is installed!
+   Version: 0.22.0
+
+======================================================================
+🎓 STEP 3: TRAINING JARVIS VOICE MODEL
+======================================================================
+
+🎵 Using 21 audio files for training
+📝 Training script created: /Users/mr.stark/Downloads/JustARatherVeryIntelligentSystem/jarvis_voice_training/train_xtts.py
+
+🚀 Launching training process...
+
+======================================================================
+
+
+✅ Training completed successfully!
+
+======================================================================
+📜 STEP 4: CREATING INFERENCE SCRIPT
+======================================================================
+
+✅ Inference script created: /Users/mr.stark/Downloads/JustARatherVeryIntelligentSystem/jarvis_voice_training/synthesize_jarvis.py
+
+💡 Usage: python /Users/mr.stark/Downloads/JustARatherVeryIntelligentSystem/jarvis_voice_training/synthesize_jarvis.py "Hello, I am JARVIS"
+
+
+======================================================================
+🎊 J.A.R.V.I.S. VOICE CLONING COMPLETE! 🎊
+======================================================================
+
+⏱️  Total time: 151.23 seconds (2.52 minutes)
+
+📁 All outputs saved to: /Users/mr.stark/Downloads/JustARatherVeryIntelligentSystem/jarvis_voice_training
+   ├── processed_audio_22050hz/ - Processed training audio
+   ├── trained_model/ - Voice model and profile
+   └── synthesize_jarvis.py - Inference script
+
+🎯 Next steps:
+   1. Test the voice: python /Users/mr.stark/Downloads/JustARatherVeryIntelligentSystem/jarvis_voice_training/synthesize_jarvis.py
+   2. Listen to: /Users/mr.stark/Downloads/JustARatherVeryIntelligentSystem/jarvis_voice_training/trained_model/test_synthesis.wav
+
+🤖 J.A.R.V.I.S. is ready to serve, sir!
+

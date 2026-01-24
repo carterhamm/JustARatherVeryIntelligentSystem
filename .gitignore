@@ -1,0 +1,30 @@
+# Python virtual environment
+jarvis_venv/
+
+# Training data and outputs (too large for git)
+jarvis_voice_training/processed_audio_22050hz/
+jarvis_voice_training/trained_model/*.wav
+jarvis_voice_training/logs/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs (keep structure files only)
+nohup.out
+*.log
+!jarvis_training_full.log
+!jarvis_training_output.log
