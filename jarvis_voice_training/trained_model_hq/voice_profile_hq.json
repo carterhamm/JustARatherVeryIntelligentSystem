@@ -1,0 +1,13 @@
+{
+  "model": "xtts_v2",
+  "reference_audio": [
+    "/Users/mr.stark/Downloads/J.A.R.V.I.S. Resources/J.A.R.V.I.S. Voice FIles/ElevenLabs-Upscaled3x/chunk_1.wav",
+    "/Users/mr.stark/Downloads/J.A.R.V.I.S. Resources/J.A.R.V.I.S. Voice FIles/ElevenLabs-Upscaled3x/chunk_13.wav",
+    "/Users/mr.stark/Downloads/J.A.R.V.I.S. Resources/J.A.R.V.I.S. Voice FIles/ElevenLabs-Upscaled3x/chunk_18.wav",
+    "/Users/mr.stark/Downloads/J.A.R.V.I.S. Resources/J.A.R.V.I.S. Voice FIles/ElevenLabs-Upscaled3x/chunk_2.wav",
+    "/Users/mr.stark/Downloads/J.A.R.V.I.S. Resources/J.A.R.V.I.S. Voice FIles/ElevenLabs-Upscaled3x/chunk_21.wav"
+  ],
+  "original_quality": true,
+  "sample_rate": 144000,
+  "created_at": "1769326090.034673"
+}
