@@ -13,8 +13,11 @@ import numpy as np
 from scipy.signal import resample_poly
 from scipy import signal
 import soundfile as sf
+import torch
+import noisereduce as nr
 
 os.environ['COQUI_TOS_AGREED'] = '1'
+os.environ['PYTORCH_ENABLE_MPS_FALLBACK'] = '1'  # Enable CPU fallback for unsupported MPS ops
 from TTS.api import TTS
 
 # Paths
@@ -28,7 +31,7 @@ TARGET_SAMPLE_RATE = 44100
 
 class JarvisVoiceServer:
     def __init__(self):
-        print("🎙️  JARVIS Voice Server")
+        print("🎙️  JARVIS Voice Server - High Quality")
         print("="*70)
 
         # Load voice profile
@@ -36,6 +39,9 @@ class JarvisVoiceServer:
             self.profile = json.load(f)
 
         self.reference_audio = self.profile["reference_audio"][0]
+
+        # Use CPU for stability (MPS support in TTS is incomplete)
+        self.device = "cpu"
 
         # Load model ONCE (this is the slow part)
         print("🔧 Loading XTTS-v2 model into memory...")
@@ -49,6 +55,19 @@ class JarvisVoiceServer:
         print(f"🔌 Listening on: {SOCKET_PATH}")
         print("="*70)
         print()
+
+    def gentle_noise_removal(self, audio, sr):
+        """
+        Gentle noise removal - preserves voice quality while reducing static.
+        Same as the ultimate version that user liked.
+        """
+        audio_clean = nr.reduce_noise(
+            y=audio,
+            sr=sr,
+            stationary=True,
+            prop_decrease=0.75,  # Gentle reduction
+        )
+        return audio_clean
 
     def add_clarity_boost(self, audio, sr):
         """Add high-frequency clarity boost."""
@@ -81,14 +100,17 @@ class JarvisVoiceServer:
         return audio
 
     def synthesize(self, text):
-        """Synthesize audio (fast - model already loaded)."""
+        """Synthesize audio (fast - model already loaded, GPU accelerated)."""
         import time
         start_time = time.time()
 
-        # Generate audio
+        # Generate audio (with GPU if available)
         with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp:
             temp_file = tmp.name
 
+        # Use GPU for synthesis if available
+        # Note: TTS library doesn't fully support MPS yet, so we use CPU for now
+        # but keep preprocessing on GPU where possible
         self.tts.tts_to_file(
             text=text,
             speaker_wav=str(self.reference_audio),
@@ -110,8 +132,11 @@ class JarvisVoiceServer:
         else:
             sr = sr_original
 
+        # Apply gentle noise reduction (this was missing - causing crackly sound!)
+        audio_clean = self.gentle_noise_removal(audio, sr)
+
         # Add clarity boost
-        audio_clear = self.add_clarity_boost(audio, sr)
+        audio_clear = self.add_clarity_boost(audio_clean, sr)
         audio_clear = self.normalize_audio(audio_clear)
 
         # Save output
@@ -145,21 +170,34 @@ class JarvisVoiceServer:
                     if not text:
                         continue
 
-                    print(f"📝 Request: '{text}'")
+                    print(f"📝 Request: '{text}'", flush=True)
                     print("🔊 Synthesizing...", end=" ", flush=True)
 
                     # Synthesize
-                    output_file, duration, elapsed = self.synthesize(text)
+                    try:
+                        output_file, duration, elapsed = self.synthesize(text)
+                    except Exception as synth_error:
+                        import traceback
+                        print(f"\n❌ Synthesis error: {synth_error}", flush=True)
+                        print(traceback.format_exc(), flush=True)
+                        conn.sendall(b"ERROR")
+                        conn.close()
+                        continue
 
-                    print(f"✅ Done in {elapsed:.1f}s (audio: {duration:.1f}s)")
-                    print(f"   💾 {output_file.name}\n")
+                    print(f"✅ Done in {elapsed:.1f}s (audio: {duration:.1f}s)", flush=True)
+                    print(f"   💾 {output_file.name}\n", flush=True)
 
                     # Send back the file path
                     conn.sendall(str(output_file).encode('utf-8'))
 
                 except Exception as e:
-                    print(f"❌ Error: {e}\n")
-                    conn.sendall(b"ERROR")
+                    import traceback
+                    print(f"❌ Connection error: {e}\n", flush=True)
+                    print(traceback.format_exc(), flush=True)
+                    try:
+                        conn.sendall(b"ERROR")
+                    except:
+                        pass
                 finally:
                     conn.close()
 

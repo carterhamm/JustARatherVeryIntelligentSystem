@@ -26,11 +26,14 @@ def start_server():
 
     # Start server in background, log to file
     log_file = open('/tmp/jarvis_server.log', 'w')
+    env = os.environ.copy()
+    env['PYTHONUNBUFFERED'] = '1'  # Force unbuffered output
     subprocess.Popen(
         [str(VENV_PYTHON), str(SERVER_SCRIPT)],
         stdout=log_file,
         stderr=subprocess.STDOUT,
-        start_new_session=True
+        start_new_session=True,
+        env=env
     )
 
     # Wait for server to be ready (socket file appears)
