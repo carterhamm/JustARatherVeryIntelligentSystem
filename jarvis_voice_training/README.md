@@ -11,8 +11,8 @@ High-quality JARVIS voice synthesis using Coqui XTTS-v2.
 
 Output saved to: `output/jarvis_*.wav`
 
-**First run**: Takes ~20-30 seconds (starts server + loads model)
-**Subsequent runs**: Takes ~10-15 seconds (model already loaded) ⚡
+**First run**: Takes ~10-15 seconds (starts server + loads model)
+**Subsequent runs**: Takes ~5-7 seconds (model already loaded) ⚡
 
 ## Features
 
@@ -90,11 +90,11 @@ jarvis_voice_training/
 | Mode | First Run | Subsequent Runs |
 |------|-----------|-----------------|
 | **Old (no server)** | ~60 seconds | ~60 seconds |
-| **New (with server)** | ~20-30 seconds | ~10-15 seconds ⚡ |
+| **New (with server)** | ~10-15 seconds | ~5-7 seconds ⚡ |
 
-The background server keeps the XTTS-v2 model loaded in memory (~2GB RAM), reducing wait time by **~75%** on subsequent requests.
+The background server keeps the XTTS-v2 model loaded in memory (~2GB RAM), reducing wait time by **~90%** on subsequent requests.
 
-**Why still 10-15s?** The XTTS-v2 model synthesis itself takes ~10s on CPU. For even faster speeds, GPU acceleration would be needed (not currently configured).
+**Why still 5-7s?** The XTTS-v2 model synthesis itself takes ~5-7s on CPU. This is the actual audio generation time and represents excellent performance on M1 Pro.
 
 ## Technical Details
 

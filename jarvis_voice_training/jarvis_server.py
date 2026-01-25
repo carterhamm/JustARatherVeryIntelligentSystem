@@ -132,11 +132,8 @@ class JarvisVoiceServer:
         else:
             sr = sr_original
 
-        # Apply gentle noise reduction (this was missing - causing crackly sound!)
-        audio_clean = self.gentle_noise_removal(audio, sr)
-
-        # Add clarity boost
-        audio_clear = self.add_clarity_boost(audio_clean, sr)
+        # Add clarity boost (same as the favorite version - NO noise reduction!)
+        audio_clear = self.add_clarity_boost(audio, sr)
         audio_clear = self.normalize_audio(audio_clear)
 
         # Save output
