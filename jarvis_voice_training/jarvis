@@ -1,5 +1,5 @@
 #!/bin/bash
-# JARVIS Voice Synthesis - Easy Launcher
+# JARVIS Voice Synthesis - Hi-Fi Launcher
 # Usage: ./jarvis "Your text here"
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
@@ -12,7 +12,7 @@ if [ ! -d "$VENV_DIR" ]; then
     exit 1
 fi
 
-# Activate venv and run
+# Activate venv and run Hi-Fi version (16-bit/44.1kHz with noise removal)
 source "$VENV_DIR/bin/activate"
 cd "$SCRIPT_DIR"
-python3 synthesize_jarvis_clean.py "$@"
+python3 synthesize_jarvis_hifi.py "$@"
