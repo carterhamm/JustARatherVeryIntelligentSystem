@@ -1,18 +1,10 @@
 #!/bin/bash
-# JARVIS Voice Synthesis
+# JARVIS Voice Synthesis - Fast Mode
+# Uses background server for instant responses
 # Usage: ./jarvis "Your text here"
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-VENV_DIR="$SCRIPT_DIR/jarvis_venv"
+VENV_PYTHON="$SCRIPT_DIR/jarvis_venv/bin/python3"
 
-# Check if venv exists
-if [ ! -d "$VENV_DIR" ]; then
-    echo "❌ Virtual environment not found!"
-    echo "Run: cd jarvis_voice_training && source jarvis_venv/bin/activate"
-    exit 1
-fi
-
-# Activate venv and run
-source "$VENV_DIR/bin/activate"
-cd "$SCRIPT_DIR"
-python3 synthesize_jarvis_final.py "$@"
+# Run client (will auto-start server if needed)
+"$VENV_PYTHON" "$SCRIPT_DIR/jarvis_client.py" "$@"

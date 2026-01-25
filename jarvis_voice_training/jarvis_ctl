@@ -1,0 +1,111 @@
+#!/bin/bash
+# JARVIS Voice Server Control
+# Manage the background voice server
+
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+VENV_PYTHON="$SCRIPT_DIR/jarvis_venv/bin/python3"
+SERVER_SCRIPT="$SCRIPT_DIR/jarvis_server.py"
+SOCKET_PATH="/tmp/jarvis_voice_server.sock"
+PID_FILE="/tmp/jarvis_voice_server.pid"
+
+case "$1" in
+    start)
+        if [ -e "$SOCKET_PATH" ]; then
+            echo "✅ Server already running"
+            exit 0
+        fi
+
+        echo "🚀 Starting JARVIS voice server..."
+        echo "   (Model loading takes ~10-20 seconds)"
+
+        # Start server and save PID
+        nohup "$VENV_PYTHON" "$SERVER_SCRIPT" > /tmp/jarvis_server.log 2>&1 &
+        echo $! > "$PID_FILE"
+
+        # Wait for socket to appear
+        echo -n "⏳ Loading model"
+        for i in {1..40}; do
+            if [ -e "$SOCKET_PATH" ]; then
+                echo ""
+                echo "✅ Server ready!"
+                exit 0
+            fi
+            sleep 0.5
+            echo -n "."
+        done
+
+        echo ""
+        echo "❌ Server failed to start (check /tmp/jarvis_server.log)"
+        exit 1
+        ;;
+
+    stop)
+        if [ ! -e "$SOCKET_PATH" ]; then
+            echo "⚠️  Server not running"
+            exit 0
+        fi
+
+        echo "🛑 Stopping server..."
+
+        if [ -f "$PID_FILE" ]; then
+            PID=$(cat "$PID_FILE")
+            kill "$PID" 2>/dev/null
+            rm "$PID_FILE"
+        else
+            # Find by socket
+            pkill -f "jarvis_server.py"
+        fi
+
+        # Wait for socket to be removed
+        sleep 1
+
+        if [ ! -e "$SOCKET_PATH" ]; then
+            echo "✅ Server stopped"
+        else
+            echo "⚠️  Socket still exists, forcing removal"
+            rm -f "$SOCKET_PATH"
+        fi
+        ;;
+
+    restart)
+        "$0" stop
+        sleep 1
+        "$0" start
+        ;;
+
+    status)
+        if [ -e "$SOCKET_PATH" ]; then
+            echo "✅ Server is running"
+            echo "🔌 Socket: $SOCKET_PATH"
+            if [ -f "$PID_FILE" ]; then
+                PID=$(cat "$PID_FILE")
+                echo "🆔 PID: $PID"
+            fi
+            exit 0
+        else
+            echo "❌ Server is not running"
+            exit 1
+        fi
+        ;;
+
+    logs)
+        if [ -f "/tmp/jarvis_server.log" ]; then
+            tail -f /tmp/jarvis_server.log
+        else
+            echo "❌ No log file found"
+            exit 1
+        fi
+        ;;
+
+    *)
+        echo "Usage: $0 {start|stop|restart|status|logs}"
+        echo ""
+        echo "Commands:"
+        echo "  start    - Start the voice server (loads model)"
+        echo "  stop     - Stop the voice server"
+        echo "  restart  - Restart the voice server"
+        echo "  status   - Check if server is running"
+        echo "  logs     - Show server logs (tail -f)"
+        exit 1
+        ;;
+esac
