@@ -50,7 +50,7 @@ print("✅ Model loaded")
 print()
 
 # Test synthesis
-test_text = "Good evening, sir. J.A.R.V.I.S. online and ready for your commands."
+test_text = "Good evening, sir. JARVIS online and ready for your commands."
 print(f"💬 Test text: '{test_text}'")
 print("🔊 Synthesizing with high-quality reference audio...")
 print()
