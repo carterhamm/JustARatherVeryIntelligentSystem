@@ -1,16 +1,14 @@
 #!/usr/bin/env python3
 """
 🎙️ JARVIS Voice Synthesis - Final Version
-CD-quality (44.1kHz) with emphasis support and crystal-clear output
+CD-quality (44.1kHz) with crystal-clear output
 
 Usage: python synthesize_jarvis_final.py "Your text here"
-Capital letters = emphasis: "Good EVEning" emphasizes "EVEN"
 """
 
 import sys
 import json
 import os
-import re
 from pathlib import Path
 import numpy as np
 from scipy.signal import resample_poly
@@ -26,40 +24,6 @@ OUTPUT_DIR = Path("/Users/mr.stark/Downloads/JustARatherVeryIntelligentSystem/ja
 OUTPUT_DIR.mkdir(exist_ok=True)
 
 TARGET_SAMPLE_RATE = 44100  # CD quality
-
-def parse_emphasis(text):
-    """
-    Parse text for emphasis patterns using capital letters.
-    Examples:
-      "Good EVEning" -> emphasize "EVEN"
-      "JARVIS" -> emphasize whole word
-      "sIR" -> emphasize "I"
-
-    Returns text with SSML-like markers for emphasis.
-    """
-    # Find patterns where we have capital letters in the middle of words
-    # This is a simple approach - we'll mark emphasized parts with special tokens
-
-    # For now, we'll use the text as-is and let TTS handle natural emphasis
-    # But we'll process it to add pauses and emphasis hints
-
-    # Convert multiple capital letters to emphasis
-    # e.g., "EVEning" -> we want to emphasize this part
-    words = text.split()
-    processed_words = []
-
-    for word in words:
-        # Check if word has mixed case (indication of emphasis)
-        if word.isupper():
-            # Fully capitalized word - strong emphasis
-            processed_words.append(f"*{word}*")
-        elif any(c.isupper() for c in word[1:]):  # Capital after first letter
-            # Mixed case - has emphasis markers
-            processed_words.append(word)
-        else:
-            processed_words.append(word)
-
-    return " ".join(processed_words)
 
 def add_clarity_boost(audio, sr):
     """
@@ -102,10 +66,9 @@ def normalize_audio(audio):
 with open(VOICE_PROFILE) as f:
     profile = json.load(f)
 
-print("🎙️  JARVIS Final Voice Synthesis")
+print("🎙️  JARVIS Voice Synthesis")
 print("="*70)
 print("✨ CD-Quality: 16-bit / 44.1 kHz")
-print("🎯 Emphasis: Use capital letters (EVEning = emphasize EVEN)")
 print("🔊 Crystal clear output (clarity boost, no muffling)")
 print("="*70)
 
@@ -123,23 +86,16 @@ if len(sys.argv) > 1:
 else:
     text = input("\n📝 Enter text: ")
 
-# Parse emphasis
-processed_text = parse_emphasis(text)
 print(f"\n💬 Text: '{text}'")
-if processed_text != text:
-    print(f"🎯 Processed: '{processed_text}'")
-
 print("🔊 Synthesizing...")
 
-# Generate with emphasis control
-# XTTS supports temperature parameter for variation/emphasis
+# Generate audio
 temp_file = OUTPUT_DIR / "temp_synthesis.wav"
 tts.tts_to_file(
     text=text,
     speaker_wav=str(reference_audio),
     language="en",
-    file_path=str(temp_file),
-    temperature=0.85,  # Slightly higher for more natural variation
+    file_path=str(temp_file)
 )
 
 # Load audio

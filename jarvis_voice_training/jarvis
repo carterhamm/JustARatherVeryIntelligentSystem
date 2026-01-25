@@ -1,7 +1,6 @@
 #!/bin/bash
 # JARVIS Voice Synthesis
 # Usage: ./jarvis "Your text here"
-# Tip: Use capital letters for emphasis - "Good EVEning, sIR"
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 VENV_DIR="$SCRIPT_DIR/jarvis_venv"

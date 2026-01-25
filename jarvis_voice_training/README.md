@@ -7,9 +7,6 @@ High-quality JARVIS voice synthesis using Coqui XTTS-v2.
 ```bash
 # Synthesize speech
 ./jarvis "Your text here"
-
-# Use capital letters for emphasis
-./jarvis "Good EVEning, sIR"
 ```
 
 Output saved to: `output/jarvis_*.wav`
@@ -18,7 +15,6 @@ Output saved to: `output/jarvis_*.wav`
 
 - ✅ **CD Quality**: 16-bit / 44.1 kHz output
 - ✅ **Crystal Clear**: Clarity boost removes muffled sound
-- ✅ **Emphasis Support**: Capital letters add voice inflection
 - ✅ **Original Voice**: Uses 144kHz reference audio (no quality loss)
 
 ## Audio Quality
@@ -36,22 +32,12 @@ Output saved to: `output/jarvis_*.wav`
 # Simple text
 ./jarvis "JARVIS online"
 
-# With emphasis
-./jarvis "Good EVEning, sIR. JARVIS ready."
+# Natural speech
+./jarvis "Good evening, sir. JARVIS ready."
 
 # Longer text
 ./jarvis "All systems operational. Standing by for further instructions."
 ```
-
-## Emphasis Guide
-
-Use capital letters to emphasize parts of words:
-
-- `EVEning` → emphasizes "EVE"
-- `sIR` → emphasizes "I"
-- `JARVIS` → emphasizes whole word
-
-The TTS model will add natural inflection to capitalized sections.
 
 ## Files
 
