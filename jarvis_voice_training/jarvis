@@ -1,6 +1,7 @@
 #!/bin/bash
-# JARVIS Voice Synthesis - Ultimate Quality Launcher
+# JARVIS Voice Synthesis
 # Usage: ./jarvis "Your text here"
+# Tip: Use capital letters for emphasis - "Good EVEning, sIR"
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 VENV_DIR="$SCRIPT_DIR/jarvis_venv"
@@ -12,7 +13,7 @@ if [ ! -d "$VENV_DIR" ]; then
     exit 1
 fi
 
-# Activate venv and run Ultimate version (16-bit/44.1kHz with gentle noise removal)
+# Activate venv and run
 source "$VENV_DIR/bin/activate"
 cd "$SCRIPT_DIR"
-python3 synthesize_jarvis_ultimate.py "$@"
+python3 synthesize_jarvis_final.py "$@"
