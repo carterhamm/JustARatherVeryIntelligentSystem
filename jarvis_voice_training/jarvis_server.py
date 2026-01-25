@@ -31,7 +31,7 @@ TARGET_SAMPLE_RATE = 44100
 
 class JarvisVoiceServer:
     def __init__(self):
-        print("🎙️  JARVIS Voice Server - High Quality")
+        print("🎙️  JARVIS Voice Server - GPU Accelerated (PyTorch 2.10)")
         print("="*70)
 
         # Load voice profile
@@ -40,16 +40,33 @@ class JarvisVoiceServer:
 
         self.reference_audio = self.profile["reference_audio"][0]
 
-        # Use CPU for stability (MPS support in TTS is incomplete)
-        self.device = "cpu"
+        # Try MPS with newer PyTorch
+        if torch.backends.mps.is_available():
+            self.device = "mps"
+            print("🚀 M1 GPU detected - attempting GPU acceleration")
+        else:
+            self.device = "cpu"
+            print("⚠️  GPU not available - using CPU")
 
         # Load model ONCE (this is the slow part)
         print("🔧 Loading XTTS-v2 model into memory...")
         print("   (This takes ~10-20 seconds, but only happens once)")
         self.tts = TTS(self.profile["model"], progress_bar=False)
 
+        # Try moving to GPU with newer PyTorch
+        if self.device == "mps":
+            print("📦 Moving model to M1 GPU (PyTorch 2.10 has better MPS support)...")
+            try:
+                self.tts.to(self.device)
+                print("✅ GPU acceleration enabled!")
+            except Exception as e:
+                print(f"⚠️  GPU failed: {e}")
+                print("   Using CPU instead")
+                self.device = "cpu"
+
         print(f"✅ Model loaded and ready!")
         print(f"🎵 Reference: {Path(self.reference_audio).name}")
+        print(f"🖥️  Device: {self.device.upper()}")
         print("="*70)
         print("⚡ Server ready - subsequent requests will be FAST")
         print(f"🔌 Listening on: {SOCKET_PATH}")
