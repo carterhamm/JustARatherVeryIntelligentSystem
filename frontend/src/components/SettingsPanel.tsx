@@ -1,14 +1,16 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, User, Mic, Key, Info, LogOut, Volume2, VolumeX } from 'lucide-react';
+import { X, User, Mic, Key, Info, LogOut, Volume2, VolumeX, Cpu } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useUIStore } from '@/stores/uiStore';
+import ModelPicker from '@/components/ModelPicker';
 import clsx from 'clsx';
 
-type SettingsSection = 'profile' | 'voice' | 'api-keys' | 'about';
+type SettingsSection = 'profile' | 'model' | 'voice' | 'api-keys' | 'about';
 
 const sections: { id: SettingsSection; label: string; icon: React.ReactNode }[] = [
   { id: 'profile', label: 'Profile', icon: <User size={15} /> },
+  { id: 'model', label: 'Model', icon: <Cpu size={15} /> },
   { id: 'voice', label: 'Voice', icon: <Mic size={15} /> },
   { id: 'api-keys', label: 'API Keys', icon: <Key size={15} /> },
   { id: 'about', label: 'About', icon: <Info size={15} /> },
@@ -138,6 +140,20 @@ function VoiceSection() {
   );
 }
 
+function ModelSection() {
+  return (
+    <div className="space-y-4">
+      <h3 className="text-sm font-display font-semibold tracking-wider text-jarvis-blue">
+        AI Model
+      </h3>
+      <p className="text-[11px] text-gray-500 leading-relaxed">
+        Choose which AI model powers J.A.R.V.I.S. All models have full feature parity.
+      </p>
+      <ModelPicker />
+    </div>
+  );
+}
+
 function ApiKeysSection() {
   const services = [
     { name: 'OpenAI', status: 'connected', key: 'sk-...configured' },
@@ -247,6 +263,8 @@ export default function SettingsPanel() {
     switch (activeSection) {
       case 'profile':
         return <ProfileSection />;
+      case 'model':
+        return <ModelSection />;
       case 'voice':
         return <VoiceSection />;
       case 'api-keys':

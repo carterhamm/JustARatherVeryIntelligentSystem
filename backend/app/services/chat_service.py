@@ -19,7 +19,8 @@ from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.redis import RedisClient
-from app.integrations.llm_client import LLMClient
+from app.integrations.llm.base import BaseLLMClient
+from app.integrations.llm.factory import get_llm_client
 from app.models.conversation import Conversation, Message
 from app.schemas.chat import (
     ChatRequest,
@@ -48,7 +49,7 @@ class ChatService:
         self,
         db: AsyncSession,
         redis: RedisClient,
-        llm_client: LLMClient,
+        llm_client: BaseLLMClient,
     ) -> None:
         self.db = db
         self.redis = redis
@@ -247,11 +248,12 @@ class ChatService:
         3. Build message history and call the LLM.
         4. Persist and return the assistant message.
         """
+        llm = self._resolve_llm_client(request)
         conversation = await self._resolve_conversation(user_id, request)
         model = request.model or conversation.model
 
         # Persist user message
-        user_token_count = await self.llm_client.count_tokens(request.message, model)
+        user_token_count = await llm.count_tokens(request.message, model)
         await self.add_message(
             conversation.id,
             role="user",
@@ -266,7 +268,7 @@ class ChatService:
         )
 
         start = time.perf_counter()
-        response = await self.llm_client.chat_completion(
+        response = await llm.chat_completion(
             messages=history,
             model=model,
         )
@@ -277,7 +279,7 @@ class ChatService:
 
         # Generate title for brand-new conversations
         if conversation.title is None:
-            title = await self._generate_title(request.message)
+            title = await self._generate_title(request.message, llm)
             conversation.title = title
             await self.db.commit()
             await self._invalidate_conversation_cache(conversation.id)
@@ -313,11 +315,12 @@ class ChatService:
             ``end`` chunk when finished (or ``error`` on failure).
         """
         try:
+            llm = self._resolve_llm_client(request)
             conversation = await self._resolve_conversation(user_id, request)
             model = request.model or conversation.model
 
             # Persist user message
-            user_token_count = await self.llm_client.count_tokens(
+            user_token_count = await llm.count_tokens(
                 request.message, model
             )
             await self.add_message(
@@ -346,7 +349,7 @@ class ChatService:
             collected_content: list[str] = []
             start = time.perf_counter()
 
-            async for token in self.llm_client.chat_completion_stream(
+            async for token in llm.chat_completion_stream(
                 messages=history,
                 model=model,
             ):
@@ -357,13 +360,13 @@ class ChatService:
             full_content = "".join(collected_content)
 
             # Count tokens on the completed response
-            completion_tokens = await self.llm_client.count_tokens(
+            completion_tokens = await llm.count_tokens(
                 full_content, model
             )
 
             # Generate title for brand-new conversations
             if conversation.title is None:
-                title = await self._generate_title(request.message)
+                title = await self._generate_title(request.message, llm)
                 conversation.title = title
                 await self.db.commit()
                 await self._invalidate_conversation_cache(conversation.id)
@@ -404,6 +407,13 @@ class ChatService:
     # Internals
     # =====================================================================
 
+    def _resolve_llm_client(self, request: ChatRequest) -> BaseLLMClient:
+        """Return the appropriate LLM client based on the request's provider."""
+        provider = getattr(request, "model_provider", None)
+        if provider:
+            return get_llm_client(provider)
+        return self.llm_client
+
     async def _resolve_conversation(
         self,
         user_id: uuid.UUID,
@@ -413,8 +423,10 @@ class ChatService:
         if request.conversation_id:
             return await self.get_conversation(request.conversation_id, user_id)
 
+        # Use provider's default model
+        llm = self._resolve_llm_client(request)
         create_data = ConversationCreate(
-            model=request.model or "gpt-4o",
+            model=request.model or llm.get_default_model(),
             system_prompt=request.system_prompt,
         )
         return await self.create_conversation(user_id, create_data)
@@ -448,12 +460,18 @@ class ChatService:
 
         return history
 
-    async def _generate_title(self, first_message: str) -> str:
+    async def _generate_title(
+        self,
+        first_message: str,
+        llm: Optional[BaseLLMClient] = None,
+    ) -> str:
         """
         Ask the LLM to produce a concise conversation title (max ~6 words)
-        derived from the first user message.
+        derived from the first user message.  Uses the cheapest available
+        model for the given provider.
         """
         try:
+            client = llm or self.llm_client
             prompt_messages = [
                 {
                     "role": "system",
@@ -466,9 +484,9 @@ class ChatService:
                 },
                 {"role": "user", "content": first_message},
             ]
-            response = await self.llm_client.chat_completion(
+            response = await client.chat_completion(
                 messages=prompt_messages,
-                model="gpt-4o-mini",
+                model=client.get_cheap_model(),
                 temperature=0.5,
                 max_tokens=20,
             )

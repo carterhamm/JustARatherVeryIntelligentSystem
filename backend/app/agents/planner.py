@@ -24,7 +24,7 @@ from app.agents.state import (
     ROUTE_TOOLS,
     VALID_ROUTES,
 )
-from app.integrations.llm_client import LLMClient
+from app.integrations.llm import get_llm_client
 from app.config import settings
 
 logger = logging.getLogger("jarvis.agents.planner")
@@ -81,6 +81,25 @@ the following schema — NO markdown fences, NO extra text:
 - mac_weather_current   -- current weather (params: latitude, longitude)
 - mac_weather_forecast  -- daily forecast (params: latitude, longitude, days?)
 
+### Productivity & Collaboration
+- google_drive      -- search, read, create Google Drive docs (params: action, query?, file_id?, title?, content?)
+- slack             -- channels, messages, search on Slack (params: action, channel?, text?, query?, limit?)
+- github            -- repos, files, issues on GitHub (params: action, owner?, repo?, query?, path?, title?, body?)
+
+### Research & Knowledge
+- wolfram_alpha     -- query Wolfram Alpha for math, science, conversions (params: query)
+- perplexity_research -- deep web research with citations (params: query, max_tokens?)
+
+### Financial
+- financial_data    -- stock quotes, symbol search, daily data (params: action, symbol?, keywords?)
+
+### Travel & Navigation
+- flight_tracker    -- track flights, search routes, airport info (params: action, flight_iata?, dep_iata?, arr_iata?, iata_code?)
+- google_maps       -- geocode, directions, places, distance (params: action, address?, origin?, destination?, query?, mode?)
+
+### Food & Nutrition
+- nutrition_recipe  -- recipes and nutrition info (params: action, query, diet?, health?, cuisine_type?)
+
 ### Cloud APIs (only if macOS tools are insufficient)
 - create_calendar_event -- create a Google Calendar event (params: title, start, end)
 - list_calendar_events  -- list Google Calendar events (params: start_date, end_date)
@@ -133,7 +152,8 @@ async def planner_node(state: AgentState) -> dict[str, Any]:
 
     # Call the LLM ----------------------------------------------------------
     try:
-        llm = LLMClient(api_key=settings.OPENAI_API_KEY)
+        provider = state.get("metadata", {}).get("llm_provider")
+        llm = get_llm_client(provider)
         result = await llm.chat_completion(
             messages=llm_messages,
             temperature=0.0,

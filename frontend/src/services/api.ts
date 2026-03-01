@@ -117,6 +117,14 @@ class ApiClient {
     });
     return response.data;
   }
+
+  async getPreferences(): Promise<Record<string, unknown>> {
+    return this.get<Record<string, unknown>>('/auth/me/preferences');
+  }
+
+  async updatePreferences(prefs: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return this.put<Record<string, unknown>>('/auth/me/preferences', prefs);
+  }
 }
 
 export const api = new ApiClient();

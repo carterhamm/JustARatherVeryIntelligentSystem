@@ -29,7 +29,7 @@ from app.config import settings
 from app.core.dependencies import get_current_active_user, get_db
 from app.core.security import decode_token
 from app.db.redis import RedisClient, get_redis_client
-from app.integrations.llm_client import LLMClient
+from app.integrations.llm import BaseLLMClient, get_llm_client
 from app.models.user import User
 from app.schemas.chat import (
     ChatRequest,
@@ -51,12 +51,9 @@ router = APIRouter(tags=["Chat"])
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-def _get_llm_client() -> LLMClient:
-    """Build an :class:`LLMClient` from application settings."""
-    return LLMClient(
-        api_key=settings.OPENAI_API_KEY,
-        default_model="gpt-4o",
-    )
+def _get_llm_client(provider: str | None = None) -> BaseLLMClient:
+    """Build an LLM client for the given provider (or default)."""
+    return get_llm_client(provider)
 
 
 async def _get_redis() -> RedisClient:
@@ -67,9 +64,9 @@ async def _get_redis() -> RedisClient:
 async def _build_chat_service(
     db: AsyncSession = Depends(get_db),
     redis: RedisClient = Depends(_get_redis),
-    llm_client: LLMClient = Depends(_get_llm_client),
 ) -> ChatService:
     """Assemble a :class:`ChatService` with all its dependencies."""
+    llm_client = _get_llm_client()
     return ChatService(db=db, redis=redis, llm_client=llm_client)
 
 
@@ -414,12 +411,19 @@ async def chat_websocket(
     redis = await _get_redis()
     service = ChatService(db=db, redis=redis, llm_client=llm_client)
 
+    # Resolve user's preferred model provider for WebSocket messages
+    user_preferences = current_user.preferences or {}
+    ws_default_provider = user_preferences.get("model_preference")
+
     # ── Message loop ─────────────────────────────────────────────────
     try:
         while True:
             raw = await websocket.receive_json()
             try:
                 request = ChatRequest(**raw)
+                # Apply user's default provider if not specified in message
+                if not request.model_provider and ws_default_provider:
+                    request.model_provider = ws_default_provider
             except Exception as exc:
                 await websocket.send_json(
                     ChatStreamChunk(

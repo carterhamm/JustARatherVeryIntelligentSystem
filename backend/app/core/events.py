@@ -67,6 +67,21 @@ async def startup_handler(app: FastAPI) -> None:
         logger.warning("imcp_not_available", error=str(exc),
                        hint="iMCP tools will fail — install iMCP.app or ignore if not on macOS")
 
+    # -- Stark Protocol (self-hosted LLM) ------------------------------------
+    if settings.STARK_PROTOCOL_ENABLED:
+        try:
+            from app.integrations.llm.stark_client import StarkProtocolClient
+            stark = StarkProtocolClient(base_url=settings.STARK_PROTOCOL_URL)
+            healthy = await stark.health_check(retries=2, delay=3.0)
+            if healthy:
+                logger.info("stark_protocol_connected", url=settings.STARK_PROTOCOL_URL)
+            else:
+                logger.warning("stark_protocol_unavailable",
+                              url=settings.STARK_PROTOCOL_URL,
+                              hint="Stark Protocol tools will fall back to other providers")
+        except Exception as exc:
+            logger.warning("stark_protocol_check_failed", error=str(exc))
+
     logger.info("startup_complete", app=settings.APP_NAME)
 
 

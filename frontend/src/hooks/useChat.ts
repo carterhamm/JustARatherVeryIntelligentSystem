@@ -1,6 +1,7 @@
 import { useCallback, useEffect } from 'react';
 import { useChatStore, Message, Conversation } from '@/stores/chatStore';
 import { useUIStore } from '@/stores/uiStore';
+import { useSettingsStore } from '@/stores/settingsStore';
 import { useWebSocket } from './useWebSocket';
 import { api } from '@/services/api';
 
@@ -22,6 +23,7 @@ export function useChat() {
   } = useChatStore();
 
   const { setIsThinking, setJarvisActivity, setIsSpeaking } = useUIStore();
+  const modelPreference = useSettingsStore((s) => s.modelPreference);
 
   const handleWsMessage = useCallback(
     (data: unknown) => {
@@ -106,6 +108,7 @@ export function useChat() {
           type: 'chat_message',
           content: content.trim(),
           conversation_id: currentConversation?.id,
+          model_provider: modelPreference,
         });
       } else {
         try {
@@ -115,6 +118,7 @@ export function useChat() {
           }>('/chat/message', {
             content: content.trim(),
             conversation_id: currentConversation?.id,
+            model_provider: modelPreference,
           });
 
           addMessage(response.message);
@@ -132,7 +136,7 @@ export function useChat() {
         }
       }
     },
-    [addMessage, currentConversation, isConnected, send, setIsThinking, setJarvisActivity]
+    [addMessage, currentConversation, isConnected, send, setIsThinking, setJarvisActivity, modelPreference]
   );
 
   const createConversation = useCallback(async () => {

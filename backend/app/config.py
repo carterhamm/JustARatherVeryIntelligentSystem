@@ -46,6 +46,16 @@ class Settings(BaseSettings):
     # -- Groq -----------------------------------------------------------------
     GROQ_API_KEY: str = ""
 
+    # -- Google Gemini --------------------------------------------------------
+    GOOGLE_GEMINI_API_KEY: str = ""
+
+    # -- Stark Protocol (self-hosted Gemma) -----------------------------------
+    STARK_PROTOCOL_URL: str = "http://localhost:8080/v1"
+    STARK_PROTOCOL_ENABLED: bool = False
+
+    # -- Default LLM Provider -------------------------------------------------
+    DEFAULT_LLM_PROVIDER: str = "openai"
+
     # -- ElevenLabs -----------------------------------------------------------
     ELEVENLABS_API_KEY: str = ""
 
@@ -54,8 +64,38 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_SECRET: str = ""
     GOOGLE_REFRESH_TOKEN: str = ""
 
+    # -- Google Drive ---------------------------------------------------------
+    GOOGLE_DRIVE_ENABLED: bool = False
+
+    # -- Slack ----------------------------------------------------------------
+    SLACK_BOT_TOKEN: str = ""
+    SLACK_ENABLED: bool = False
+
+    # -- GitHub ---------------------------------------------------------------
+    GITHUB_TOKEN: str = ""
+    GITHUB_ENABLED: bool = False
+
     # -- Matter / Smart Home --------------------------------------------------
     MATTER_CONTROLLER_URL: str = "http://localhost:5580"
+
+    # -- Wolfram Alpha --------------------------------------------------------
+    WOLFRAM_APP_ID: str = ""
+
+    # -- Perplexity -----------------------------------------------------------
+    PERPLEXITY_API_KEY: str = ""
+
+    # -- Alpha Vantage (Financial Data) ---------------------------------------
+    ALPHA_VANTAGE_API_KEY: str = ""
+
+    # -- AviationStack (Flight Tracking) --------------------------------------
+    AVIATIONSTACK_API_KEY: str = ""
+
+    # -- Google Maps Platform -------------------------------------------------
+    GOOGLE_MAPS_API_KEY: str = ""
+
+    # -- Edamam (Nutrition & Recipes) -----------------------------------------
+    EDAMAM_APP_ID: str = ""
+    EDAMAM_APP_KEY: str = ""
 
     # -- Web Search -----------------------------------------------------------
     TAVILY_API_KEY: str = ""

@@ -15,6 +15,7 @@ export interface Conversation {
   updatedAt: string;
   messageCount: number;
   model?: string;
+  modelProvider?: string;
 }
 
 interface ChatState {

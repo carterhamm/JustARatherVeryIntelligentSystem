@@ -69,6 +69,11 @@ services:
       - NEO4J_PASSWORD=${NEO4J_PASSWORD:-jarvis_neo4j}
       - QDRANT_URL=http://qdrant:6333
       - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - GOOGLE_GEMINI_API_KEY=${GOOGLE_GEMINI_API_KEY:-}
+      - DEFAULT_LLM_PROVIDER=${DEFAULT_LLM_PROVIDER:-openai}
+      - STARK_PROTOCOL_URL=${STARK_PROTOCOL_URL:-http://stark-protocol:8080/v1}
+      - STARK_PROTOCOL_ENABLED=${STARK_PROTOCOL_ENABLED:-false}
       - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY:-super-secret-jwt-key-change-in-production}
       - AES_KEY=${AES_KEY:-}
@@ -103,11 +108,45 @@ services:
       - frontend
     restart: unless-stopped
 
+  # Stark Protocol — self-hosted Gemma LLM (requires GPU)
+  # Enable with: STARK_PROTOCOL_ENABLED=true
+  # For full GPU setup, use docker/stark-protocol/docker-compose.gpu.yml
+  stark-protocol:
+    image: vllm/vllm-openai:latest
+    profiles:
+      - gpu
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    command: >
+      --model google/gemma-3-27b-it
+      --served-model-name gemma-3-27b
+      --dtype auto
+      --max-model-len 8192
+      --gpu-memory-utilization 0.85
+      --port 8000
+    ports:
+      - "8080:8000"
+    volumes:
+      - vllm_cache:/root/.cache/huggingface
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   redis_data:
   neo4j_data:
   qdrant_data:
+  vllm_cache:
 
 networks:
   default:

@@ -132,6 +132,11 @@ class ChatRequest(BaseModel):
         None,
         description="Override system prompt for this turn only.",
     )
+    model_provider: Optional[str] = Field(
+        None,
+        max_length=32,
+        description="LLM provider to use: openai, claude, gemini, or stark_protocol.",
+    )
 
 
 class ChatStreamChunk(BaseModel):

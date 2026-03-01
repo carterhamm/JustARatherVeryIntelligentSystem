@@ -13,7 +13,7 @@ import logging
 from typing import Any
 
 from app.agents.state import AgentState
-from app.integrations.llm_client import LLMClient
+from app.integrations.llm import get_llm_client
 from app.config import settings
 
 logger = logging.getLogger("jarvis.agents.responder")
@@ -94,7 +94,8 @@ async def responder_node(state: AgentState) -> dict[str, Any]:
 
     # ── Call LLM ──────────────────────────────────────────────────────────
     try:
-        llm = LLMClient(api_key=settings.OPENAI_API_KEY)
+        provider = state.get("metadata", {}).get("llm_provider")
+        llm = get_llm_client(provider)
         result = await llm.chat_completion(
             messages=llm_messages,
             temperature=0.7,

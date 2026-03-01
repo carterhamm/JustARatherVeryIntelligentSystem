@@ -1087,6 +1087,694 @@ class DateTimeTool(BaseTool):
 
 
 # ═════════════════════════════════════════════════════════════════════════
+# Google Drive tool
+# ═════════════════════════════════════════════════════════════════════════
+
+class GoogleDriveTool(BaseTool):
+    """Search, read, and create Google Drive documents."""
+
+    name = "google_drive"
+    description = (
+        "Search files, read documents, or create new docs on Google Drive.  "
+        "Params: action (str: 'search' | 'read' | 'create'), "
+        "query? (str), file_id? (str), title? (str), content? (str)."
+    )
+
+    async def execute(
+        self,
+        params: dict[str, Any],
+        *,
+        state: Optional[AgentState] = None,
+    ) -> str:
+        from app.integrations.google_drive import GoogleDriveClient
+
+        action = params.get("action", "search")
+        client = GoogleDriveClient()
+
+        try:
+            if action == "search":
+                query = params.get("query", "")
+                if not query:
+                    return "Missing 'query' for Drive search."
+                files = await client.search_files(query, max_results=params.get("max_results", 5))
+                if not files:
+                    return f"No files found for: '{query}'"
+                lines = [f"Google Drive files for '{query}':\n"]
+                for f in files:
+                    lines.append(
+                        f"  {f.get('name', 'Untitled')} ({f.get('mimeType', '')})\n"
+                        f"    Modified: {f.get('modifiedTime', 'N/A')}\n"
+                        f"    Link: {f.get('webViewLink', '')}"
+                    )
+                return "\n".join(lines)
+
+            elif action == "read":
+                file_id = params.get("file_id", "")
+                if not file_id:
+                    return "Missing 'file_id' to read."
+                result = await client.read_file(file_id)
+                content = result.get("content", "")
+                return (
+                    f"File: {result.get('name', 'Unknown')}\n"
+                    f"Type: {result.get('mimeType', '')}\n"
+                    f"Content:\n{content[:5000]}"
+                )
+
+            elif action == "create":
+                title = params.get("title", "Untitled")
+                content = params.get("content", "")
+                result = await client.create_doc(title, content)
+                return (
+                    f"Document created.\n"
+                    f"  Title: {result.get('title', title)}\n"
+                    f"  URL: {result.get('url', '')}"
+                )
+
+            return f"Unknown Drive action: '{action}'."
+        except Exception as exc:
+            return f"Google Drive error: {exc}"
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# Slack tool
+# ═════════════════════════════════════════════════════════════════════════
+
+class SlackTool(BaseTool):
+    """Interact with Slack — channels, messages, search."""
+
+    name = "slack"
+    description = (
+        "Read Slack channels, send messages, or search.  "
+        "Params: action (str: 'channels' | 'read' | 'send' | 'search'), "
+        "channel? (str), text? (str), query? (str), limit? (int)."
+    )
+
+    async def execute(
+        self,
+        params: dict[str, Any],
+        *,
+        state: Optional[AgentState] = None,
+    ) -> str:
+        from app.integrations.slack_client import SlackClient
+
+        action = params.get("action", "channels")
+        client = SlackClient()
+
+        if action == "channels":
+            channels = await client.list_channels(limit=params.get("limit", 20))
+            if not channels:
+                return "No channels found or Slack not configured."
+            lines = ["Slack channels:\n"]
+            for ch in channels:
+                topic = f" — {ch['topic']}" if ch.get("topic") else ""
+                lines.append(f"  #{ch['name']}{topic}")
+            return "\n".join(lines)
+
+        elif action == "read":
+            channel = params.get("channel", "")
+            if not channel:
+                return "Missing 'channel' to read."
+            messages = await client.read_messages(channel, limit=params.get("limit", 10))
+            if not messages:
+                return f"No messages in channel '{channel}'."
+            lines = [f"Messages from #{channel}:\n"]
+            for m in messages:
+                lines.append(f"  [{m.get('user', '?')}] {m.get('text', '')}")
+            return "\n".join(lines)
+
+        elif action == "send":
+            channel = params.get("channel", "")
+            text = params.get("text", "")
+            if not channel or not text:
+                return "Missing 'channel' and/or 'text'."
+            result = await client.send_message(channel, text, thread_ts=params.get("thread_ts"))
+            if result.get("error"):
+                return f"Slack error: {result['error']}"
+            return f"Message sent to #{channel}."
+
+        elif action == "search":
+            query = params.get("query", "")
+            if not query:
+                return "Missing 'query' for Slack search."
+            results = await client.search_messages(query, count=params.get("limit", 5))
+            if not results:
+                return f"No Slack messages matching: '{query}'"
+            lines = [f"Slack search for '{query}':\n"]
+            for r in results:
+                lines.append(
+                    f"  [{r.get('user', '?')} in #{r.get('channel', '?')}] "
+                    f"{r.get('text', '')[:200]}"
+                )
+            return "\n".join(lines)
+
+        return f"Unknown Slack action: '{action}'."
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# GitHub tool
+# ═════════════════════════════════════════════════════════════════════════
+
+class GitHubTool(BaseTool):
+    """Interact with GitHub — repos, files, issues."""
+
+    name = "github"
+    description = (
+        "Search repos, read files, manage issues on GitHub.  "
+        "Params: action (str: 'search_repos' | 'repo_info' | 'read_file' | "
+        "'list_issues' | 'create_issue'), owner? (str), repo? (str), "
+        "query? (str), path? (str), title? (str), body? (str), labels? (list)."
+    )
+
+    async def execute(
+        self,
+        params: dict[str, Any],
+        *,
+        state: Optional[AgentState] = None,
+    ) -> str:
+        from app.integrations.github_client import GitHubClient
+
+        action = params.get("action", "search_repos")
+        client = GitHubClient()
+
+        try:
+            if action == "search_repos":
+                query = params.get("query", "")
+                if not query:
+                    return "Missing 'query' for repo search."
+                repos = await client.search_repos(query, max_results=params.get("max_results", 5))
+                if not repos:
+                    return f"No repos found for: '{query}'"
+                lines = [f"GitHub repos for '{query}':\n"]
+                for r in repos:
+                    lines.append(
+                        f"  {r['full_name']} ({r.get('language', '?')}, "
+                        f"{r['stars']} stars)\n"
+                        f"    {r.get('description', '')[:100]}"
+                    )
+                return "\n".join(lines)
+
+            elif action == "repo_info":
+                owner = params.get("owner", "")
+                repo = params.get("repo", "")
+                if not owner or not repo:
+                    return "Missing 'owner' and/or 'repo'."
+                info = await client.get_repo(owner, repo)
+                return (
+                    f"Repo: {info['full_name']}\n"
+                    f"  Description: {info.get('description', 'N/A')}\n"
+                    f"  Language: {info.get('language', 'N/A')}\n"
+                    f"  Stars: {info['stars']} | Forks: {info['forks']} | "
+                    f"Open Issues: {info['open_issues']}\n"
+                    f"  URL: {info['url']}"
+                )
+
+            elif action == "read_file":
+                owner = params.get("owner", "")
+                repo = params.get("repo", "")
+                path = params.get("path", "")
+                if not owner or not repo or not path:
+                    return "Missing 'owner', 'repo', and/or 'path'."
+                result = await client.read_file(owner, repo, path, ref=params.get("ref"))
+                return (
+                    f"File: {result['path']} ({result['size']} bytes)\n"
+                    f"Content:\n{result['content'][:5000]}"
+                )
+
+            elif action == "list_issues":
+                owner = params.get("owner", "")
+                repo = params.get("repo", "")
+                if not owner or not repo:
+                    return "Missing 'owner' and/or 'repo'."
+                issues = await client.list_issues(
+                    owner, repo,
+                    state=params.get("state", "open"),
+                    max_results=params.get("max_results", 10),
+                )
+                if not issues:
+                    return f"No issues found for {owner}/{repo}."
+                lines = [f"Issues for {owner}/{repo}:\n"]
+                for i in issues:
+                    labels = ", ".join(i.get("labels", []))
+                    lines.append(
+                        f"  #{i['number']}: {i['title']} [{i['state']}]\n"
+                        f"    By: {i['user']} | Labels: {labels or 'none'}"
+                    )
+                return "\n".join(lines)
+
+            elif action == "create_issue":
+                owner = params.get("owner", "")
+                repo = params.get("repo", "")
+                title = params.get("title", "")
+                if not owner or not repo or not title:
+                    return "Missing 'owner', 'repo', and/or 'title'."
+                result = await client.create_issue(
+                    owner, repo, title,
+                    body=params.get("body", ""),
+                    labels=params.get("labels"),
+                )
+                if result.get("error"):
+                    return f"GitHub error: {result['error']}"
+                return (
+                    f"Issue created: #{result['number']} — {result['title']}\n"
+                    f"  URL: {result['url']}"
+                )
+
+            return f"Unknown GitHub action: '{action}'."
+        except Exception as exc:
+            return f"GitHub error: {exc}"
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# Wolfram Alpha tool
+# ═════════════════════════════════════════════════════════════════════════
+
+class WolframAlphaTool(BaseTool):
+    """Query Wolfram Alpha for computational knowledge."""
+
+    name = "wolfram_alpha"
+    description = (
+        "Query Wolfram Alpha for math, science, geography, unit conversions, "
+        "and other computational knowledge.  Params: query (str)."
+    )
+
+    async def execute(
+        self,
+        params: dict[str, Any],
+        *,
+        state: Optional[AgentState] = None,
+    ) -> str:
+        from app.integrations.wolfram import WolframClient
+
+        query = params.get("query", "")
+        if not query:
+            return "No query provided."
+
+        client = WolframClient()
+        result = await client.query(query)
+
+        if result.get("error"):
+            return f"Wolfram Alpha error: {result['error']}"
+
+        if not result.get("success"):
+            suggestions = result.get("suggestions", [])
+            hint = f"  Suggestions: {', '.join(suggestions)}" if suggestions else ""
+            return f"Wolfram Alpha could not interpret: '{query}'.{hint}"
+
+        lines: list[str] = [f"Wolfram Alpha results for: '{query}'\n"]
+        for pod in result.get("pods", []):
+            lines.append(f"  [{pod['title']}]\n  {pod['text']}")
+        return "\n".join(lines)
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# Perplexity research tool
+# ═════════════════════════════════════════════════════════════════════════
+
+class PerplexityResearchTool(BaseTool):
+    """Deep research using Perplexity's search-augmented LLM."""
+
+    name = "perplexity_research"
+    description = (
+        "Perform deep research on a topic using Perplexity's search-augmented "
+        "LLM.  Returns comprehensive, sourced answers.  "
+        "Params: query (str), max_tokens? (int, default 1024)."
+    )
+
+    async def execute(
+        self,
+        params: dict[str, Any],
+        *,
+        state: Optional[AgentState] = None,
+    ) -> str:
+        from app.integrations.perplexity import PerplexityClient
+
+        query = params.get("query", "")
+        max_tokens = params.get("max_tokens", 1024)
+        if not query:
+            return "No research query provided."
+
+        client = PerplexityClient()
+        result = await client.research(query, max_tokens=max_tokens)
+
+        if result.get("error"):
+            return f"Perplexity error: {result['error']}"
+
+        content = result.get("content", "")
+        citations = result.get("citations", [])
+        text = f"Research results for: '{query}'\n\n{content}"
+        if citations:
+            text += "\n\nSources:\n" + "\n".join(f"  - {c}" for c in citations)
+        return text
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# Financial data tool
+# ═════════════════════════════════════════════════════════════════════════
+
+class FinancialDataTool(BaseTool):
+    """Get stock quotes and financial data from Alpha Vantage."""
+
+    name = "financial_data"
+    description = (
+        "Get real-time stock quotes, search symbols, or get historical data.  "
+        "Params: action (str: 'quote' | 'search' | 'daily'), "
+        "symbol? (str, e.g. AAPL), keywords? (str, for search)."
+    )
+
+    async def execute(
+        self,
+        params: dict[str, Any],
+        *,
+        state: Optional[AgentState] = None,
+    ) -> str:
+        from app.integrations.alpha_vantage import AlphaVantageClient
+
+        action = params.get("action", "quote")
+        client = AlphaVantageClient()
+
+        if action == "search":
+            keywords = params.get("keywords", "")
+            if not keywords:
+                return "Missing 'keywords' for symbol search."
+            result = await client.search_symbol(keywords)
+            if result.get("error"):
+                return f"Alpha Vantage error: {result['error']}"
+            matches = result.get("bestMatches", [])
+            if not matches:
+                return f"No symbols found for: '{keywords}'"
+            lines = [f"Symbol search for '{keywords}':\n"]
+            for m in matches[:5]:
+                lines.append(
+                    f"  {m.get('1. symbol', '')} — {m.get('2. name', '')} "
+                    f"({m.get('4. region', '')})"
+                )
+            return "\n".join(lines)
+
+        elif action == "daily":
+            symbol = params.get("symbol", "")
+            if not symbol:
+                return "Missing 'symbol' for daily data."
+            result = await client.get_daily(symbol)
+            if result.get("error"):
+                return f"Alpha Vantage error: {result['error']}"
+            ts = result.get("Time Series (Daily)", {})
+            lines = [f"Daily data for {symbol} (last 5 days):\n"]
+            for date, vals in list(ts.items())[:5]:
+                lines.append(
+                    f"  {date}: O={vals.get('1. open')} H={vals.get('2. high')} "
+                    f"L={vals.get('3. low')} C={vals.get('4. close')} "
+                    f"V={vals.get('5. volume')}"
+                )
+            return "\n".join(lines)
+
+        else:  # quote
+            symbol = params.get("symbol", "")
+            if not symbol:
+                return "Missing 'symbol' for quote."
+            result = await client.get_quote(symbol)
+            if result.get("error"):
+                return f"Alpha Vantage error: {result['error']}"
+            quote = result.get("Global Quote", {})
+            if not quote:
+                return f"No quote data for '{symbol}'."
+            return (
+                f"Stock quote for {quote.get('01. symbol', symbol)}:\n"
+                f"  Price: ${quote.get('05. price', 'N/A')}\n"
+                f"  Change: {quote.get('09. change', 'N/A')} "
+                f"({quote.get('10. change percent', 'N/A')})\n"
+                f"  Volume: {quote.get('06. volume', 'N/A')}\n"
+                f"  Previous Close: ${quote.get('08. previous close', 'N/A')}"
+            )
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# Flight tracker tool
+# ═════════════════════════════════════════════════════════════════════════
+
+class FlightTrackerTool(BaseTool):
+    """Track flights and get airport information."""
+
+    name = "flight_tracker"
+    description = (
+        "Track flights by IATA code, search flights by route, or get airport "
+        "info.  Params: action (str: 'track' | 'search' | 'airport'), "
+        "flight_iata? (str, e.g. AA100), dep_iata? (str), arr_iata? (str), "
+        "airline_iata? (str), iata_code? (str)."
+    )
+
+    async def execute(
+        self,
+        params: dict[str, Any],
+        *,
+        state: Optional[AgentState] = None,
+    ) -> str:
+        from app.integrations.flight_tracker import FlightTrackerClient
+
+        action = params.get("action", "track")
+        client = FlightTrackerClient()
+
+        if action == "airport":
+            code = params.get("iata_code", "")
+            if not code:
+                return "Missing 'iata_code' for airport info."
+            result = await client.get_airport_info(code)
+            if result.get("error"):
+                return f"AviationStack error: {result['error']}"
+            airports = result.get("data", [])
+            if not airports:
+                return f"No airport found for code '{code}'."
+            ap = airports[0]
+            return (
+                f"Airport: {ap.get('airport_name', 'Unknown')}\n"
+                f"  IATA: {ap.get('iata_code', '')}\n"
+                f"  City: {ap.get('city_iata_code', '')} | "
+                f"Country: {ap.get('country_name', '')}\n"
+                f"  Timezone: {ap.get('timezone', '')}"
+            )
+
+        elif action == "search":
+            result = await client.search_flights(
+                dep_iata=params.get("dep_iata"),
+                arr_iata=params.get("arr_iata"),
+                airline_iata=params.get("airline_iata"),
+            )
+            if result.get("error"):
+                return f"AviationStack error: {result['error']}"
+            flights = result.get("data", [])[:5]
+            if not flights:
+                return "No flights found matching criteria."
+            lines = ["Flights found:\n"]
+            for f in flights:
+                dep = f.get("departure", {})
+                arr = f.get("arrival", {})
+                lines.append(
+                    f"  {f.get('flight', {}).get('iata', '?')}: "
+                    f"{dep.get('iata', '?')} -> {arr.get('iata', '?')} | "
+                    f"Status: {f.get('flight_status', 'unknown')}"
+                )
+            return "\n".join(lines)
+
+        else:  # track
+            flight_iata = params.get("flight_iata", "")
+            if not flight_iata:
+                return "Missing 'flight_iata' for tracking."
+            result = await client.track_flight(flight_iata)
+            if result.get("error"):
+                return f"AviationStack error: {result['error']}"
+            flights = result.get("data", [])
+            if not flights:
+                return f"No data found for flight '{flight_iata}'."
+            fl = flights[0]
+            dep = fl.get("departure", {})
+            arr = fl.get("arrival", {})
+            return (
+                f"Flight {fl.get('flight', {}).get('iata', flight_iata)}:\n"
+                f"  Status: {fl.get('flight_status', 'unknown')}\n"
+                f"  From: {dep.get('airport', '?')} ({dep.get('iata', '')})\n"
+                f"  To: {arr.get('airport', '?')} ({arr.get('iata', '')})\n"
+                f"  Scheduled departure: {dep.get('scheduled', 'N/A')}\n"
+                f"  Scheduled arrival: {arr.get('scheduled', 'N/A')}"
+            )
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# Google Maps tool
+# ═════════════════════════════════════════════════════════════════════════
+
+class GoogleMapsTool(BaseTool):
+    """Get directions, geocode addresses, and search places via Google Maps."""
+
+    name = "google_maps"
+    description = (
+        "Geocode addresses, get directions, search places, or calculate "
+        "distances via Google Maps.  Params: action (str: 'geocode' | "
+        "'directions' | 'places' | 'distance_matrix'), "
+        "address? (str), origin? (str), destination? (str), "
+        "query? (str), mode? (str: driving/walking/transit/bicycling)."
+    )
+
+    async def execute(
+        self,
+        params: dict[str, Any],
+        *,
+        state: Optional[AgentState] = None,
+    ) -> str:
+        from app.integrations.google_maps import GoogleMapsClient
+
+        action = params.get("action", "geocode")
+        client = GoogleMapsClient()
+
+        if action == "geocode":
+            address = params.get("address", "")
+            if not address:
+                return "Missing 'address' for geocoding."
+            result = await client.geocode(address)
+            if result.get("error"):
+                return f"Google Maps error: {result['error']}"
+            results = result.get("results", [])
+            if not results:
+                return f"No results for address: '{address}'"
+            loc = results[0]
+            geo = loc.get("geometry", {}).get("location", {})
+            return (
+                f"Geocode result for: '{address}'\n"
+                f"  Formatted: {loc.get('formatted_address', '')}\n"
+                f"  Lat: {geo.get('lat', '')}, Lng: {geo.get('lng', '')}"
+            )
+
+        elif action == "directions":
+            origin = params.get("origin", "")
+            destination = params.get("destination", "")
+            mode = params.get("mode", "driving")
+            if not origin or not destination:
+                return "Missing 'origin' and/or 'destination'."
+            result = await client.directions(origin, destination, mode)
+            if result.get("error"):
+                return f"Google Maps error: {result['error']}"
+            routes = result.get("routes", [])
+            if not routes:
+                return "No route found."
+            leg = routes[0].get("legs", [{}])[0]
+            return (
+                f"Directions ({mode}): {origin} -> {destination}\n"
+                f"  Distance: {leg.get('distance', {}).get('text', 'N/A')}\n"
+                f"  Duration: {leg.get('duration', {}).get('text', 'N/A')}\n"
+                f"  Start: {leg.get('start_address', '')}\n"
+                f"  End: {leg.get('end_address', '')}"
+            )
+
+        elif action == "places":
+            query = params.get("query", "")
+            if not query:
+                return "Missing 'query' for places search."
+            result = await client.places_search(query)
+            if result.get("error"):
+                return f"Google Maps error: {result['error']}"
+            places = result.get("results", [])[:5]
+            if not places:
+                return f"No places found for: '{query}'"
+            lines = [f"Places for '{query}':\n"]
+            for p in places:
+                rating = p.get("rating", "N/A")
+                lines.append(
+                    f"  {p.get('name', 'Unknown')}: "
+                    f"{p.get('formatted_address', '')} "
+                    f"(rating: {rating})"
+                )
+            return "\n".join(lines)
+
+        elif action == "distance_matrix":
+            origins = params.get("origins", params.get("origin", ""))
+            destinations = params.get("destinations", params.get("destination", ""))
+            mode = params.get("mode", "driving")
+            if not origins or not destinations:
+                return "Missing 'origins' and/or 'destinations'."
+            result = await client.distance_matrix(origins, destinations, mode)
+            if result.get("error"):
+                return f"Google Maps error: {result['error']}"
+            rows = result.get("rows", [])
+            if not rows:
+                return "No distance data found."
+            elements = rows[0].get("elements", [{}])
+            el = elements[0] if elements else {}
+            return (
+                f"Distance ({mode}): {origins} -> {destinations}\n"
+                f"  Distance: {el.get('distance', {}).get('text', 'N/A')}\n"
+                f"  Duration: {el.get('duration', {}).get('text', 'N/A')}"
+            )
+
+        return f"Unknown Google Maps action: '{action}'."
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# Nutrition & Recipe tool
+# ═════════════════════════════════════════════════════════════════════════
+
+class NutritionRecipeTool(BaseTool):
+    """Search recipes and get nutrition data via Edamam."""
+
+    name = "nutrition_recipe"
+    description = (
+        "Search for recipes or get nutrition info for ingredients.  "
+        "Params: action (str: 'recipe' | 'nutrition'), "
+        "query (str), diet? (str), health? (str), cuisine_type? (str), "
+        "max_results? (int, default 5)."
+    )
+
+    async def execute(
+        self,
+        params: dict[str, Any],
+        *,
+        state: Optional[AgentState] = None,
+    ) -> str:
+        from app.integrations.edamam import EdamamClient
+
+        action = params.get("action", "recipe")
+        query = params.get("query", "")
+        if not query:
+            return "No query provided."
+
+        client = EdamamClient()
+
+        if action == "nutrition":
+            result = await client.get_nutrition(query)
+            if result.get("error"):
+                return f"Edamam error: {result['error']}"
+            calories = result.get("calories", 0)
+            nutrients = result.get("nutrients", {})
+            lines = [f"Nutrition for: '{query}'\n  Calories: {calories}"]
+            for key in ("FAT", "CHOCDF", "PROCNT", "FIBTG", "SUGAR"):
+                n = nutrients.get(key)
+                if n:
+                    lines.append(f"  {n['label']}: {n['quantity']} {n['unit']}")
+            return "\n".join(lines)
+
+        else:  # recipe
+            max_results = params.get("max_results", 5)
+            result = await client.search_recipes(
+                query,
+                diet=params.get("diet"),
+                health=params.get("health"),
+                cuisine_type=params.get("cuisine_type"),
+                max_results=max_results,
+            )
+            if result.get("error"):
+                return f"Edamam error: {result['error']}"
+            recipes = result.get("recipes", [])
+            if not recipes:
+                return f"No recipes found for: '{query}'"
+            lines = [f"Recipes for '{query}' ({result.get('count', 0)} total):\n"]
+            for i, r in enumerate(recipes, 1):
+                lines.append(
+                    f"  {i}. {r['label']} ({r['calories']} cal, "
+                    f"{r['servings']} servings)\n"
+                    f"     Source: {r['source']}\n"
+                    f"     URL: {r['url']}"
+                )
+            return "\n".join(lines)
+
+
+# ═════════════════════════════════════════════════════════════════════════
 # Tool registry factory
 # ═════════════════════════════════════════════════════════════════════════
 
@@ -1129,6 +1817,17 @@ def get_tool_registry() -> dict[str, BaseTool]:
             IMCPMapsETATool(),
             IMCPWeatherCurrentTool(),
             IMCPWeatherForecastTool(),
+            # MCP integrations (Google Drive, Slack, GitHub)
+            GoogleDriveTool(),
+            SlackTool(),
+            GitHubTool(),
+            # External API integrations
+            WolframAlphaTool(),
+            PerplexityResearchTool(),
+            FinancialDataTool(),
+            FlightTrackerTool(),
+            GoogleMapsTool(),
+            NutritionRecipeTool(),
         ]
         _registry = {t.name: t for t in tools}
     return _registry

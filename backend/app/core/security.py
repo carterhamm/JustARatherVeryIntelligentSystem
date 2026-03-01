@@ -1,5 +1,8 @@
-"""Security utilities — password hashing, JWT tokens, AES encryption."""
+"""Security utilities — password hashing, JWT tokens, AES encryption, PBKDF2."""
 
+import base64
+import hashlib
+import os
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 from uuid import UUID
@@ -97,6 +100,61 @@ def encrypt_value(plain_text: str) -> str:
 def decrypt_value(cipher_text: str) -> str:
     """Decrypt a Fernet token back to plain text."""
     return _get_fernet().decrypt(cipher_text.encode()).decode()
+
+
+# ---------------------------------------------------------------------------
+# PBKDF2 per-user key derivation (for OAuth token encryption)
+# ---------------------------------------------------------------------------
+
+_PBKDF2_ITERATIONS = 480_000
+_PBKDF2_KEY_LENGTH = 32  # 256 bits
+
+
+def derive_user_key(user_id: str | UUID, salt: bytes | None = None) -> tuple[bytes, bytes]:
+    """Derive a per-user Fernet key using PBKDF2-HMAC-SHA256.
+
+    Returns ``(derived_key_bytes, salt)``.  Store the salt alongside the
+    encrypted data so it can be reproduced later.
+    """
+    if salt is None:
+        salt = os.urandom(16)
+
+    master = settings.AES_KEY.encode()
+    # Combine master key with user ID for per-user isolation
+    password = master + str(user_id).encode()
+
+    dk = hashlib.pbkdf2_hmac(
+        "sha256",
+        password,
+        salt,
+        _PBKDF2_ITERATIONS,
+        dklen=_PBKDF2_KEY_LENGTH,
+    )
+
+    # Fernet requires a URL-safe base64-encoded 32-byte key
+    fernet_key = base64.urlsafe_b64encode(dk)
+    return fernet_key, salt
+
+
+def encrypt_user_value(plain_text: str, user_id: str | UUID) -> str:
+    """Encrypt a value with a per-user derived key.
+
+    Returns ``salt_b64:cipher_text`` so the salt is stored alongside.
+    """
+    fernet_key, salt = derive_user_key(user_id)
+    f = Fernet(fernet_key)
+    cipher = f.encrypt(plain_text.encode()).decode()
+    salt_b64 = base64.urlsafe_b64encode(salt).decode()
+    return f"{salt_b64}:{cipher}"
+
+
+def decrypt_user_value(stored: str, user_id: str | UUID) -> str:
+    """Decrypt a value encrypted with :func:`encrypt_user_value`."""
+    salt_b64, cipher_text = stored.split(":", 1)
+    salt = base64.urlsafe_b64decode(salt_b64)
+    fernet_key, _ = derive_user_key(user_id, salt=salt)
+    f = Fernet(fernet_key)
+    return f.decrypt(cipher_text.encode()).decode()
 
 
 # ---------------------------------------------------------------------------

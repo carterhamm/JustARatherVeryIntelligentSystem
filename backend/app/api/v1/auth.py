@@ -1,4 +1,6 @@
-"""Authentication endpoints — register, login, refresh, profile."""
+"""Authentication endpoints — register, login, refresh, profile, preferences."""
+
+from typing import Any
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -44,3 +46,26 @@ async def update_me(
     """Update the authenticated user's profile."""
     updated = await AuthService.update_user(db, current_user.id, payload)
     return UserResponse.model_validate(updated)
+
+
+@router.get("/me/preferences")
+async def get_preferences(
+    current_user: User = Depends(get_current_active_user),
+) -> dict[str, Any]:
+    """Return the authenticated user's preferences."""
+    return current_user.preferences or {}
+
+
+@router.put("/me/preferences")
+async def update_preferences(
+    payload: dict[str, Any],
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Merge new preferences into the user's existing preferences."""
+    existing = current_user.preferences or {}
+    existing.update(payload)
+    current_user.preferences = existing
+    await db.commit()
+    await db.refresh(current_user)
+    return current_user.preferences or {}
