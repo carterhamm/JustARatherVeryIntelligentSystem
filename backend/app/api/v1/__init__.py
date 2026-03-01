@@ -1,0 +1,22 @@
+"""API v1 — aggregate router that includes all sub-routers."""
+
+from fastapi import APIRouter
+
+from app.api.v1.auth import router as auth_router
+from app.api.v1.chat import router as chat_router
+from app.api.v1.voice import router as voice_router
+from app.api.v1.vision import router as vision_router
+from app.api.v1.mcp import router as mcp_router
+from app.api.v1.knowledge import router as knowledge_router
+from app.api.v1.data_import import router as data_import_router
+from app.api.v1.smart_home import router as smart_home_router
+
+v1_router = APIRouter()
+v1_router.include_router(auth_router, prefix="/auth", tags=["auth"])
+v1_router.include_router(chat_router, tags=["chat"])
+v1_router.include_router(voice_router, tags=["voice"])
+v1_router.include_router(vision_router, tags=["vision"])
+v1_router.include_router(mcp_router, tags=["MCP"])
+v1_router.include_router(knowledge_router, tags=["knowledge"])
+v1_router.include_router(data_import_router, tags=["Data Import"])
+v1_router.include_router(smart_home_router, tags=["smart-home"])

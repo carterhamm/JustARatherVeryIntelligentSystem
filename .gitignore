@@ -1,30 +1,47 @@
-# Python virtual environment
-jarvis_venv/
-
-# Training data and outputs (too large for git)
-jarvis_voice_training/processed_audio_22050hz/
-jarvis_voice_training/trained_model/*.wav
-jarvis_voice_training/logs/
-
-# Python cache
+# Python
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
 .Python
+*.egg-info/
+dist/
+build/
+.eggs/
+venv/
+.venv/
+*.egg
 
-# IDEs
+# Node
+node_modules/
+frontend/dist/
+frontend/build/
+
+# Environment
+.env
+.env.local
+.env.production
+
+# IDE
 .vscode/
 .idea/
 *.swp
 *.swo
 
-# OS files
+# OS
 .DS_Store
 Thumbs.db
 
-# Logs (keep structure files only)
-nohup.out
+# Docker
+docker/data/
+
+# Logs
 *.log
-!jarvis_training_full.log
-!jarvis_training_output.log
+nohup.out
+
+# Alembic
+backend/alembic/versions/*.py
+!backend/alembic/versions/.gitkeep
+
+# Uploads
+backend/uploads/
