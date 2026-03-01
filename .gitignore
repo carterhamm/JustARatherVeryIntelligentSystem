@@ -39,9 +39,7 @@ docker/data/
 *.log
 nohup.out
 
-# Alembic
-backend/alembic/versions/*.py
-!backend/alembic/versions/.gitkeep
+# Alembic — track migrations in version control for deployment
 
 # Uploads
 backend/uploads/
