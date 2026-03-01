@@ -49,8 +49,10 @@ class Settings(BaseSettings):
     # -- Google Gemini --------------------------------------------------------
     GOOGLE_GEMINI_API_KEY: str = ""
 
-    # -- Stark Protocol (self-hosted Gemma) -----------------------------------
+    # -- Stark Protocol (Gemma on RunPod serverless) --------------------------
     STARK_PROTOCOL_URL: str = "http://localhost:8080/v1"
+    STARK_PROTOCOL_ENDPOINT: str = ""
+    RUNPOD_API_KEY: str = ""
     STARK_PROTOCOL_ENABLED: bool = False
 
     # -- Default LLM Provider -------------------------------------------------
