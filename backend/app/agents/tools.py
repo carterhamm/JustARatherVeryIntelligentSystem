@@ -694,6 +694,281 @@ class SpotifyTool(BaseTool):
 
 
 # ═════════════════════════════════════════════════════════════════════════
+# iMCP tools — native macOS access (Calendar, Contacts, Messages,
+#               Reminders, Location, Maps, Weather) via MCP protocol
+# ═════════════════════════════════════════════════════════════════════════
+
+class _IMCPBaseTool(BaseTool):
+    """Base class for tools backed by the iMCP server."""
+
+    _mcp_tool_name: str = ""
+
+    async def _call_imcp(self, arguments: dict[str, Any]) -> str:
+        from app.integrations.mcp_client import get_imcp_client
+
+        client = get_imcp_client()
+        try:
+            await client.start()
+            result = await client.call_tool(self._mcp_tool_name, arguments)
+            if isinstance(result, str):
+                return result
+            return json.dumps(result, indent=2, default=str)
+        except Exception as exc:
+            logger.exception("iMCP tool '%s' failed: %s", self._mcp_tool_name, exc)
+            return f"Error calling {self._mcp_tool_name}: {exc}"
+
+
+class IMCPCalendarListTool(_IMCPBaseTool):
+    name = "mac_calendars_list"
+    description = "List all available calendars on this Mac. No params."
+    _mcp_tool_name = "calendars_list"
+
+    async def execute(self, params: dict[str, Any], *, state: Optional[AgentState] = None) -> str:
+        return await self._call_imcp({})
+
+
+class IMCPEventsFetchTool(_IMCPBaseTool):
+    name = "mac_events_fetch"
+    description = (
+        "Fetch calendar events from this Mac with filters.  "
+        "Params: start? (ISO datetime), end? (ISO datetime), "
+        "calendars? (list[str]), query? (str), includeAllDay? (bool)."
+    )
+    _mcp_tool_name = "events_fetch"
+
+    async def execute(self, params: dict[str, Any], *, state: Optional[AgentState] = None) -> str:
+        args: dict[str, Any] = {}
+        for key in ("start", "end", "query", "includeAllDay", "calendars", "status", "availability", "hasAlarms", "isRecurring"):
+            if key in params:
+                args[key] = params[key]
+        return await self._call_imcp(args)
+
+
+class IMCPEventsCreateTool(_IMCPBaseTool):
+    name = "mac_events_create"
+    description = (
+        "Create a calendar event on this Mac.  "
+        "Params: title (str, required), start (ISO datetime, required), "
+        "end (ISO datetime, required), calendar? (str), location? (str), "
+        "notes? (str), url? (str), isAllDay? (bool), alarms? (list)."
+    )
+    _mcp_tool_name = "events_create"
+
+    async def execute(self, params: dict[str, Any], *, state: Optional[AgentState] = None) -> str:
+        if not params.get("title") or not params.get("start") or not params.get("end"):
+            return "Missing required fields: title, start, end."
+        return await self._call_imcp(params)
+
+
+class IMCPContactsMeTool(_IMCPBaseTool):
+    name = "mac_contacts_me"
+    description = "Get the user's own contact information from this Mac. No params."
+    _mcp_tool_name = "contacts_me"
+
+    async def execute(self, params: dict[str, Any], *, state: Optional[AgentState] = None) -> str:
+        return await self._call_imcp({})
+
+
+class IMCPContactsSearchTool(_IMCPBaseTool):
+    name = "mac_contacts_search"
+    description = (
+        "Search contacts on this Mac by name, phone, or email.  "
+        "Params: name? (str), phone? (str), email? (str). At least one required."
+    )
+    _mcp_tool_name = "contacts_search"
+
+    async def execute(self, params: dict[str, Any], *, state: Optional[AgentState] = None) -> str:
+        args = {k: v for k, v in params.items() if k in ("name", "phone", "email") and v}
+        if not args:
+            return "Provide at least one of: name, phone, email."
+        return await self._call_imcp(args)
+
+
+class IMCPContactsCreateTool(_IMCPBaseTool):
+    name = "mac_contacts_create"
+    description = (
+        "Create a new contact on this Mac.  "
+        "Params: givenName (str, required), familyName? (str), "
+        "organizationName? (str), jobTitle? (str), phoneNumbers? (list), "
+        "emailAddresses? (list), birthday? (dict)."
+    )
+    _mcp_tool_name = "contacts_create"
+
+    async def execute(self, params: dict[str, Any], *, state: Optional[AgentState] = None) -> str:
+        if not params.get("givenName"):
+            return "Missing required field: givenName."
+        return await self._call_imcp(params)
+
+
+class IMCPMessagesFetchTool(_IMCPBaseTool):
+    name = "mac_messages_fetch"
+    description = (
+        "Fetch iMessages/SMS from this Mac.  "
+        "Params: participants? (list[str], phone/email in E.164), "
+        "start? (ISO datetime), end? (ISO datetime), "
+        "query? (str), limit? (int, default 30)."
+    )
+    _mcp_tool_name = "messages_fetch"
+
+    async def execute(self, params: dict[str, Any], *, state: Optional[AgentState] = None) -> str:
+        args: dict[str, Any] = {}
+        for key in ("participants", "start", "end", "query", "limit"):
+            if key in params:
+                args[key] = params[key]
+        return await self._call_imcp(args)
+
+
+class IMCPRemindersListsTool(_IMCPBaseTool):
+    name = "mac_reminders_lists"
+    description = "List all reminder lists on this Mac. No params."
+    _mcp_tool_name = "reminders_lists"
+
+    async def execute(self, params: dict[str, Any], *, state: Optional[AgentState] = None) -> str:
+        return await self._call_imcp({})
+
+
+class IMCPRemindersFetchTool(_IMCPBaseTool):
+    name = "mac_reminders_fetch"
+    description = (
+        "Fetch reminders from this Mac.  "
+        "Params: completed? (bool), start? (ISO datetime), "
+        "end? (ISO datetime), lists? (list[str]), query? (str)."
+    )
+    _mcp_tool_name = "reminders_fetch"
+
+    async def execute(self, params: dict[str, Any], *, state: Optional[AgentState] = None) -> str:
+        args: dict[str, Any] = {}
+        for key in ("completed", "start", "end", "lists", "query"):
+            if key in params:
+                args[key] = params[key]
+        return await self._call_imcp(args)
+
+
+class IMCPRemindersCreateTool(_IMCPBaseTool):
+    name = "mac_reminders_create"
+    description = (
+        "Create a reminder on this Mac.  "
+        "Params: title (str, required), due? (ISO datetime), "
+        "list? (str), notes? (str), priority? (str), alarms? (list[int] minutes)."
+    )
+    _mcp_tool_name = "reminders_create"
+
+    async def execute(self, params: dict[str, Any], *, state: Optional[AgentState] = None) -> str:
+        if not params.get("title"):
+            return "Missing required field: title."
+        return await self._call_imcp(params)
+
+
+class IMCPLocationCurrentTool(_IMCPBaseTool):
+    name = "mac_location_current"
+    description = "Get the user's current location from this Mac. No params."
+    _mcp_tool_name = "location_current"
+
+    async def execute(self, params: dict[str, Any], *, state: Optional[AgentState] = None) -> str:
+        return await self._call_imcp({})
+
+
+class IMCPLocationGeocodeTool(_IMCPBaseTool):
+    name = "mac_location_geocode"
+    description = (
+        "Convert an address to coordinates.  Params: address (str, required)."
+    )
+    _mcp_tool_name = "location_geocode"
+
+    async def execute(self, params: dict[str, Any], *, state: Optional[AgentState] = None) -> str:
+        if not params.get("address"):
+            return "Missing required field: address."
+        return await self._call_imcp({"address": params["address"]})
+
+
+class IMCPMapsSearchTool(_IMCPBaseTool):
+    name = "mac_maps_search"
+    description = (
+        "Search for places/addresses using Apple Maps.  "
+        "Params: query (str, required), region? ({latitude, longitude, radius?})."
+    )
+    _mcp_tool_name = "maps_search"
+
+    async def execute(self, params: dict[str, Any], *, state: Optional[AgentState] = None) -> str:
+        if not params.get("query"):
+            return "Missing required field: query."
+        args: dict[str, Any] = {"query": params["query"]}
+        if "region" in params:
+            args["region"] = params["region"]
+        return await self._call_imcp(args)
+
+
+class IMCPMapsDirectionsTool(_IMCPBaseTool):
+    name = "mac_maps_directions"
+    description = (
+        "Get directions between locations via Apple Maps.  "
+        "Params: originAddress? (str), destinationAddress? (str), "
+        "originCoordinates? ({latitude, longitude}), "
+        "destinationCoordinates? ({latitude, longitude}), "
+        "transportType? (str: automobile/walking/transit/any)."
+    )
+    _mcp_tool_name = "maps_directions"
+
+    async def execute(self, params: dict[str, Any], *, state: Optional[AgentState] = None) -> str:
+        return await self._call_imcp(params)
+
+
+class IMCPMapsETATool(_IMCPBaseTool):
+    name = "mac_maps_eta"
+    description = (
+        "Get travel time estimate between two points.  "
+        "Params: originLatitude (float), originLongitude (float), "
+        "destinationLatitude (float), destinationLongitude (float), "
+        "transportType? (str: automobile/walking/transit)."
+    )
+    _mcp_tool_name = "maps_eta"
+
+    async def execute(self, params: dict[str, Any], *, state: Optional[AgentState] = None) -> str:
+        required = ("originLatitude", "originLongitude", "destinationLatitude", "destinationLongitude")
+        if not all(params.get(k) is not None for k in required):
+            return f"Missing required fields: {', '.join(required)}"
+        return await self._call_imcp(params)
+
+
+class IMCPWeatherCurrentTool(_IMCPBaseTool):
+    name = "mac_weather_current"
+    description = (
+        "Get current weather from Apple Weather (no API key needed).  "
+        "Params: latitude (float, required), longitude (float, required)."
+    )
+    _mcp_tool_name = "weather_current"
+
+    async def execute(self, params: dict[str, Any], *, state: Optional[AgentState] = None) -> str:
+        if params.get("latitude") is None or params.get("longitude") is None:
+            return "Missing required fields: latitude, longitude."
+        return await self._call_imcp({
+            "latitude": params["latitude"],
+            "longitude": params["longitude"],
+        })
+
+
+class IMCPWeatherForecastTool(_IMCPBaseTool):
+    name = "mac_weather_forecast"
+    description = (
+        "Get daily weather forecast from Apple Weather.  "
+        "Params: latitude (float, required), longitude (float, required), "
+        "days? (int, 1-10, default 7)."
+    )
+    _mcp_tool_name = "weather_daily"
+
+    async def execute(self, params: dict[str, Any], *, state: Optional[AgentState] = None) -> str:
+        if params.get("latitude") is None or params.get("longitude") is None:
+            return "Missing required fields: latitude, longitude."
+        args: dict[str, Any] = {
+            "latitude": params["latitude"],
+            "longitude": params["longitude"],
+        }
+        if "days" in params:
+            args["days"] = params["days"]
+        return await self._call_imcp(args)
+
+
+# ═════════════════════════════════════════════════════════════════════════
 # Calculator tool
 # ═════════════════════════════════════════════════════════════════════════
 
@@ -836,6 +1111,24 @@ def get_tool_registry() -> dict[str, BaseTool]:
             SpotifyTool(),
             CalculatorTool(),
             DateTimeTool(),
+            # iMCP — native macOS tools (no API keys, all local)
+            IMCPCalendarListTool(),
+            IMCPEventsFetchTool(),
+            IMCPEventsCreateTool(),
+            IMCPContactsMeTool(),
+            IMCPContactsSearchTool(),
+            IMCPContactsCreateTool(),
+            IMCPMessagesFetchTool(),
+            IMCPRemindersListsTool(),
+            IMCPRemindersFetchTool(),
+            IMCPRemindersCreateTool(),
+            IMCPLocationCurrentTool(),
+            IMCPLocationGeocodeTool(),
+            IMCPMapsSearchTool(),
+            IMCPMapsDirectionsTool(),
+            IMCPMapsETATool(),
+            IMCPWeatherCurrentTool(),
+            IMCPWeatherForecastTool(),
         ]
         _registry = {t.name: t for t in tools}
     return _registry

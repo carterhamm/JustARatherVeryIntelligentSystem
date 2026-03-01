@@ -8,6 +8,7 @@ from app.db.neo4j import close_neo4j_client, get_neo4j_client
 from app.db.postgres import engine
 from app.db.qdrant import close_qdrant_store, get_qdrant_store
 from app.db.redis import close_redis, get_redis_client
+from app.integrations.mcp_client import close_imcp_client, get_imcp_client
 
 logger = structlog.stdlib.get_logger("jarvis.events")
 
@@ -56,6 +57,16 @@ async def startup_handler(app: FastAPI) -> None:
     except Exception as exc:
         logger.error("qdrant_connection_failed", error=str(exc))
 
+    # -- iMCP (macOS native services) ----------------------------------------
+    try:
+        imcp = get_imcp_client()
+        await imcp.start()
+        tools = await imcp.list_tools()
+        logger.info("imcp_connected", tools_count=len(tools))
+    except Exception as exc:
+        logger.warning("imcp_not_available", error=str(exc),
+                       hint="iMCP tools will fail — install iMCP.app or ignore if not on macOS")
+
     logger.info("startup_complete", app=settings.APP_NAME)
 
 
@@ -78,5 +89,8 @@ async def shutdown_handler(app: FastAPI) -> None:
 
     await close_qdrant_store()
     logger.info("qdrant_disconnected")
+
+    await close_imcp_client()
+    logger.info("imcp_disconnected")
 
     logger.info("shutdown_complete", app=settings.APP_NAME)

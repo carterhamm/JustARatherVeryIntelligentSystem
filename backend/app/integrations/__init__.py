@@ -8,6 +8,7 @@ from app.integrations.elevenlabs import ElevenLabsClient
 from app.integrations.gmail import GmailClient
 from app.integrations.llm_client import LLMClient
 from app.integrations.matter import MatterClient
+from app.integrations.mcp_client import MCPStdioClient
 from app.integrations.news import NewsClient
 from app.integrations.spotify import SpotifyClient
 from app.integrations.vision import VisionClient
@@ -20,6 +21,7 @@ __all__ = [
     "GmailClient",
     "LLMClient",
     "MatterClient",
+    "MCPStdioClient",
     "NewsClient",
     "SpotifyClient",
     "VisionClient",

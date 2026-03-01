@@ -52,16 +52,43 @@ the following schema — NO markdown fences, NO extra text:
 
 ## Tool catalogue
 
-- search_knowledge   -- search the private knowledge base
-- send_email         -- compose and send an email (params: to, subject, body)
-- read_email         -- read recent emails (params: query?, limit?)
-- create_calendar_event -- create a calendar event (params: title, start, end, description?)
-- list_calendar_events  -- list upcoming events (params: start_date, end_date)
-- set_reminder       -- set a reminder (params: message, remind_at)
-- smart_home_control -- control a smart-home device (params: device_id, command, params?)
-- web_search         -- search the web (params: query)
+### Knowledge & Utilities
+- search_knowledge   -- search the private knowledge base (params: query, limit?)
 - calculator         -- evaluate a math expression (params: expression)
 - date_time          -- current date/time or timezone conversion (params: timezone?, operation?)
+- web_search         -- search the web (params: query)
+
+### Email (Google)
+- send_email         -- send an email via Gmail (params: to, subject, body)
+- read_email         -- read recent Gmail emails (params: query?, limit?)
+
+### macOS Native (via iMCP — PREFER these over cloud APIs)
+- mac_calendars_list    -- list all calendars on this Mac
+- mac_events_fetch      -- fetch calendar events (params: start?, end?, calendars?, query?)
+- mac_events_create     -- create a calendar event (params: title, start, end, calendar?, location?, notes?)
+- mac_contacts_me       -- get the user's own contact info
+- mac_contacts_search   -- search contacts (params: name?, phone?, email?)
+- mac_contacts_create   -- create a new contact (params: givenName, familyName?, phone?, email?)
+- mac_messages_fetch    -- fetch iMessages/SMS (params: participants?, start?, end?, query?, limit?)
+- mac_reminders_lists   -- list all reminder lists
+- mac_reminders_fetch   -- fetch reminders (params: completed?, start?, end?, lists?, query?)
+- mac_reminders_create  -- create a reminder (params: title, due?, list?, notes?, priority?)
+- mac_location_current  -- get user's current location
+- mac_location_geocode  -- convert address to coordinates (params: address)
+- mac_maps_search       -- search places via Apple Maps (params: query, region?)
+- mac_maps_directions   -- get directions (params: originAddress?, destinationAddress?, transportType?)
+- mac_maps_eta          -- travel time estimate (params: originLatitude, originLongitude, destinationLatitude, destinationLongitude)
+- mac_weather_current   -- current weather (params: latitude, longitude)
+- mac_weather_forecast  -- daily forecast (params: latitude, longitude, days?)
+
+### Cloud APIs (only if macOS tools are insufficient)
+- create_calendar_event -- create a Google Calendar event (params: title, start, end)
+- list_calendar_events  -- list Google Calendar events (params: start_date, end_date)
+- set_reminder       -- set a DB-persisted reminder (params: message, remind_at)
+- weather            -- weather via OpenWeatherMap (params: action, city?, lat?, lon?)
+- news               -- news headlines/search (params: action, query?, category?)
+- spotify            -- Spotify info (params: action, query?)
+- smart_home_control -- control smart home device (params: device_id, command, params?)
 
 ## Decision guide
 
