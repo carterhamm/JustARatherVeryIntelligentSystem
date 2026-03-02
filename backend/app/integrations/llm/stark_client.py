@@ -25,7 +25,7 @@ _MODEL_NAME = "gemma-3-27b"
 _POLL_INITIAL_INTERVAL = 0.1   # 100 ms
 _POLL_MAX_INTERVAL = 2.0       # 2 s
 _POLL_BACKOFF_FACTOR = 2.0
-_JOB_TIMEOUT = 120.0           # 120 s total (covers cold starts)
+_JOB_TIMEOUT = 600.0           # 10 min total (covers cold starts + model loading)
 
 # Retry on transient HTTP errors
 _MAX_RETRIES = 3
