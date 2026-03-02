@@ -1,8 +1,9 @@
-"""Stark Protocol LLM client — Gemma 3 27B on RunPod serverless.
+"""Stark Protocol LLM client — Gemma 3 27B on RunPod serverless vLLM.
 
-Submits inference jobs to a RunPod serverless vLLM endpoint and polls
-for completion.  Handles cold starts (30-60 s) with a 120 s timeout
-and exponential-backoff polling.
+Submits inference jobs to a RunPod serverless vLLM endpoint using the
+OpenAI-compatible chat completions route.  Polls for completion with
+exponential-backoff.  Handles cold starts (up to several minutes) with
+a 600 s timeout.
 """
 
 from __future__ import annotations
@@ -19,33 +20,17 @@ from app.integrations.llm.shield_gemma import ShieldGemmaFilter, FilterResult
 
 logger = logging.getLogger("jarvis.llm.stark_protocol")
 
-_MODEL_NAME = "gemma-3-27b"
+_MODEL_NAME = "google/gemma-3-27b-it"
 
 # Polling configuration
-_POLL_INITIAL_INTERVAL = 0.1   # 100 ms
-_POLL_MAX_INTERVAL = 2.0       # 2 s
-_POLL_BACKOFF_FACTOR = 2.0
+_POLL_INITIAL_INTERVAL = 0.5   # 500 ms
+_POLL_MAX_INTERVAL = 3.0       # 3 s
+_POLL_BACKOFF_FACTOR = 1.5
 _JOB_TIMEOUT = 600.0           # 10 min total (covers cold starts + model loading)
 
 # Retry on transient HTTP errors
 _MAX_RETRIES = 3
 _RETRY_BASE_DELAY = 1.0
-
-
-def _build_prompt(messages: list[dict[str, str]]) -> str:
-    """Convert chat messages into a single prompt string for vLLM."""
-    parts: list[str] = []
-    for msg in messages:
-        role = msg.get("role", "user")
-        content = msg.get("content", "")
-        if role == "system":
-            parts.append(f"<start_of_turn>system\n{content}<end_of_turn>")
-        elif role == "assistant":
-            parts.append(f"<start_of_turn>model\n{content}<end_of_turn>")
-        else:
-            parts.append(f"<start_of_turn>user\n{content}<end_of_turn>")
-    parts.append("<start_of_turn>model\n")
-    return "\n".join(parts)
 
 
 class StarkProtocolClient(BaseLLMClient):
@@ -78,16 +63,20 @@ class StarkProtocolClient(BaseLLMClient):
 
     async def _submit_job(
         self,
-        prompt: str,
+        messages: list[dict[str, str]],
         temperature: float = 0.7,
         max_tokens: int = 1024,
     ) -> str:
-        """POST to /run — returns the job ID."""
+        """POST to /run with vLLM OpenAI-compatible format — returns the job ID."""
         payload = {
             "input": {
-                "prompt": prompt,
-                "max_tokens": max_tokens,
-                "temperature": temperature,
+                "openai_route": "/v1/chat/completions",
+                "openai_input": {
+                    "model": _MODEL_NAME,
+                    "messages": messages,
+                    "max_tokens": max_tokens,
+                    "temperature": temperature,
+                },
             },
         }
         resp = await self._http.post(self._endpoint_url, json=payload)
@@ -133,7 +122,7 @@ class StarkProtocolClient(BaseLLMClient):
 
     async def _run_job(
         self,
-        prompt: str,
+        messages: list[dict[str, str]],
         temperature: float = 0.7,
         max_tokens: int = 1024,
     ) -> dict[str, Any]:
@@ -141,7 +130,7 @@ class StarkProtocolClient(BaseLLMClient):
         last_exc: BaseException | None = None
         for attempt in range(self._max_retries):
             try:
-                job_id = await self._submit_job(prompt, temperature, max_tokens)
+                job_id = await self._submit_job(messages, temperature, max_tokens)
                 return await self._poll_job(job_id)
             except httpx.HTTPStatusError as exc:
                 if exc.response.status_code == 503:
@@ -168,28 +157,47 @@ class StarkProtocolClient(BaseLLMClient):
         ) from last_exc
 
     @staticmethod
-    def _extract_output(data: dict[str, Any]) -> str:
-        """Extract generated text from RunPod job output."""
+    def _extract_output(data: dict[str, Any]) -> tuple[str, dict[str, int]]:
+        """Extract generated text and usage from RunPod vLLM job output.
+
+        The vLLM worker wraps OpenAI-format responses in a list:
+        {"output": [{"choices": [{"message": {"content": "..."}}], "usage": {...}}]}
+        """
         output = data.get("output")
         if output is None:
-            return ""
-        # vLLM serverless output formats vary
-        if isinstance(output, str):
-            return output
-        if isinstance(output, dict):
-            # {"text": "..."} or {"choices": [{"text": "..."}]}
-            if "text" in output:
-                return output["text"]
-            choices = output.get("choices", [])
-            if choices:
-                return choices[0].get("text", "")
+            return "", {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+
+        # vLLM worker returns output as a list of OpenAI responses
         if isinstance(output, list) and output:
             first = output[0]
-            if isinstance(first, str):
-                return first
             if isinstance(first, dict):
-                return first.get("text", first.get("generated_text", ""))
-        return str(output)
+                # Extract content from choices
+                choices = first.get("choices", [])
+                if choices:
+                    choice = choices[0]
+                    # Chat completion format: choices[].message.content
+                    message = choice.get("message", {})
+                    content = message.get("content", "")
+                    if not content:
+                        # Completion format: choices[].text
+                        content = choice.get("text", "")
+                else:
+                    content = ""
+
+                # Extract real usage from vLLM
+                usage = first.get("usage", {})
+                token_usage = {
+                    "prompt_tokens": usage.get("prompt_tokens", 0),
+                    "completion_tokens": usage.get("completion_tokens", 0),
+                    "total_tokens": usage.get("total_tokens", 0),
+                }
+                return content, token_usage
+
+        # Fallback for unexpected formats
+        if isinstance(output, str):
+            return output, {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+
+        return str(output), {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
 
     # ------------------------------------------------------------------
     # BaseLLMClient interface
@@ -221,22 +229,17 @@ class StarkProtocolClient(BaseLLMClient):
                     "tool_calls": None,
                 }
 
-        prompt = _build_prompt(messages)
         start = time.monotonic()
-        data = await self._run_job(prompt, temperature, max_tokens or 1024)
+        data = await self._run_job(messages, temperature, max_tokens or 1024)
         latency = time.monotonic() - start
 
-        content = self._extract_output(data)
+        content, usage = self._extract_output(data)
         logger.info("Stark Protocol response: %.1fs, %d chars", latency, len(content))
 
         return {
             "content": content,
             "model": _MODEL_NAME,
-            "usage": {
-                "prompt_tokens": max(1, len(prompt) // 4),
-                "completion_tokens": max(1, len(content) // 4),
-                "total_tokens": max(1, (len(prompt) + len(content)) // 4),
-            },
+            "usage": usage,
             "finish_reason": "stop",
             "tool_calls": None,
         }
@@ -271,13 +274,13 @@ class StarkProtocolClient(BaseLLMClient):
                     self._endpoint_url.replace("/run", "/health"),
                 )
                 if resp.status_code == 200:
-                    logger.info("RunPod endpoint healthy")
+                    data = resp.json()
+                    workers = data.get("workers", {})
+                    ready = workers.get("ready", 0)
+                    logger.info(
+                        "RunPod endpoint healthy (%d workers ready)", ready,
+                    )
                     return True
-                # RunPod may not have /health — try submitting a tiny job
-                job_id = await self._submit_job("Hi", temperature=0.0, max_tokens=5)
-                await self._poll_job(job_id)
-                logger.info("RunPod endpoint healthy (test job succeeded)")
-                return True
             except Exception as exc:
                 logger.warning(
                     "RunPod health check %d/%d failed: %s",
