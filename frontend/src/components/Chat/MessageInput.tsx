@@ -24,7 +24,7 @@ export default function MessageInput({
     const textarea = textareaRef.current;
     if (textarea) {
       textarea.style.height = 'auto';
-      const maxHeight = 6 * 24; // 6 lines
+      const maxHeight = 6 * 24;
       textarea.style.height = `${Math.min(textarea.scrollHeight, maxHeight)}px`;
     }
   }, []);
@@ -51,29 +51,41 @@ export default function MessageInput({
         handleSend();
       }
     },
-    [handleSend]
+    [handleSend],
   );
 
   const charCount = content.length;
   const showCharCount = charCount > 500;
 
   return (
-    <div className="glass-panel rounded-2xl p-3">
+    <div
+      className="bg-hud-panel backdrop-blur-hud border border-jarvis-blue/12 p-2.5"
+      style={{
+        clipPath: 'polygon(0 6px, 6px 0, calc(100% - 6px) 0, 100% 6px, 100% calc(100% - 6px), calc(100% - 6px) 100%, 6px 100%, 0 calc(100% - 6px))',
+      }}
+    >
       <div className="flex items-end gap-2">
-        {/* Voice toggle button */}
+        {/* Voice toggle — hexagonal */}
         {onVoiceToggle && (
           <button
             onClick={onVoiceToggle}
             disabled={disabled || isLoading}
             className={clsx(
-              'flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center transition-all',
+              'flex-shrink-0 w-9 h-9 flex items-center justify-center transition-all',
               {
-                'bg-red-500/20 border border-red-500/50 text-red-400 recording-pulse': isRecording,
-                'jarvis-button': !isRecording,
-              }
+                'text-hud-red': isRecording,
+                'text-jarvis-blue/60 hover:text-jarvis-blue': !isRecording,
+              },
             )}
+            style={{
+              clipPath: 'polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)',
+              background: isRecording
+                ? 'rgba(255, 58, 58, 0.15)'
+                : 'rgba(0, 212, 255, 0.08)',
+              border: `1px solid ${isRecording ? 'rgba(255, 58, 58, 0.3)' : 'rgba(0, 212, 255, 0.15)'}`,
+            }}
           >
-            {isRecording ? <MicOff size={18} /> : <Mic size={18} />}
+            {isRecording ? <MicOff size={15} /> : <Mic size={15} />}
           </button>
         )}
 
@@ -87,13 +99,10 @@ export default function MessageInput({
             placeholder="Message J.A.R.V.I.S. ..."
             disabled={disabled || isLoading}
             rows={1}
-            className={clsx(
-              'w-full resize-none jarvis-input rounded-xl px-4 py-2.5 text-sm',
-              'placeholder:text-gray-500 disabled:opacity-50'
-            )}
+            className="w-full resize-none bg-transparent border-none text-sm text-gray-200 placeholder:text-gray-600 disabled:opacity-50 focus:outline-none px-2 py-2 font-sans"
           />
           {showCharCount && (
-            <span className="absolute right-3 bottom-1 text-[10px] text-gray-500">
+            <span className="absolute right-2 bottom-0.5 text-[9px] text-gray-600 font-mono">
               {charCount}
             </span>
           )}
@@ -104,27 +113,37 @@ export default function MessageInput({
           onClick={handleSend}
           disabled={!content.trim() || isLoading || disabled}
           className={clsx(
-            'flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center transition-all',
-            'jarvis-button',
+            'flex-shrink-0 w-9 h-9 flex items-center justify-center transition-all',
             {
-              'opacity-40 cursor-not-allowed': !content.trim() || isLoading || disabled,
-            }
+              'opacity-30 cursor-not-allowed': !content.trim() || isLoading || disabled,
+              'text-jarvis-gold hover:text-jarvis-gold': content.trim() && !isLoading && !disabled,
+              'text-jarvis-blue/40': !content.trim(),
+            },
           )}
+          style={{
+            clipPath: 'polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)',
+            background: content.trim() && !isLoading
+              ? 'rgba(240, 165, 0, 0.12)'
+              : 'rgba(0, 212, 255, 0.05)',
+            border: `1px solid ${content.trim() && !isLoading ? 'rgba(240, 165, 0, 0.25)' : 'rgba(0, 212, 255, 0.1)'}`,
+          }}
         >
           {isLoading ? (
-            <Loader2 size={18} className="animate-spin" />
+            <Loader2 size={15} className="animate-spin" />
           ) : (
-            <Send size={18} />
+            <Send size={15} />
           )}
         </button>
       </div>
 
-      {/* Keyboard hint */}
-      <div className="flex justify-between items-center mt-1.5 px-1">
-        <span className="text-[10px] text-gray-600">
-          Press <kbd className="px-1 py-0.5 rounded bg-jarvis-darker text-gray-400 text-[9px]">Enter</kbd> to send,{' '}
-          <kbd className="px-1 py-0.5 rounded bg-jarvis-darker text-gray-400 text-[9px]">Shift+Enter</kbd> for new line
+      {/* Bottom hints */}
+      <div className="flex justify-between items-center mt-1 px-1">
+        <span className="text-[9px] text-gray-700 font-mono">
+          ENTER send / SHIFT+ENTER newline
         </span>
+        {isRecording && (
+          <span className="text-[9px] text-hud-red font-mono animate-pulse">REC</span>
+        )}
       </div>
     </div>
   );

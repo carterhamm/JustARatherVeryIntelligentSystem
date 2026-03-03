@@ -1,19 +1,18 @@
 # =============================================================================
-# J.A.R.V.I.S. Backend — Production Dockerfile
+# J.A.R.V.I.S. — Production Dockerfile (backend + frontend)
 # =============================================================================
-# Build:  docker build -t jarvis-backend .
-# Run:    docker run -p 8000:8000 --env-file ../.env jarvis-backend
+# Serves both the API and the pre-built React frontend from a single container.
+# Frontend is pre-built and included in backend/static/.
 # =============================================================================
 
-FROM python:3.11-slim AS base
+FROM python:3.11-slim
 
-# Prevent Python from writing .pyc files and enable unbuffered stdout/stderr
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# -- System dependencies ------------------------------------------------------
+# System dependencies
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         gcc \
@@ -23,16 +22,16 @@ RUN apt-get update && \
         curl \
     && rm -rf /var/lib/apt/lists/*
 
-# -- Python dependencies ------------------------------------------------------
+# Python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# -- Application code ---------------------------------------------------------
+# Application code (includes static/ with pre-built frontend)
 COPY . .
 RUN chmod +x /app/entrypoint.sh
 
-# -- Non-root user -------------------------------------------------------------
+# Non-root user
 RUN addgroup --system jarvis && \
     adduser --system --ingroup jarvis jarvis && \
     chown -R jarvis:jarvis /app
@@ -40,9 +39,7 @@ USER jarvis
 
 EXPOSE 8000
 
-# -- Health check --------------------------------------------------------------
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
     CMD curl -f http://localhost:${PORT:-8000}/health || exit 1
 
-# -- Entrypoint ----------------------------------------------------------------
 ENTRYPOINT ["/app/entrypoint.sh"]

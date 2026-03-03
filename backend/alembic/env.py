@@ -19,6 +19,7 @@ import app.models.conversation  # noqa: F401
 import app.models.knowledge  # noqa: F401
 import app.models.smart_home  # noqa: F401
 import app.models.reminder  # noqa: F401
+import app.models.passkey  # noqa: F401
 
 # Alembic Config object — gives access to alembic.ini values
 config = context.config

@@ -1,0 +1,24 @@
+# Dependencies (rebuilt in container)
+**/node_modules
+**/__pycache__
+**/.venv
+**/venv
+
+# Build artifacts
+frontend/dist
+frontend/build
+backend/dist
+
+# Dev/IDE
+.git
+.claude
+*.pyc
+.DS_Store
+*.egg-info
+
+# Training / media artifacts
+jarvis_voice_training
+*.wav
+*.log
+*.png
+Website

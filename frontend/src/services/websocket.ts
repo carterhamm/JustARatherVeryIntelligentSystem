@@ -63,6 +63,14 @@ class WebSocketManager {
       };
 
       this.ws.onmessage = (event: MessageEvent) => {
+        // Binary frame = TTS audio blob
+        if (event.data instanceof Blob) {
+          this.messageHandlers.forEach((h) =>
+            h({ type: 'audio_binary', blob: event.data })
+          );
+          return;
+        }
+
         try {
           const data = JSON.parse(event.data);
 

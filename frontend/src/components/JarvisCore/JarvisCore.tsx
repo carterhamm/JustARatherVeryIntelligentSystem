@@ -8,6 +8,7 @@ import ParticleSystem from './ParticleSystem';
 import ConnectionNetwork from './ConnectionNetwork';
 import OrbitalRings from './OrbitalRings';
 import HolographicGrid from './HolographicGrid';
+import HUDOverlay3D from './HUDOverlay3D';
 
 function JarvisScene() {
   const isListening = useUIStore((s) => s.isListening);
@@ -32,6 +33,7 @@ function JarvisScene() {
       <ConnectionNetwork activity={activity} />
       <OrbitalRings activity={activity} />
       <HolographicGrid activity={activity} />
+      <HUDOverlay3D activity={activity} />
 
       {/* Post-processing */}
       <EffectComposer>

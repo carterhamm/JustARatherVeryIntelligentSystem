@@ -1,7 +1,7 @@
 """Pydantic v2 schemas for authentication and user management."""
 
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, EmailStr, Field, ConfigDict
@@ -51,9 +51,57 @@ class Token(BaseModel):
     token_type: str = "bearer"
 
 
+class AuthResponse(BaseModel):
+    """Token pair + user object returned after login / register."""
+
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+    user: UserResponse
+
+
 class TokenPayload(BaseModel):
     """Decoded JWT payload."""
 
     sub: str
     exp: Optional[int] = None
     type: str = "access"
+
+
+# -- Passkey / WebAuthn schemas -----------------------------------------------
+
+class LookupRequest(BaseModel):
+    """Check if an identifier (email or username) exists."""
+    identifier: str = Field(min_length=1, max_length=320)
+
+
+class LookupResponse(BaseModel):
+    exists: bool
+    user_id: Optional[UUID] = None
+    username: Optional[str] = None
+
+
+class PasskeyRegisterBeginRequest(BaseModel):
+    """Start passkey registration for a new user."""
+    email: EmailStr
+    username: str = Field(min_length=3, max_length=64)
+    full_name: Optional[str] = Field(default=None, max_length=256)
+
+
+class PasskeyRegisterCompleteRequest(BaseModel):
+    """Complete passkey registration with the credential response."""
+    email: EmailStr
+    username: str = Field(min_length=3, max_length=64)
+    full_name: Optional[str] = None
+    credential: dict[str, Any]
+
+
+class PasskeyLoginBeginRequest(BaseModel):
+    """Start passkey authentication for an existing user."""
+    identifier: str = Field(min_length=1, max_length=320)
+
+
+class PasskeyLoginCompleteRequest(BaseModel):
+    """Complete passkey authentication with the assertion response."""
+    identifier: str = Field(min_length=1, max_length=320)
+    credential: dict[str, Any]

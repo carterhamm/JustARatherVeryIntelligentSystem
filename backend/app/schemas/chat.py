@@ -137,6 +137,10 @@ class ChatRequest(BaseModel):
         max_length=32,
         description="LLM provider to use: openai, claude, gemini, or stark_protocol.",
     )
+    voice_enabled: bool = Field(
+        False,
+        description="Synthesize audio response via ElevenLabs.",
+    )
 
 
 class ChatStreamChunk(BaseModel):

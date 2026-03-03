@@ -20,24 +20,15 @@ function CodeBlock({ language, children }: { language: string; children: string 
   };
 
   return (
-    <div className="relative group my-2 rounded-lg overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-2 bg-[#1a1a2e] border-b border-jarvis-blue/20">
-        <span className="text-xs text-jarvis-blue/70 font-mono">{language || 'code'}</span>
+    <div className="relative group my-2 overflow-hidden border border-jarvis-blue/15"
+      style={{ clipPath: 'polygon(0 6px, 6px 0, calc(100% - 6px) 0, 100% 6px, 100% calc(100% - 6px), calc(100% - 6px) 100%, 6px 100%, 0 calc(100% - 6px))' }}>
+      <div className="flex items-center justify-between px-4 py-1.5 bg-[#0a0a1e] border-b border-jarvis-blue/15">
+        <span className="hud-label text-[8px]">{language || 'code'}</span>
         <button
           onClick={handleCopy}
-          className="flex items-center gap-1 text-xs text-jarvis-blue/50 hover:text-jarvis-blue transition-colors"
+          className="flex items-center gap-1 text-[10px] text-jarvis-blue/50 hover:text-jarvis-blue transition-colors"
         >
-          {copied ? (
-            <>
-              <Check size={12} />
-              <span>Copied</span>
-            </>
-          ) : (
-            <>
-              <Copy size={12} />
-              <span>Copy</span>
-            </>
-          )}
+          {copied ? <><Check size={10} /> Copied</> : <><Copy size={10} /> Copy</>}
         </button>
       </div>
       <SyntaxHighlighter
@@ -45,9 +36,9 @@ function CodeBlock({ language, children }: { language: string; children: string 
         language={language || 'text'}
         customStyle={{
           margin: 0,
-          background: '#0d0d1a',
-          padding: '1rem',
-          fontSize: '0.85rem',
+          background: '#060612',
+          padding: '0.75rem 1rem',
+          fontSize: '0.8rem',
         }}
       >
         {children}
@@ -78,8 +69,9 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
   if (isSystem) {
     return (
       <div className="flex justify-center my-3">
-        <div className="px-4 py-2 rounded-lg bg-jarvis-darker/50 border border-jarvis-blue/10 max-w-lg">
-          <p className="text-xs text-center text-gray-400">{message.content}</p>
+        <div className="px-4 py-1.5 border border-jarvis-blue/10 bg-hud-panel/50 max-w-lg"
+          style={{ clipPath: 'polygon(0 4px, 4px 0, calc(100% - 4px) 0, 100% 4px, 100% calc(100% - 4px), calc(100% - 4px) 100%, 4px 100%, 0 calc(100% - 4px))' }}>
+          <p className="text-[10px] text-center text-gray-500 font-mono">{message.content}</p>
         </div>
       </div>
     );
@@ -92,28 +84,35 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
         'justify-start': !isUser,
       })}
     >
-      <div
-        className={clsx('max-w-[75%] relative group', {
-          'order-1': isUser,
-        })}
-      >
-        {/* Avatar indicator */}
+      <div className={clsx('max-w-[75%] relative group', { 'order-1': isUser })}>
+        {/* Label */}
         {!isUser && (
           <div className="flex items-center gap-2 mb-1">
-            <div className="w-5 h-5 rounded-full bg-gradient-to-br from-jarvis-blue to-jarvis-cyan flex items-center justify-center">
-              <span className="text-[10px] font-bold text-jarvis-darker">J</span>
+            <div className="w-4 h-4 flex items-center justify-center" style={{
+              clipPath: 'polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)',
+              background: 'linear-gradient(135deg, rgba(0, 212, 255, 0.3), rgba(0, 128, 255, 0.2))',
+            }}>
+              <span className="text-[6px] font-bold text-jarvis-blue">J</span>
             </div>
-            <span className="text-xs text-jarvis-blue/60 font-display tracking-wider">J.A.R.V.I.S.</span>
+            <span className="hud-label text-[8px]">J.A.R.V.I.S.</span>
+          </div>
+        )}
+        {isUser && (
+          <div className="flex items-center justify-end gap-1.5 mb-1">
+            <span className="hud-label text-[8px] text-jarvis-gold/50">YOU</span>
           </div>
         )}
 
-        {/* Message bubble */}
+        {/* Bubble */}
         <div
-          className={clsx('rounded-2xl px-4 py-3 text-sm leading-relaxed', {
-            'bg-gradient-to-br from-jarvis-blue/20 to-blue-600/20 border border-jarvis-blue/30 text-white':
-              isUser,
-            'bg-jarvis-darker/80 border border-jarvis-blue/15 text-gray-200': !isUser,
+          className={clsx('px-4 py-3 text-sm leading-relaxed', {
+            'bg-jarvis-gold/[0.08] border border-jarvis-gold/25 text-white': isUser,
+            'bg-hud-panel border border-jarvis-blue/15 text-gray-200': !isUser,
           })}
+          style={{
+            clipPath: 'polygon(0 6px, 6px 0, calc(100% - 6px) 0, 100% 6px, 100% calc(100% - 6px), calc(100% - 6px) 100%, 6px 100%, 0 calc(100% - 6px))',
+            backdropFilter: 'blur(8px)',
+          }}
         >
           {message.isStreaming && !message.content ? (
             <TypingIndicator />
@@ -129,17 +128,14 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
                     if (isInline) {
                       return (
                         <code
-                          className="px-1.5 py-0.5 rounded bg-jarvis-darker/60 text-jarvis-cyan text-xs font-mono border border-jarvis-blue/20"
+                          className="px-1.5 py-0.5 bg-jarvis-darker/80 text-jarvis-cyan text-xs font-mono border border-jarvis-blue/15"
                           {...props}
                         >
                           {children}
                         </code>
                       );
                     }
-
-                    return (
-                      <CodeBlock language={match[1]}>{codeString}</CodeBlock>
-                    );
+                    return <CodeBlock language={match[1]}>{codeString}</CodeBlock>;
                   },
                   p({ children }) {
                     return <p className="mb-2 last:mb-0">{children}</p>;
@@ -152,19 +148,15 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
                   },
                   a({ href, children }) {
                     return (
-                      <a
-                        href={href}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-jarvis-blue hover:text-jarvis-cyan underline"
-                      >
+                      <a href={href} target="_blank" rel="noopener noreferrer"
+                        className="text-jarvis-blue hover:text-jarvis-cyan underline">
                         {children}
                       </a>
                     );
                   },
                   blockquote({ children }) {
                     return (
-                      <blockquote className="border-l-2 border-jarvis-blue/40 pl-3 my-2 text-gray-400 italic">
+                      <blockquote className="border-l-2 border-jarvis-blue/30 pl-3 my-2 text-gray-400 italic">
                         {children}
                       </blockquote>
                     );
@@ -184,11 +176,8 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
         {/* Timestamp */}
         <div
           className={clsx(
-            'text-[10px] text-gray-500 mt-1 opacity-0 group-hover:opacity-100 transition-opacity',
-            {
-              'text-right': isUser,
-              'text-left': !isUser,
-            }
+            'text-[9px] text-gray-600 mt-1 opacity-0 group-hover:opacity-100 transition-opacity font-mono',
+            { 'text-right': isUser, 'text-left': !isUser },
           )}
         >
           {timeDisplay}

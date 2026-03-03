@@ -1,4 +1,4 @@
-"""Authentication endpoints — register, login, refresh, profile, preferences."""
+"""Authentication endpoints — register, login, refresh, profile, preferences, passkeys."""
 
 from typing import Any
 
@@ -7,21 +7,36 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_current_active_user, get_db
 from app.models.user import User
-from app.schemas.auth import Token, UserCreate, UserLogin, UserResponse, UserUpdate
+from app.schemas.auth import (
+    AuthResponse,
+    LookupRequest,
+    LookupResponse,
+    PasskeyLoginBeginRequest,
+    PasskeyLoginCompleteRequest,
+    PasskeyRegisterBeginRequest,
+    PasskeyRegisterCompleteRequest,
+    Token,
+    UserCreate,
+    UserLogin,
+    UserResponse,
+    UserUpdate,
+)
 from app.services.auth_service import AuthService
 
 router = APIRouter()
 
 
-@router.post("/register", response_model=Token, status_code=201)
-async def register(payload: UserCreate, db: AsyncSession = Depends(get_db)) -> Token:
-    """Create a new user account and return JWT tokens."""
+# -- Legacy password auth (kept for backwards compatibility) ----------------
+
+@router.post("/register", response_model=AuthResponse, status_code=201)
+async def register(payload: UserCreate, db: AsyncSession = Depends(get_db)) -> AuthResponse:
+    """Create a new user account and return JWT tokens with user data."""
     return await AuthService.register(db, payload)
 
 
-@router.post("/login", response_model=Token)
-async def login(payload: UserLogin, db: AsyncSession = Depends(get_db)) -> Token:
-    """Authenticate with email and password, receive JWT tokens."""
+@router.post("/login", response_model=AuthResponse)
+async def login(payload: UserLogin, db: AsyncSession = Depends(get_db)) -> AuthResponse:
+    """Authenticate with email and password, receive JWT tokens with user data."""
     return await AuthService.login(db, payload.email, payload.password)
 
 
@@ -30,6 +45,59 @@ async def refresh(refresh_token: str, db: AsyncSession = Depends(get_db)) -> Tok
     """Exchange a valid refresh token for a new token pair."""
     return await AuthService.refresh_token(db, refresh_token)
 
+
+# -- Passkey / WebAuthn endpoints -------------------------------------------
+
+@router.post("/lookup", response_model=LookupResponse)
+async def lookup(payload: LookupRequest, db: AsyncSession = Depends(get_db)) -> LookupResponse:
+    """Check if an identifier (email or username) exists."""
+    result = await AuthService.lookup(db, payload.identifier)
+    return LookupResponse(**result)
+
+
+@router.post("/register/begin")
+async def passkey_register_begin(
+    payload: PasskeyRegisterBeginRequest, db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Start WebAuthn registration — returns PublicKeyCredentialCreationOptions."""
+    return await AuthService.begin_registration(
+        db, email=payload.email, username=payload.username, full_name=payload.full_name,
+    )
+
+
+@router.post("/register/complete", response_model=AuthResponse, status_code=201)
+async def passkey_register_complete(
+    payload: PasskeyRegisterCompleteRequest, db: AsyncSession = Depends(get_db),
+) -> AuthResponse:
+    """Complete WebAuthn registration, create user + credential, return tokens."""
+    return await AuthService.complete_registration(
+        db,
+        email=payload.email,
+        username=payload.username,
+        full_name=payload.full_name,
+        credential=payload.credential,
+    )
+
+
+@router.post("/login/begin")
+async def passkey_login_begin(
+    payload: PasskeyLoginBeginRequest, db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Start WebAuthn authentication — returns PublicKeyCredentialRequestOptions."""
+    return await AuthService.begin_authentication(db, payload.identifier)
+
+
+@router.post("/login/complete", response_model=AuthResponse)
+async def passkey_login_complete(
+    payload: PasskeyLoginCompleteRequest, db: AsyncSession = Depends(get_db),
+) -> AuthResponse:
+    """Complete WebAuthn authentication, return tokens with user data."""
+    return await AuthService.complete_authentication(
+        db, identifier=payload.identifier, credential=payload.credential,
+    )
+
+
+# -- Profile & Preferences -------------------------------------------------
 
 @router.get("/me", response_model=UserResponse)
 async def get_me(current_user: User = Depends(get_current_active_user)) -> UserResponse:

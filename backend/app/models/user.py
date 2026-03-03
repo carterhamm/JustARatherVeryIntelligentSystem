@@ -14,6 +14,7 @@ from app.models.base import Base, TimestampMixin, UUIDMixin
 
 if TYPE_CHECKING:
     from app.models.conversation import Conversation
+    from app.models.passkey import PasskeyCredential
 
 
 class User(UUIDMixin, TimestampMixin, Base):
@@ -27,7 +28,7 @@ class User(UUIDMixin, TimestampMixin, Base):
     username: Mapped[str] = mapped_column(
         String(64), unique=True, index=True, nullable=False
     )
-    hashed_password: Mapped[str] = mapped_column(String(128), nullable=False)
+    hashed_password: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
     full_name: Mapped[Optional[str]] = mapped_column(String(256), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     is_superuser: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
@@ -36,6 +37,12 @@ class User(UUIDMixin, TimestampMixin, Base):
     # ── Relationships ────────────────────────────────────────────────────
     conversations: Mapped[list["Conversation"]] = relationship(
         "Conversation",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+    passkeys: Mapped[list["PasskeyCredential"]] = relationship(
+        "PasskeyCredential",
         back_populates="user",
         cascade="all, delete-orphan",
         lazy="selectin",

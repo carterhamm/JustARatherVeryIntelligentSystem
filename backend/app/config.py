@@ -60,6 +60,7 @@ class Settings(BaseSettings):
 
     # -- ElevenLabs -----------------------------------------------------------
     ELEVENLABS_API_KEY: str = ""
+    ELEVENLABS_VOICE_ID: str = "hfL46UZ81fwyurp9f2X4"
 
     # -- Google (Gmail + Calendar) --------------------------------------------
     GOOGLE_CLIENT_ID: str = ""
@@ -122,6 +123,11 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
 
     AES_KEY: str = "change-me-to-a-valid-fernet-key"
+
+    # -- WebAuthn / Passkeys --------------------------------------------------
+    WEBAUTHN_RP_ID: str = "localhost"
+    WEBAUTHN_RP_NAME: str = "J.A.R.V.I.S."
+    WEBAUTHN_ORIGIN: str = "http://localhost:3000"
 
     # -- CORS -----------------------------------------------------------------
     CORS_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:5173"]

@@ -433,8 +433,29 @@ async def chat_websocket(
                 )
                 continue
 
+            full_response_text = ""
             async for chunk in service.chat_stream(current_user.id, request):
                 await websocket.send_json(chunk.model_dump(mode="json"))
+                if chunk.type == "token" and chunk.content:
+                    full_response_text += chunk.content
+
+            # Synthesize voice if requested and not Stark Protocol
+            if (
+                request.voice_enabled
+                and request.model_provider != "stark_protocol"
+                and full_response_text.strip()
+            ):
+                try:
+                    from app.api.v1.voice import get_voice_service
+
+                    voice_svc = get_voice_service()
+                    audio_bytes = await voice_svc.synthesize(
+                        text=full_response_text,
+                        voice_id=settings.ELEVENLABS_VOICE_ID,
+                    )
+                    await websocket.send_bytes(audio_bytes)
+                except Exception as tts_exc:
+                    logger.warning("TTS synthesis failed: %s", tts_exc)
 
     except WebSocketDisconnect:
         logger.info(

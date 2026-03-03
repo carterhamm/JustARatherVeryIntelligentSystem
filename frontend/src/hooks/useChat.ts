@@ -24,6 +24,7 @@ export function useChat() {
 
   const { setIsThinking, setJarvisActivity, setIsSpeaking } = useUIStore();
   const modelPreference = useSettingsStore((s) => s.modelPreference);
+  const voiceEnabled = useSettingsStore((s) => s.voiceEnabled);
 
   const handleWsMessage = useCallback(
     (data: unknown) => {
@@ -68,6 +69,23 @@ export function useChat() {
           break;
         }
 
+        case 'audio_binary': {
+          setIsSpeaking(true);
+          const blob = msg.blob as Blob;
+          const audioUrl = URL.createObjectURL(blob);
+          const binaryAudio = new Audio(audioUrl);
+          binaryAudio.onended = () => {
+            setIsSpeaking(false);
+            setJarvisActivity(0.1);
+            URL.revokeObjectURL(audioUrl);
+          };
+          binaryAudio.play().catch(() => {
+            setIsSpeaking(false);
+            URL.revokeObjectURL(audioUrl);
+          });
+          break;
+        }
+
         case 'error': {
           setIsStreaming(false);
           setIsThinking(false);
@@ -109,6 +127,7 @@ export function useChat() {
           content: content.trim(),
           conversation_id: currentConversation?.id,
           model_provider: modelPreference,
+          voice_enabled: voiceEnabled,
         });
       } else {
         try {
@@ -136,7 +155,7 @@ export function useChat() {
         }
       }
     },
-    [addMessage, currentConversation, isConnected, send, setIsThinking, setJarvisActivity, modelPreference]
+    [addMessage, currentConversation, isConnected, send, setIsThinking, setJarvisActivity, modelPreference, voiceEnabled]
   );
 
   const createConversation = useCallback(async () => {
