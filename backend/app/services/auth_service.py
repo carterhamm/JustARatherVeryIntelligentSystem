@@ -21,6 +21,7 @@ from webauthn import (
 from webauthn.helpers.cose import COSEAlgorithmIdentifier
 from webauthn.helpers.structs import (
     AuthenticatorSelectionCriteria,
+    AuthenticatorTransport,
     PublicKeyCredentialDescriptor,
     ResidentKeyRequirement,
     UserVerificationRequirement,
@@ -355,13 +356,21 @@ class AuthService:
         if not passkeys:
             raise HTTPException(status_code=400, detail="No passkeys registered for this user")
 
-        allow_credentials = [
-            PublicKeyCredentialDescriptor(
-                id=pk.credential_id,
-                transports=pk.transports or [],
+        allow_credentials = []
+        for pk in passkeys:
+            # Convert stored transport strings to AuthenticatorTransport enums
+            transport_enums = []
+            for t in (pk.transports or []):
+                try:
+                    transport_enums.append(AuthenticatorTransport(t))
+                except ValueError:
+                    pass  # Skip unknown transport types
+            allow_credentials.append(
+                PublicKeyCredentialDescriptor(
+                    id=pk.credential_id,
+                    transports=transport_enums,
+                )
             )
-            for pk in passkeys
-        ]
 
         options = generate_authentication_options(
             rp_id=settings.WEBAUTHN_RP_ID,
