@@ -1,8 +1,7 @@
 import { useState, useCallback } from 'react';
 import { Plus, MessageSquare, Trash2, ChevronLeft, ChevronRight, Brain, Upload } from 'lucide-react';
-import { useChatStore, Conversation } from '@/stores/chatStore';
+import { useChatStore, type Conversation, type Message } from '@/stores/chatStore';
 import { useUIStore } from '@/stores/uiStore';
-import { useChat } from '@/hooks/useChat';
 import { api } from '@/services/api';
 import clsx from 'clsx';
 
@@ -20,8 +19,14 @@ function formatTimestamp(dateStr: string): string {
 
 export default function HUDNavPanel() {
   const { sidebarOpen, toggleSidebar } = useUIStore();
-  const { conversations, currentConversation } = useChatStore();
-  const { createConversation, loadConversation } = useChat();
+  const {
+    conversations,
+    currentConversation,
+    addConversation,
+    setCurrentConversation,
+    setMessages,
+    clearMessages,
+  } = useChatStore();
 
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
@@ -30,18 +35,29 @@ export default function HUDNavPanel() {
     if (isCreating) return;
     setIsCreating(true);
     try {
-      await createConversation();
-    } finally {
-      setIsCreating(false);
-    }
-  }, [createConversation, isCreating]);
+      const conversation = await api.post<Conversation>('/conversations', {
+        title: 'New Conversation',
+      });
+      addConversation(conversation);
+      setCurrentConversation(conversation);
+      clearMessages();
+    } catch { /* ignore */ }
+    setIsCreating(false);
+  }, [isCreating, addConversation, setCurrentConversation, clearMessages]);
 
   const handleSelectConversation = useCallback(
-    (conv: Conversation) => {
+    async (conv: Conversation) => {
       if (conv.id === currentConversation?.id) return;
-      loadConversation(conv.id);
+      try {
+        const [conversation, messagesData] = await Promise.all([
+          api.get<Conversation>(`/conversations/${conv.id}`),
+          api.get<Message[]>(`/conversations/${conv.id}/messages`),
+        ]);
+        setCurrentConversation(conversation);
+        setMessages(messagesData);
+      } catch { /* ignore */ }
     },
-    [currentConversation, loadConversation],
+    [currentConversation, setCurrentConversation, setMessages],
   );
 
   const handleDeleteConversation = useCallback(

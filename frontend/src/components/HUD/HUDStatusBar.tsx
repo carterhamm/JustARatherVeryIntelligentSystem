@@ -49,12 +49,21 @@ export default function HUDStatusBar() {
     return () => clearInterval(id);
   }, []);
 
-  // Fetch available providers
+  // Fetch available providers and auto-switch if current one is unavailable
   useEffect(() => {
     api.get<{ id: string; available: boolean }[]>('/providers').then((data) => {
-      setAvailableProviders(new Set(data.filter(p => p.available).map(p => p.id)));
+      const available = new Set(data.filter(p => p.available).map(p => p.id));
+      setAvailableProviders(available);
+      // If the user's selected provider isn't available on this server,
+      // auto-switch to the first available one instead of showing errors.
+      if (!available.has(modelPreference)) {
+        const fallback = providers.find(p => available.has(p.id));
+        if (fallback) {
+          setModelPreference(fallback.id);
+        }
+      }
     }).catch(() => {});
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Close menu on outside click
   useEffect(() => {

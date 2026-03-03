@@ -5,6 +5,11 @@ import { useUIStore } from '@/stores/uiStore';
 
 type MessageHandler = (data: unknown) => void;
 
+// Track whether the WS connection has already been initialised so that
+// multiple components calling useWebSocket don't register duplicate
+// message handlers (which caused double-bubble issues).
+let wsInitialised = false;
+
 export function useWebSocket(onMessage?: MessageHandler) {
   const token = useAuthStore((state) => state.token);
   const setWsConnected = useUIStore((state) => state.setWsConnected);
@@ -14,7 +19,15 @@ export function useWebSocket(onMessage?: MessageHandler) {
   useEffect(() => {
     if (!token) return;
 
-    const wsUrl = import.meta.env.VITE_WS_URL || `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/api/v1/ws/chat`;
+    // Only the FIRST caller sets up the connection + message handler.
+    // Subsequent callers (e.g. HUDNavPanel also importing useChat) are
+    // no-ops — they still get send() and isConnected from the store.
+    if (wsInitialised) return;
+    wsInitialised = true;
+
+    const wsUrl =
+      import.meta.env.VITE_WS_URL ||
+      `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/api/v1/ws/chat`;
 
     wsManager.connect({
       url: wsUrl,
@@ -33,6 +46,7 @@ export function useWebSocket(onMessage?: MessageHandler) {
     return () => {
       wsManager.disconnect();
       setWsConnected(false);
+      wsInitialised = false;
     };
   }, [token, setWsConnected]);
 
