@@ -46,34 +46,36 @@ def _build_client(provider: LLMProvider) -> BaseLLMClient:
     if provider == LLMProvider.OPENAI:
         from app.integrations.llm.openai_client import OpenAIClient
 
+        if not settings.OPENAI_API_KEY:
+            raise ValueError("OpenAI is not configured — OPENAI_API_KEY is missing. Please select a different provider.")
         return OpenAIClient(api_key=settings.OPENAI_API_KEY)
 
     elif provider == LLMProvider.CLAUDE:
         from app.integrations.llm.claude_client import ClaudeClient
 
         if not settings.ANTHROPIC_API_KEY:
-            raise ValueError("ANTHROPIC_API_KEY is not configured")
+            raise ValueError("Claude is not configured — ANTHROPIC_API_KEY is missing. Please select a different provider.")
         return ClaudeClient(api_key=settings.ANTHROPIC_API_KEY)
 
     elif provider == LLMProvider.GEMINI:
         from app.integrations.llm.gemini_client import GeminiClient
 
         if not settings.GOOGLE_GEMINI_API_KEY:
-            raise ValueError("GOOGLE_GEMINI_API_KEY is not configured")
+            raise ValueError("Gemini is not configured — GOOGLE_GEMINI_API_KEY is missing. Please select a different provider.")
         return GeminiClient(api_key=settings.GOOGLE_GEMINI_API_KEY)
 
     elif provider == LLMProvider.GLM:
         from app.integrations.llm.glm_client import GLMClient
 
         if not settings.GLM_API_KEY:
-            raise ValueError("GLM_API_KEY is not configured")
+            raise ValueError("GLM is not configured — GLM_API_KEY is missing. Please select a different provider.")
         return GLMClient(api_key=settings.GLM_API_KEY)
 
     elif provider == LLMProvider.STARK_PROTOCOL:
         from app.integrations.llm.stark_client import StarkProtocolClient
 
         if not settings.STARK_PROTOCOL_ENABLED:
-            raise ValueError("Stark Protocol is not enabled")
+            raise ValueError("Stark Protocol is not available on this server. Switch to an Uplink provider instead.")
         endpoint = settings.STARK_PROTOCOL_URL
         api_key = settings.STARK_PROTOCOL_API_KEY or "lm-studio"
         return StarkProtocolClient(endpoint_url=endpoint, api_key=api_key)

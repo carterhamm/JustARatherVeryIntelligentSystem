@@ -491,19 +491,13 @@ class ChatService:
     def _resolve_llm_client(self, request: ChatRequest) -> BaseLLMClient:
         """Return the appropriate LLM client based on the request's provider.
 
-        Falls back to the default provider if the requested one is unavailable.
+        Raises a clear error if the requested provider is unavailable rather
+        than silently falling back (which can be confusing).
         """
         provider = request.model_provider
         if provider:
-            try:
-                logger.info("Resolving LLM client for provider: %s", provider)
-                return get_llm_client(provider)
-            except (ValueError, RuntimeError) as exc:
-                logger.warning(
-                    "Provider '%s' unavailable (%s), falling back to default",
-                    provider, exc,
-                )
-                # Fall through to default
+            logger.info("Resolving LLM client for provider: %s", provider)
+            return get_llm_client(provider)
         logger.info("Using default LLM client: %s", self.llm_client.provider.value)
         return self.llm_client
 

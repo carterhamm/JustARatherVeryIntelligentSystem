@@ -71,7 +71,7 @@ export default function ChatArea() {
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [messages, isThinking]);
+  }, [messages]);
 
   const handleVoiceToggle = useCallback(async () => {
     if (isRecording) {
@@ -104,10 +104,16 @@ export default function ChatArea() {
     return acc;
   }, []);
 
-  // Show a single "thinking" placeholder ONLY when waiting for the first token
-  // and no streaming message has been added to the list yet.
-  const hasStreamingMessage = messages.some((m) => m.isStreaming);
-  const showThinking = isThinking && !isStreaming && !hasStreamingMessage;
+  // Derive "thinking" entirely from chatStore data to avoid cross-store
+  // rendering inconsistency (isThinking from UIStore can lag behind messages
+  // from ChatStore, causing duplicate bubbles).
+  // Show thinking only when the last message is a client-sent user message
+  // (id starts with "user-") and no streaming/response has arrived yet.
+  const lastMessage = messages[messages.length - 1];
+  const awaitingResponse = !!lastMessage
+    && lastMessage.role === 'user'
+    && lastMessage.id.startsWith('user-');
+  const showThinking = awaitingResponse && !isStreaming;
 
   return (
     <div className="flex-1 flex flex-col h-full min-w-0 hud-boot-2 relative">
