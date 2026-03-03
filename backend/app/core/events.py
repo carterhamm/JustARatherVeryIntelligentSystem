@@ -71,10 +71,10 @@ async def startup_handler(app: FastAPI) -> None:
     if settings.STARK_PROTOCOL_ENABLED:
         try:
             from app.integrations.llm.stark_client import StarkProtocolClient
-            endpoint = settings.STARK_PROTOCOL_ENDPOINT or settings.STARK_PROTOCOL_URL
+            endpoint = settings.STARK_PROTOCOL_URL
             stark = StarkProtocolClient(
                 endpoint_url=endpoint,
-                api_key=settings.RUNPOD_API_KEY,
+                api_key=settings.STARK_PROTOCOL_API_KEY,
             )
             healthy = await stark.health_check(retries=2, delay=3.0)
             if healthy:
