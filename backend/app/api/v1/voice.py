@@ -73,32 +73,34 @@ def _get_settings() -> Any:
         return _Settings()
 
 
+_jarvis_tts = None
+
+
+def _get_jarvis_tts():
+    """Lazily create the local JARVIS TTS client."""
+    global _jarvis_tts
+    if _jarvis_tts is None:
+        from app.config import settings as app_settings
+        if app_settings.JARVIS_VOICE_ENABLED and app_settings.JARVIS_VOICE_SERVER:
+            from app.integrations.jarvis_tts import JarvisTTSClient
+            _jarvis_tts = JarvisTTSClient(voice_server_dir=app_settings.JARVIS_VOICE_SERVER)
+            logger.info("JARVIS local TTS initialized: %s", app_settings.JARVIS_VOICE_SERVER)
+    return _jarvis_tts
+
+
 def get_voice_service() -> VoiceService:
     """Return (and lazily create) the singleton VoiceService."""
     global _voice_service
     if _voice_service is None:
-        settings = _get_settings()
-        whisper = WhisperClient(api_key=settings.OPENAI_API_KEY)
-        elevenlabs = ElevenLabsClient(api_key=settings.ELEVENLABS_API_KEY)
+        from app.config import settings as app_settings
+        whisper = WhisperClient(api_key=app_settings.OPENAI_API_KEY)
+        elevenlabs = ElevenLabsClient(api_key=app_settings.ELEVENLABS_API_KEY)
         fallback = CoquiTTSClient()
-
-        # Try to wire up the chat service if available
-        chat_service = None
-        try:
-            from app.services.chat_service import ChatService
-            from app.integrations.llm_client import LLMClient
-
-            llm = LLMClient(api_key=settings.OPENAI_API_KEY)
-            chat_service = ChatService(llm_client=llm)
-        except (ImportError, AttributeError, TypeError):
-            logger.info(
-                "Chat service not available; voice chat will run in echo mode"
-            )
 
         _voice_service = VoiceService(
             whisper=whisper,
             elevenlabs=elevenlabs,
-            chat_service=chat_service,
+            chat_service=None,
             fallback_tts=fallback,
         )
     return _voice_service

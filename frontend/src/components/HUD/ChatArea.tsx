@@ -9,46 +9,74 @@ import MessageInput from '@/components/Chat/MessageInput';
 function ThinkingIndicator() {
   return (
     <div className="flex items-center gap-3 px-4 py-3">
-      <div className="w-5 h-5 flex items-center justify-center" style={{
+      <div className="w-6 h-6 flex items-center justify-center" style={{
         clipPath: 'polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)',
         background: 'linear-gradient(135deg, rgba(0, 212, 255, 0.3), rgba(0, 128, 255, 0.2))',
       }}>
-        <span className="text-[8px] font-bold text-jarvis-blue">J</span>
+        <span className="text-[8px] font-bold text-jarvis-blue animate-pulse">J</span>
       </div>
       <div className="flex items-center gap-1.5">
         <div className="typing-dot w-1.5 h-1.5 rounded-full bg-jarvis-cyan" />
         <div className="typing-dot w-1.5 h-1.5 rounded-full bg-jarvis-cyan" />
         <div className="typing-dot w-1.5 h-1.5 rounded-full bg-jarvis-cyan" />
       </div>
-      <span className="hud-label text-[9px]">PROCESSING</span>
+      <span className="hud-label text-[9px]">PROCESSING QUERY</span>
     </div>
   );
 }
 
-function EmptyState() {
+function ArcReactorEmptyState() {
   return (
     <div className="flex-1 flex flex-col items-center justify-center px-4">
-      <div className="text-center max-w-sm">
-        <div className="relative inline-block mb-4">
-          <div className="w-16 h-16 flex items-center justify-center animate-pulse-glow" style={{
-            clipPath: 'polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)',
-            background: 'linear-gradient(135deg, rgba(0, 212, 255, 0.1), rgba(0, 128, 255, 0.05))',
-            border: '1px solid rgba(0, 212, 255, 0.2)',
-          }}>
-            <span className="text-2xl font-display font-bold text-jarvis-blue glow-text">J</span>
+      <div className="text-center">
+        {/* Arc Reactor */}
+        <div className="relative inline-block mb-8">
+          <div className="arc-reactor">
+            {/* Concentric rings */}
+            <div className="arc-ring arc-ring-1" />
+            <div className="arc-ring arc-ring-2" />
+            <div className="arc-ring arc-ring-3" />
+            <div className="arc-ring arc-ring-4" />
+            {/* Spinning segments */}
+            <div className="arc-segment arc-segment-1" />
+            <div className="arc-segment arc-segment-2" />
+            <div className="arc-segment arc-segment-3" />
+            {/* Core glow */}
+            <div className="arc-reactor-core" />
           </div>
         </div>
 
-        <h2 className="text-lg font-display font-bold tracking-[0.15em] text-jarvis-blue glow-text mb-1">
-          READY
+        <h2 className="text-base font-display font-bold tracking-[0.25em] text-jarvis-blue glow-text mb-2">
+          SYSTEMS ONLINE
         </h2>
-        <p className="text-xs text-gray-500 leading-relaxed font-mono">
-          Awaiting input. Type below or use voice.
+        <p className="text-[11px] text-gray-500 leading-relaxed font-mono tracking-wide">
+          All subsystems operational. Awaiting directives.
         </p>
 
-        <div className="mt-6 hud-divider">
+        <div className="mt-8 flex items-center justify-center gap-6">
+          <div className="flex flex-col items-center gap-1">
+            <div className="hud-status-dot online" style={{ width: 5, height: 5 }} />
+            <span className="text-[8px] font-mono text-gray-600 tracking-wider">CORE</span>
+          </div>
+          <div className="h-3 w-px bg-jarvis-blue/10" />
+          <div className="flex flex-col items-center gap-1">
+            <div className="hud-status-dot online" style={{ width: 5, height: 5 }} />
+            <span className="text-[8px] font-mono text-gray-600 tracking-wider">UPLINK</span>
+          </div>
+          <div className="h-3 w-px bg-jarvis-blue/10" />
+          <div className="flex flex-col items-center gap-1">
+            <div className="hud-status-dot online" style={{ width: 5, height: 5 }} />
+            <span className="text-[8px] font-mono text-gray-600 tracking-wider">VOICE</span>
+          </div>
+        </div>
+
+        <div className="mt-6 hud-divider max-w-xs mx-auto">
           <div className="hud-divider-dot" />
         </div>
+
+        <p className="mt-4 text-[9px] text-gray-600 font-mono">
+          TYPE OR SPEAK TO BEGIN
+        </p>
       </div>
     </div>
   );
@@ -99,18 +127,18 @@ export default function ChatArea() {
   }, []);
 
   return (
-    <div className="flex-1 flex flex-col h-full min-w-0 hud-boot-2">
-      {/* Messages area — transparent background */}
+    <div className="flex-1 flex flex-col h-full min-w-0 hud-boot-2 relative">
+      {/* Messages area */}
       {hasMessages || currentConversation ? (
         <div className="flex-1 overflow-y-auto px-4 sm:px-8 py-4">
-          {!hasMessages && currentConversation && <EmptyState />}
+          {!hasMessages && currentConversation && <ArcReactorEmptyState />}
           {displayMessages.map((item) => {
             if ('type' in item && item.type === 'error_stack') {
               const count = item.errors.length;
               const latestError = item.errors[item.errors.length - 1];
               return (
                 <div key={latestError.id} className="flex justify-center my-2">
-                  <div className="px-4 py-1.5 border border-red-500/20 bg-red-500/5 max-w-lg"
+                  <div className="px-4 py-1.5 border border-red-500/20 bg-red-500/5 max-w-lg hud-glitch"
                     style={{ clipPath: 'polygon(0 4px, 4px 0, calc(100% - 4px) 0, 100% 4px, 100% calc(100% - 4px), calc(100% - 4px) 100%, 4px 100%, 0 calc(100% - 4px))' }}>
                     <p className="text-[10px] text-center text-red-400 font-mono">
                       {count > 1 ? `${latestError.content} (+${count - 1} more)` : latestError.content}
@@ -125,7 +153,7 @@ export default function ChatArea() {
           <div ref={messagesEndRef} />
         </div>
       ) : (
-        <EmptyState />
+        <ArcReactorEmptyState />
       )}
 
       {/* Input bar */}

@@ -111,7 +111,10 @@ export default function HUDNavPanel() {
     <div className="flex flex-col w-64 border-r border-jarvis-blue/10 bg-hud-panel backdrop-blur-hud flex-shrink-0 hud-boot-2">
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-jarvis-blue/8">
-        <span className="hud-label text-[9px]">SESSIONS</span>
+        <div className="flex items-center gap-2">
+          <span className="hud-label text-[9px]">SESSIONS</span>
+          <span className="text-[8px] font-mono text-gray-600">{conversations.length}</span>
+        </div>
         <button onClick={toggleSidebar} className="text-gray-500 hover:text-jarvis-blue transition-colors">
           <ChevronLeft size={14} />
         </button>

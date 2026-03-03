@@ -333,4 +333,249 @@
     0% { transform: translate(0, 0); }
     100% { transform: translate(60px, 60px); }
   }
+
+  /* ── Arc Reactor ─────────────────────────────────────────────────── */
+
+  .arc-reactor {
+    position: relative;
+    width: 180px;
+    height: 180px;
+  }
+
+  .arc-reactor-core {
+    position: absolute;
+    inset: 50%;
+    width: 24px;
+    height: 24px;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    background: radial-gradient(circle, #00f0ff 0%, #00d4ff 40%, transparent 70%);
+    box-shadow: 0 0 30px rgba(0, 240, 255, 0.8), 0 0 60px rgba(0, 212, 255, 0.4), 0 0 120px rgba(0, 212, 255, 0.2);
+    animation: arcPulse 2s ease-in-out infinite;
+  }
+
+  .arc-ring {
+    position: absolute;
+    inset: 50%;
+    border-radius: 50%;
+    border: 1px solid rgba(0, 212, 255, 0.3);
+  }
+
+  .arc-ring-1 {
+    width: 50px; height: 50px;
+    transform: translate(-50%, -50%);
+    border-color: rgba(0, 212, 255, 0.5);
+    animation: arcSpin 12s linear infinite;
+  }
+
+  .arc-ring-2 {
+    width: 80px; height: 80px;
+    transform: translate(-50%, -50%);
+    border-color: rgba(0, 212, 255, 0.25);
+    border-style: dashed;
+    animation: arcSpin 20s linear infinite reverse;
+  }
+
+  .arc-ring-3 {
+    width: 120px; height: 120px;
+    transform: translate(-50%, -50%);
+    border-color: rgba(0, 212, 255, 0.15);
+    animation: arcSpin 30s linear infinite;
+  }
+
+  .arc-ring-4 {
+    width: 160px; height: 160px;
+    transform: translate(-50%, -50%);
+    border-color: rgba(0, 212, 255, 0.08);
+    border-style: dotted;
+    animation: arcSpin 40s linear infinite reverse;
+  }
+
+  /* Arc ring segments */
+  .arc-segment {
+    position: absolute;
+    inset: 50%;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    border-top-color: rgba(0, 212, 255, 0.6);
+  }
+
+  .arc-segment-1 {
+    width: 60px; height: 60px;
+    transform: translate(-50%, -50%);
+    animation: arcSpin 4s linear infinite;
+  }
+
+  .arc-segment-2 {
+    width: 100px; height: 100px;
+    transform: translate(-50%, -50%);
+    border-top-color: rgba(0, 212, 255, 0.3);
+    border-right-color: rgba(0, 212, 255, 0.15);
+    animation: arcSpin 6s linear infinite reverse;
+  }
+
+  .arc-segment-3 {
+    width: 140px; height: 140px;
+    transform: translate(-50%, -50%);
+    border-top-color: rgba(0, 212, 255, 0.2);
+    animation: arcSpin 8s linear infinite;
+  }
+
+  @keyframes arcSpin {
+    from { transform: translate(-50%, -50%) rotate(0deg); }
+    to { transform: translate(-50%, -50%) rotate(360deg); }
+  }
+
+  @keyframes arcPulse {
+    0%, 100% {
+      box-shadow: 0 0 30px rgba(0, 240, 255, 0.8), 0 0 60px rgba(0, 212, 255, 0.4), 0 0 120px rgba(0, 212, 255, 0.2);
+    }
+    50% {
+      box-shadow: 0 0 40px rgba(0, 240, 255, 1), 0 0 80px rgba(0, 212, 255, 0.6), 0 0 160px rgba(0, 212, 255, 0.3);
+    }
+  }
+
+  /* ── Holographic Grid ────────────────────────────────────────────── */
+
+  .holo-grid {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    background-image:
+      linear-gradient(rgba(0, 212, 255, 0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0, 212, 255, 0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    animation: gridDrift 20s linear infinite;
+  }
+
+  .holo-grid::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(
+      ellipse at center,
+      transparent 0%,
+      transparent 40%,
+      rgba(5, 5, 16, 0.8) 100%
+    );
+  }
+
+  /* ── Scanner Sweep ───────────────────────────────────────────────── */
+
+  .scanner-sweep {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 2;
+    overflow: hidden;
+  }
+
+  .scanner-sweep::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg,
+      transparent 0%,
+      rgba(0, 212, 255, 0.15) 20%,
+      rgba(0, 212, 255, 0.4) 50%,
+      rgba(0, 212, 255, 0.15) 80%,
+      transparent 100%
+    );
+    box-shadow: 0 0 20px rgba(0, 212, 255, 0.2);
+    animation: scanSweep 6s ease-in-out infinite;
+  }
+
+  @keyframes scanSweep {
+    0%, 100% { top: -2px; opacity: 0; }
+    5% { opacity: 1; }
+    50% { top: 100%; opacity: 0.6; }
+    95% { opacity: 1; }
+  }
+
+  /* ── Circular Progress Ring ──────────────────────────────────────── */
+
+  .progress-ring {
+    transform: rotate(-90deg);
+  }
+
+  .progress-ring circle {
+    transition: stroke-dashoffset 0.5s ease;
+  }
+
+  /* ── Corner Brackets (decorative) ────────────────────────────────── */
+
+  .hud-brackets::before,
+  .hud-brackets::after {
+    content: '';
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    pointer-events: none;
+  }
+
+  .hud-brackets::before {
+    top: 0;
+    left: 0;
+    border-top: 2px solid rgba(0, 212, 255, 0.4);
+    border-left: 2px solid rgba(0, 212, 255, 0.4);
+  }
+
+  .hud-brackets::after {
+    bottom: 0;
+    right: 0;
+    border-bottom: 2px solid rgba(0, 212, 255, 0.4);
+    border-right: 2px solid rgba(0, 212, 255, 0.4);
+  }
+
+  /* ── Glitch Effect (for errors) ──────────────────────────────────── */
+
+  @keyframes hudGlitch {
+    0% { transform: translate(0); }
+    20% { transform: translate(-2px, 1px); }
+    40% { transform: translate(2px, -1px); }
+    60% { transform: translate(-1px, -1px); }
+    80% { transform: translate(1px, 2px); }
+    100% { transform: translate(0); }
+  }
+
+  .hud-glitch {
+    animation: hudGlitch 0.3s ease-in-out;
+  }
+
+  /* ── Data Stream Widget ──────────────────────────────────────────── */
+
+  .data-bars {
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+    height: 20px;
+  }
+
+  .data-bar {
+    width: 3px;
+    background: rgba(0, 212, 255, 0.4);
+    border-radius: 1px 1px 0 0;
+    transition: height 0.3s ease;
+    animation: barPulse 2s ease-in-out infinite;
+  }
+
+  .data-bar:nth-child(2n) { animation-delay: 0.3s; }
+  .data-bar:nth-child(3n) { animation-delay: 0.6s; }
+  .data-bar:nth-child(5n) { animation-delay: 0.9s; }
+
+  @keyframes barPulse {
+    0%, 100% { opacity: 0.4; }
+    50% { opacity: 1; }
+  }
+
+  /* ── Hexagonal Button ────────────────────────────────────────────── */
+
+  .hex-btn {
+    clip-path: polygon(
+      25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%
+    );
+  }
 }

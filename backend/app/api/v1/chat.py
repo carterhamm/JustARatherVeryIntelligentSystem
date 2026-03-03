@@ -102,6 +102,33 @@ async def _authenticate_ws_token(
 # ═════════════════════════════════════════════════════════════════════════════
 
 
+@router.get(
+    "/providers",
+    summary="List available LLM providers with status",
+)
+async def list_providers(
+    current_user: User = Depends(get_current_active_user),
+) -> list[dict]:
+    """Return which providers are configured and available."""
+    from app.integrations.llm.base import LLMProvider
+
+    provider_info = []
+    for p in LLMProvider:
+        available = False
+        reason = ""
+        try:
+            _get_llm_client(p)
+            available = True
+        except Exception as exc:
+            reason = str(exc)
+        provider_info.append({
+            "id": p.value,
+            "available": available,
+            "reason": reason,
+        })
+    return provider_info
+
+
 @router.post(
     "/conversations",
     response_model=ConversationResponse,
@@ -446,21 +473,27 @@ async def chat_websocket(
                 if chunk.type == "token" and chunk.content:
                     full_response_text += chunk.content
 
-            # Synthesize voice if requested and not Stark Protocol
-            if (
-                request.voice_enabled
-                and request.model_provider != "stark_protocol"
-                and full_response_text.strip()
-            ):
+            # Synthesize voice if requested
+            if request.voice_enabled and full_response_text.strip():
                 try:
-                    from app.api.v1.voice import get_voice_service
-
-                    voice_svc = get_voice_service()
-                    audio_bytes = await voice_svc.synthesize(
-                        text=full_response_text,
-                        voice_id=settings.ELEVENLABS_VOICE_ID,
-                    )
-                    await websocket.send_bytes(audio_bytes)
+                    if request.model_provider == "stark_protocol":
+                        # Use local JARVIS voice for Stark Protocol
+                        from app.api.v1.voice import _get_jarvis_tts
+                        jarvis_tts = _get_jarvis_tts()
+                        if jarvis_tts:
+                            audio_bytes = await jarvis_tts.synthesize(full_response_text)
+                            await websocket.send_bytes(audio_bytes)
+                        else:
+                            logger.warning("JARVIS local TTS not available")
+                    else:
+                        # Use ElevenLabs for Uplink providers
+                        from app.api.v1.voice import get_voice_service
+                        voice_svc = get_voice_service()
+                        audio_bytes = await voice_svc.synthesize(
+                            text=full_response_text,
+                            voice_id=settings.ELEVENLABS_VOICE_ID,
+                        )
+                        await websocket.send_bytes(audio_bytes)
                 except Exception as tts_exc:
                     logger.warning("TTS synthesis failed: %s", tts_exc)
 

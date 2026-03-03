@@ -27,11 +27,13 @@ export default {
       animation: {
         'pulse-glow': 'pulseGlow 2s ease-in-out infinite',
         'spin-slow': 'spin 8s linear infinite',
+        'spin-reverse': 'spinReverse 12s linear infinite',
         'gradient-border': 'gradientBorder 3s ease infinite',
         'scan-line': 'scanLine 4s linear infinite',
         'hud-boot': 'hudBoot 0.6s ease-out forwards',
         'hud-flicker': 'hudFlicker 0.15s ease-in-out',
         'data-stream': 'dataStream 2s linear infinite',
+        'arc-pulse': 'arcPulse 2s ease-in-out infinite',
       },
       keyframes: {
         pulseGlow: {
@@ -57,6 +59,14 @@ export default {
         dataStream: {
           '0%': { backgroundPosition: '0% 0%' },
           '100%': { backgroundPosition: '0% 100%' },
+        },
+        spinReverse: {
+          '0%': { transform: 'rotate(360deg)' },
+          '100%': { transform: 'rotate(0deg)' },
+        },
+        arcPulse: {
+          '0%, 100%': { boxShadow: '0 0 30px rgba(0,240,255,0.8), 0 0 60px rgba(0,212,255,0.4)' },
+          '50%': { boxShadow: '0 0 40px rgba(0,240,255,1), 0 0 80px rgba(0,212,255,0.6)' },
         },
       },
       boxShadow: {

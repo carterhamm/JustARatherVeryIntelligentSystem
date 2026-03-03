@@ -52,12 +52,14 @@ class Settings(BaseSettings):
     # -- ZhipuAI GLM ---------------------------------------------------------
     GLM_API_KEY: str = ""
 
-    # -- Stark Protocol (local Gemma via LM Studio or remote) ------------------
+    # -- Stark Protocol (local Gemma via LM Studio) ----------------------------
     STARK_PROTOCOL_URL: str = "http://localhost:1234/v1"
-    STARK_PROTOCOL_ENDPOINT: str = ""
     STARK_PROTOCOL_API_KEY: str = "lm-studio"
-    RUNPOD_API_KEY: str = ""  # legacy, kept for backwards compat
     STARK_PROTOCOL_ENABLED: bool = False
+
+    # -- JARVIS Voice (local Coqui TTS XTTS-v2) ------------------------------
+    JARVIS_VOICE_SERVER: str = ""  # path to jarvis_voice_training dir
+    JARVIS_VOICE_ENABLED: bool = False
 
     # -- Default LLM Provider -------------------------------------------------
     DEFAULT_LLM_PROVIDER: str = "openai"

@@ -9,6 +9,12 @@ import KnowledgePanel from '@/components/KnowledgePanel';
 export default function MainPage() {
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-jarvis-darker">
+      {/* Holographic grid background */}
+      <div className="holo-grid" />
+
+      {/* Scanner sweep overlay */}
+      <div className="scanner-sweep" />
+
       {/* HUD Layout */}
       <div className="relative z-10 flex flex-col h-full">
         {/* Top status bar */}

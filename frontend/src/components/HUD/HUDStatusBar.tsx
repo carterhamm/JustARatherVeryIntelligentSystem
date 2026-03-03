@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
-import { Settings, Wifi, WifiOff, ChevronDown } from 'lucide-react';
+import { Settings, Wifi, WifiOff, ChevronDown, Lock } from 'lucide-react';
 import { useUIStore } from '@/stores/uiStore';
 import { useSettingsStore, type ModelProvider } from '@/stores/settingsStore';
 import { useChatStore } from '@/stores/chatStore';
+import { api } from '@/services/api';
 import clsx from 'clsx';
 
 interface ProviderOption {
@@ -31,6 +32,7 @@ export default function HUDStatusBar() {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const [time, setTime] = useState('');
+  const [availableProviders, setAvailableProviders] = useState<Set<string>>(new Set(providers.map(p => p.id)));
 
   // Count recent error messages for the stacked badge
   const errorCount = messages.filter((m) => m.role === 'system' && m.id.startsWith('error-')).length;
@@ -45,6 +47,13 @@ export default function HUDStatusBar() {
     update();
     const id = setInterval(update, 1000);
     return () => clearInterval(id);
+  }, []);
+
+  // Fetch available providers
+  useEffect(() => {
+    api.get<{ id: string; available: boolean }[]>('/providers').then((data) => {
+      setAvailableProviders(new Set(data.filter(p => p.available).map(p => p.id)));
+    }).catch(() => {});
   }, []);
 
   // Close menu on outside click
@@ -116,33 +125,43 @@ export default function HUDStatusBar() {
             <div className="px-2 py-1.5 border-b border-jarvis-blue/10">
               <span className="hud-label text-[8px]">SELECT PROVIDER</span>
             </div>
-            {providers.map((p) => (
-              <button
-                key={p.id}
-                onClick={() => {
-                  setModelPreference(p.id);
-                  setMenuOpen(false);
-                }}
-                className={clsx(
-                  'w-full text-left px-3 py-2 flex items-center justify-between transition-colors',
-                  {
-                    'bg-jarvis-blue/10 text-jarvis-cyan': modelPreference === p.id,
-                    'text-gray-400 hover:bg-white/[0.03] hover:text-gray-300': modelPreference !== p.id,
-                  }
-                )}
-              >
-                <div className="flex flex-col gap-0.5">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[8px] font-mono text-gray-600 uppercase">{p.tag}</span>
-                    <span className="text-[11px] font-mono font-semibold">{p.label}</span>
+            {providers.map((p) => {
+              const isAvailable = availableProviders.has(p.id);
+              return (
+                <button
+                  key={p.id}
+                  disabled={!isAvailable}
+                  onClick={() => {
+                    if (isAvailable) {
+                      setModelPreference(p.id);
+                      setMenuOpen(false);
+                    }
+                  }}
+                  className={clsx(
+                    'w-full text-left px-3 py-2 flex items-center justify-between transition-colors',
+                    {
+                      'bg-jarvis-blue/10 text-jarvis-cyan': modelPreference === p.id,
+                      'text-gray-400 hover:bg-white/[0.03] hover:text-gray-300': modelPreference !== p.id && isAvailable,
+                      'text-gray-700 cursor-not-allowed opacity-40': !isAvailable,
+                    }
+                  )}
+                >
+                  <div className="flex flex-col gap-0.5">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[8px] font-mono text-gray-600 uppercase">{p.tag}</span>
+                      <span className="text-[11px] font-mono font-semibold">{p.label}</span>
+                      {!isAvailable && <Lock size={8} className="text-gray-600" />}
+                    </div>
+                    <span className="text-[9px] text-gray-600">
+                      {isAvailable ? p.description : 'No API key configured'}
+                    </span>
                   </div>
-                  <span className="text-[9px] text-gray-600">{p.description}</span>
-                </div>
-                {modelPreference === p.id && (
-                  <div className="w-1.5 h-1.5 rounded-full bg-jarvis-cyan shadow-[0_0_4px_rgba(0,212,255,0.5)]" />
-                )}
-              </button>
-            ))}
+                  {modelPreference === p.id && isAvailable && (
+                    <div className="w-1.5 h-1.5 rounded-full bg-jarvis-cyan shadow-[0_0_4px_rgba(0,212,255,0.5)]" />
+                  )}
+                </button>
+              );
+            })}
           </div>
         )}
       </div>
