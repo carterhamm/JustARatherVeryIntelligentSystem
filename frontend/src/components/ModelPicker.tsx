@@ -22,6 +22,12 @@ const uplinkModels: ModelDef[] = [
     activeColor: 'border-orange-400/30 text-orange-400',
   },
   {
+    id: 'glm',
+    label: 'GLM-4',
+    description: 'ZhipuAI Coding Pro — fast, capable',
+    activeColor: 'border-purple-400/30 text-purple-400',
+  },
+  {
     id: 'gemini',
     label: 'Gemini',
     description: 'Gemini 2.5 Flash — multimodal',

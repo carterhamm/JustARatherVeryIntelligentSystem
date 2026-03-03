@@ -419,6 +419,13 @@ async def chat_websocket(
     try:
         while True:
             raw = await websocket.receive_json()
+
+            # Handle heartbeat ping/pong (not a chat message)
+            msg_type = raw.get("type")
+            if msg_type == "ping":
+                await websocket.send_json({"type": "pong"})
+                continue
+
             try:
                 request = ChatRequest(**raw)
                 # Apply user's default provider if not specified in message

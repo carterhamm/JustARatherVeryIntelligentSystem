@@ -20,7 +20,7 @@ logger = logging.getLogger("jarvis.llm.stark_protocol")
 
 # Default model name — LM Studio serves whatever is loaded,
 # but we pass the identifier for logging / routing purposes.
-_DEFAULT_MODEL = "gemma-3-4b-it"
+_DEFAULT_MODEL = "gemma-3-4b-it-abliterated-text"
 
 # Retry config for transient errors (e.g. LM Studio not running yet)
 _MAX_RETRIES = 3

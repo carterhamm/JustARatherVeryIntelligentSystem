@@ -49,6 +49,9 @@ class Settings(BaseSettings):
     # -- Google Gemini --------------------------------------------------------
     GOOGLE_GEMINI_API_KEY: str = ""
 
+    # -- ZhipuAI GLM ---------------------------------------------------------
+    GLM_API_KEY: str = ""
+
     # -- Stark Protocol (local Gemma via LM Studio or remote) ------------------
     STARK_PROTOCOL_URL: str = "http://localhost:1234/v1"
     STARK_PROTOCOL_ENDPOINT: str = ""

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useCallback } from 'react';
-import { useChatStore } from '@/stores/chatStore';
+import { useChatStore, type Message } from '@/stores/chatStore';
 import { useUIStore } from '@/stores/uiStore';
 import { useChat } from '@/hooks/useChat';
 import { useVoice } from '@/hooks/useVoice';
@@ -83,15 +83,44 @@ export default function ChatArea() {
 
   const hasMessages = messages.length > 0;
 
+  // Group consecutive error messages into a single collapsed block
+  const displayMessages = messages.reduce<(Message | { type: 'error_stack'; errors: Message[] })[]>((acc, msg) => {
+    if (msg.role === 'system' && msg.id.startsWith('error-')) {
+      const last = acc[acc.length - 1];
+      if (last && 'type' in last && last.type === 'error_stack') {
+        last.errors.push(msg);
+      } else {
+        acc.push({ type: 'error_stack', errors: [msg] });
+      }
+    } else {
+      acc.push(msg);
+    }
+    return acc;
+  }, []);
+
   return (
     <div className="flex-1 flex flex-col h-full min-w-0 hud-boot-2">
       {/* Messages area — transparent background */}
       {hasMessages || currentConversation ? (
         <div className="flex-1 overflow-y-auto px-4 sm:px-8 py-4">
           {!hasMessages && currentConversation && <EmptyState />}
-          {messages.map((msg) => (
-            <MessageBubble key={msg.id} message={msg} />
-          ))}
+          {displayMessages.map((item) => {
+            if ('type' in item && item.type === 'error_stack') {
+              const count = item.errors.length;
+              const latestError = item.errors[item.errors.length - 1];
+              return (
+                <div key={latestError.id} className="flex justify-center my-2">
+                  <div className="px-4 py-1.5 border border-red-500/20 bg-red-500/5 max-w-lg"
+                    style={{ clipPath: 'polygon(0 4px, 4px 0, calc(100% - 4px) 0, 100% 4px, 100% calc(100% - 4px), calc(100% - 4px) 100%, 4px 100%, 0 calc(100% - 4px))' }}>
+                    <p className="text-[10px] text-center text-red-400 font-mono">
+                      {count > 1 ? `${latestError.content} (+${count - 1} more)` : latestError.content}
+                    </p>
+                  </div>
+                </div>
+              );
+            }
+            return <MessageBubble key={(item as Message).id} message={item as Message} />;
+          })}
           {isThinking && !isStreaming && <ThinkingIndicator />}
           <div ref={messagesEndRef} />
         </div>

@@ -165,7 +165,7 @@ function AboutSection() {
         {[
           { label: 'VERSION', value: '1.0.0' },
           { label: 'DESIGNATION', value: 'Just A Rather Very Intelligent System' },
-          { label: 'FRONTEND', value: 'React + Three.js + TypeScript' },
+          { label: 'FRONTEND', value: 'React + TypeScript' },
           { label: 'BACKEND', value: 'FastAPI + WebSocket' },
         ].map((item) => (
           <div key={item.label}

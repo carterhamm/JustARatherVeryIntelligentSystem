@@ -1,8 +1,11 @@
 """Authentication business logic — registration, login, token refresh, user CRUD, passkeys."""
 
 import json
+import logging
 from typing import Any, Optional
 from uuid import UUID
+
+logger = logging.getLogger("jarvis.auth_service")
 
 from fastapi import HTTPException, status
 from sqlalchemy import select, update
@@ -368,10 +371,14 @@ class AuthService:
 
         # Store challenge in Redis
         import base64
-        redis = await get_redis_client()
-        challenge_b64 = base64.b64encode(options.challenge).decode()
-        cache_key = f"webauthn:auth:{identifier}"
-        await redis.cache_set(cache_key, challenge_b64, ttl=60)
+        try:
+            redis = await get_redis_client()
+            challenge_b64 = base64.b64encode(options.challenge).decode()
+            cache_key = f"webauthn:auth:{identifier}"
+            await redis.cache_set(cache_key, challenge_b64, ttl=60)
+        except Exception as exc:
+            logger.error("Redis unavailable during auth begin: %s", exc)
+            raise HTTPException(status_code=503, detail="Cache service unavailable, please try again") from exc
 
         from webauthn.helpers import options_to_json
         return json.loads(options_to_json(options))
@@ -392,12 +399,18 @@ class AuthService:
         if not user or not user.is_active:
             raise HTTPException(status_code=401, detail="User not found")
 
-        redis = await get_redis_client()
-        cache_key = f"webauthn:auth:{identifier}"
-        stored_challenge = await redis.cache_get(cache_key)
-        if not stored_challenge:
-            raise HTTPException(status_code=400, detail="Authentication challenge expired")
-        await redis.cache_delete(cache_key)
+        try:
+            redis = await get_redis_client()
+            cache_key = f"webauthn:auth:{identifier}"
+            stored_challenge = await redis.cache_get(cache_key)
+            if not stored_challenge:
+                raise HTTPException(status_code=400, detail="Authentication challenge expired")
+            await redis.cache_delete(cache_key)
+        except HTTPException:
+            raise
+        except Exception as exc:
+            logger.error("Redis unavailable during auth complete: %s", exc)
+            raise HTTPException(status_code=503, detail="Cache service unavailable, please try again") from exc
 
         expected_challenge = base64.b64decode(stored_challenge)
         auth_credential = parse_authentication_credential_json(json.dumps(credential))

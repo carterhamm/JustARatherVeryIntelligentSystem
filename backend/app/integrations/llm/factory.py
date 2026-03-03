@@ -62,6 +62,13 @@ def _build_client(provider: LLMProvider) -> BaseLLMClient:
             raise ValueError("GOOGLE_GEMINI_API_KEY is not configured")
         return GeminiClient(api_key=settings.GOOGLE_GEMINI_API_KEY)
 
+    elif provider == LLMProvider.GLM:
+        from app.integrations.llm.glm_client import GLMClient
+
+        if not settings.GLM_API_KEY:
+            raise ValueError("GLM_API_KEY is not configured")
+        return GLMClient(api_key=settings.GLM_API_KEY)
+
     elif provider == LLMProvider.STARK_PROTOCOL:
         from app.integrations.llm.stark_client import StarkProtocolClient
 

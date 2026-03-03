@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { api } from '@/services/api';
 
-export type ModelProvider = 'openai' | 'claude' | 'gemini' | 'stark_protocol';
+export type ModelProvider = 'openai' | 'claude' | 'gemini' | 'glm' | 'stark_protocol';
 
 interface SettingsState {
   modelPreference: ModelProvider;
@@ -20,7 +20,7 @@ const VOICE_STORAGE_KEY = 'jarvis-voice-enabled';
 function getStoredPreference(): ModelProvider {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored && ['openai', 'claude', 'gemini', 'stark_protocol'].includes(stored)) {
+    if (stored && ['openai', 'claude', 'gemini', 'glm', 'stark_protocol'].includes(stored)) {
       return stored as ModelProvider;
     }
   } catch {
