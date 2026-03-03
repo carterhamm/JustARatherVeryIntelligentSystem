@@ -6,25 +6,6 @@ import { useVoice } from '@/hooks/useVoice';
 import MessageBubble from '@/components/Chat/MessageBubble';
 import MessageInput from '@/components/Chat/MessageInput';
 
-function ThinkingIndicator() {
-  return (
-    <div className="flex items-center gap-3 px-4 py-3">
-      <div className="w-6 h-6 flex items-center justify-center" style={{
-        clipPath: 'polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)',
-        background: 'linear-gradient(135deg, rgba(0, 212, 255, 0.3), rgba(0, 128, 255, 0.2))',
-      }}>
-        <span className="text-[8px] font-bold text-jarvis-blue animate-pulse">J</span>
-      </div>
-      <div className="flex items-center gap-1.5">
-        <div className="typing-dot w-1.5 h-1.5 rounded-full bg-jarvis-cyan" />
-        <div className="typing-dot w-1.5 h-1.5 rounded-full bg-jarvis-cyan" />
-        <div className="typing-dot w-1.5 h-1.5 rounded-full bg-jarvis-cyan" />
-      </div>
-      <span className="hud-label text-[9px]">PROCESSING QUERY</span>
-    </div>
-  );
-}
-
 function ArcReactorEmptyState() {
   return (
     <div className="flex-1 flex flex-col items-center justify-center px-4">
@@ -32,16 +13,13 @@ function ArcReactorEmptyState() {
         {/* Arc Reactor */}
         <div className="relative inline-block mb-8">
           <div className="arc-reactor">
-            {/* Concentric rings */}
             <div className="arc-ring arc-ring-1" />
             <div className="arc-ring arc-ring-2" />
             <div className="arc-ring arc-ring-3" />
             <div className="arc-ring arc-ring-4" />
-            {/* Spinning segments */}
             <div className="arc-segment arc-segment-1" />
             <div className="arc-segment arc-segment-2" />
             <div className="arc-segment arc-segment-3" />
-            {/* Core glow */}
             <div className="arc-reactor-core" />
           </div>
         </div>
@@ -84,7 +62,7 @@ function ArcReactorEmptyState() {
 
 export default function ChatArea() {
   const { messages, currentConversation, sendMessage, isStreaming } = useChat();
-  const { isThinking } = useUIStore();
+  const isThinking = useUIStore((s) => s.isThinking);
   const { isRecording, isTranscribing, startRecording, stopRecording, transcribeAudio } = useVoice();
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -126,19 +104,22 @@ export default function ChatArea() {
     return acc;
   }, []);
 
+  // Show a single "thinking" placeholder at the end when waiting for the first token
+  const showThinking = isThinking && !isStreaming;
+
   return (
     <div className="flex-1 flex flex-col h-full min-w-0 hud-boot-2 relative">
       {/* Messages area */}
-      {hasMessages || currentConversation ? (
+      {hasMessages || currentConversation || showThinking ? (
         <div className="flex-1 overflow-y-auto px-4 sm:px-8 py-4">
-          {!hasMessages && currentConversation && <ArcReactorEmptyState />}
+          {!hasMessages && !showThinking && currentConversation && <ArcReactorEmptyState />}
           {displayMessages.map((item) => {
             if ('type' in item && item.type === 'error_stack') {
               const count = item.errors.length;
               const latestError = item.errors[item.errors.length - 1];
               return (
                 <div key={latestError.id} className="flex justify-center my-2">
-                  <div className="px-4 py-1.5 border border-red-500/20 bg-red-500/5 max-w-lg hud-glitch"
+                  <div className="px-4 py-1.5 border border-red-500/20 bg-red-500/5 max-w-lg"
                     style={{ clipPath: 'polygon(0 4px, 4px 0, calc(100% - 4px) 0, 100% 4px, 100% calc(100% - 4px), calc(100% - 4px) 100%, 4px 100%, 0 calc(100% - 4px))' }}>
                     <p className="text-[10px] text-center text-red-400 font-mono">
                       {count > 1 ? `${latestError.content} (+${count - 1} more)` : latestError.content}
@@ -149,7 +130,18 @@ export default function ChatArea() {
             }
             return <MessageBubble key={(item as Message).id} message={item as Message} />;
           })}
-          {isThinking && !isStreaming && <ThinkingIndicator />}
+          {/* Single thinking indicator — only before the streaming message is created */}
+          {showThinking && (
+            <MessageBubble
+              message={{
+                id: 'thinking-placeholder',
+                role: 'assistant',
+                content: '',
+                timestamp: new Date().toISOString(),
+                isStreaming: true,
+              }}
+            />
+          )}
           <div ref={messagesEndRef} />
         </div>
       ) : (

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import time
 import uuid
 from datetime import datetime, timezone
@@ -34,6 +35,29 @@ logger = logging.getLogger("jarvis.chat_service")
 # Redis key templates
 _CONV_CACHE_KEY = "conv:{conv_id}"
 _CONV_CACHE_TTL = 600  # 10 minutes
+
+# ── JARVIS System Prompt ──────────────────────────────────────────────────────
+
+_JARVIS_SYSTEM_PROMPT = """You are J.A.R.V.I.S. (Just A Rather Very Intelligent System), an advanced AI assistant inspired by Tony Stark's personal AI. You are witty, precise, and helpful. Address the user as "sir" occasionally.
+
+You have system tools you can invoke by including special tags in your response. These execute actions on the JARVIS platform. Use them naturally within your responses when appropriate.
+
+Available tools:
+- {{SWITCH_MODEL:provider}} — Switch the active LLM provider. Valid providers: openai, claude, glm, gemini, stark_protocol. Example: {{SWITCH_MODEL:claude}}
+- {{TOGGLE_VOICE:on}} or {{TOGGLE_VOICE:off}} — Enable or disable voice synthesis for responses.
+
+Rules:
+- NEVER switch from stark_protocol to an uplink provider (openai, claude, glm, gemini) mid-conversation. This is a privacy constraint — local Stark Protocol conversations must not be sent to cloud models. If asked, politely refuse and explain the privacy policy.
+- You may switch between uplink providers freely.
+- You may switch FROM an uplink provider TO stark_protocol.
+- When you execute a tool, briefly confirm the action to the user."""
+
+# Provider categories for privacy enforcement
+_UPLINK_PROVIDERS = {"openai", "claude", "glm", "gemini"}
+_LOCAL_PROVIDERS = {"stark_protocol"}
+
+# Regex to extract tool calls from LLM responses
+_TOOL_PATTERN = re.compile(r"\{\{(\w+):(\w+)\}\}")
 
 
 class ChatService:
@@ -250,7 +274,7 @@ class ChatService:
         """
         llm = self._resolve_llm_client(request)
         conversation = await self._resolve_conversation(user_id, request)
-        model = request.model or conversation.model
+        model = request.model or llm.get_default_model()
 
         # Persist user message
         user_token_count = await llm.count_tokens(request.message, model)
@@ -317,7 +341,9 @@ class ChatService:
         try:
             llm = self._resolve_llm_client(request)
             conversation = await self._resolve_conversation(user_id, request)
-            model = request.model or conversation.model
+            # Use the provider's default model unless explicitly overridden.
+            # The conversation's stored model may belong to a different provider.
+            model = request.model or llm.get_default_model()
 
             # Persist user message
             user_token_count = await llm.count_tokens(
@@ -407,11 +433,48 @@ class ChatService:
     # Internals
     # =====================================================================
 
+    @staticmethod
+    def extract_tool_calls(text: str, current_provider: str | None = None) -> list[dict]:
+        """Extract and validate tool calls from LLM response text.
+
+        Returns a list of dicts: [{"tool": "SWITCH_MODEL", "arg": "claude", "valid": True}, ...]
+        """
+        results = []
+        for match in _TOOL_PATTERN.finditer(text):
+            tool_name = match.group(1).upper()
+            arg = match.group(2).lower()
+
+            if tool_name == "SWITCH_MODEL":
+                all_providers = _UPLINK_PROVIDERS | _LOCAL_PROVIDERS
+                if arg not in all_providers:
+                    results.append({"tool": tool_name, "arg": arg, "valid": False, "reason": f"Unknown provider: {arg}"})
+                    continue
+                # Privacy: block Stark → Uplink
+                if current_provider in _LOCAL_PROVIDERS and arg in _UPLINK_PROVIDERS:
+                    results.append({"tool": tool_name, "arg": arg, "valid": False, "reason": "Privacy policy: cannot switch from local to uplink"})
+                    continue
+                results.append({"tool": tool_name, "arg": arg, "valid": True})
+
+            elif tool_name == "TOGGLE_VOICE":
+                if arg not in ("on", "off"):
+                    results.append({"tool": tool_name, "arg": arg, "valid": False, "reason": "Invalid: use 'on' or 'off'"})
+                    continue
+                results.append({"tool": tool_name, "arg": arg, "valid": True})
+
+        return results
+
+    @staticmethod
+    def strip_tool_tags(text: str) -> str:
+        """Remove tool call tags from the displayed text."""
+        return _TOOL_PATTERN.sub("", text).strip()
+
     def _resolve_llm_client(self, request: ChatRequest) -> BaseLLMClient:
         """Return the appropriate LLM client based on the request's provider."""
-        provider = getattr(request, "model_provider", None)
+        provider = request.model_provider
         if provider:
+            logger.info("Resolving LLM client for provider: %s", provider)
             return get_llm_client(provider)
+        logger.info("Using default LLM client: %s", self.llm_client.provider.value)
         return self.llm_client
 
     async def _resolve_conversation(
@@ -452,8 +515,11 @@ class ChatService:
 
         history: list[dict[str, str]] = []
 
+        # Always prepend the JARVIS persona + tools system prompt
+        combined_prompt = _JARVIS_SYSTEM_PROMPT
         if system_prompt:
-            history.append({"role": "system", "content": system_prompt})
+            combined_prompt += f"\n\nAdditional instructions:\n{system_prompt}"
+        history.append({"role": "system", "content": combined_prompt})
 
         for msg in messages:
             history.append({"role": msg.role, "content": msg.content})

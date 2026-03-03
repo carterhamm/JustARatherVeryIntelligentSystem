@@ -473,6 +473,23 @@ async def chat_websocket(
                 if chunk.type == "token" and chunk.content:
                     full_response_text += chunk.content
 
+            # Process tool calls embedded in the response
+            if full_response_text:
+                tool_calls = ChatService.extract_tool_calls(
+                    full_response_text,
+                    current_provider=request.model_provider,
+                )
+                for tc in tool_calls:
+                    if tc["valid"]:
+                        await websocket.send_json(
+                            ChatStreamChunk(
+                                type="tool_call",
+                                tool=tc["tool"],
+                                tool_arg=tc["arg"],
+                            ).model_dump(mode="json")
+                        )
+                        logger.info("Tool call executed: %s(%s)", tc["tool"], tc["arg"])
+
             # Synthesize voice if requested
             if request.voice_enabled and full_response_text.strip():
                 try:

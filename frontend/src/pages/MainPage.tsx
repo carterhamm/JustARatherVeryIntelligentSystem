@@ -12,9 +12,6 @@ export default function MainPage() {
       {/* Holographic grid background */}
       <div className="holo-grid" />
 
-      {/* Scanner sweep overlay */}
-      <div className="scanner-sweep" />
-
       {/* HUD Layout */}
       <div className="relative z-10 flex flex-col h-full">
         {/* Top status bar */}

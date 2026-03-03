@@ -156,7 +156,7 @@ class ChatStreamChunk(BaseModel):
 
     type: str = Field(
         ...,
-        description='Chunk type: "start", "token", "end", or "error".',
+        description='Chunk type: "start", "token", "end", "error", or "tool_call".',
     )
     content: Optional[str] = Field(None, description="Token content for type=token.")
     conversation_id: Optional[uuid.UUID] = Field(
@@ -169,3 +169,5 @@ class ChatStreamChunk(BaseModel):
     )
     done: Optional[bool] = Field(None, description="True on the end chunk.")
     error: Optional[str] = Field(None, description="Error description when type=error.")
+    tool: Optional[str] = Field(None, description="Tool name for type=tool_call.")
+    tool_arg: Optional[str] = Field(None, description="Tool argument for type=tool_call.")

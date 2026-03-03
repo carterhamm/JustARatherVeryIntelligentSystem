@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { useChatStore, Message, Conversation } from '@/stores/chatStore';
 import { useUIStore } from '@/stores/uiStore';
-import { useSettingsStore } from '@/stores/settingsStore';
+import { useSettingsStore, type ModelProvider } from '@/stores/settingsStore';
 import { useWebSocket } from './useWebSocket';
 import { api } from '@/services/api';
 
@@ -98,6 +98,22 @@ export function useChat() {
             setIsSpeaking(false);
             URL.revokeObjectURL(audioUrl);
           });
+          break;
+        }
+
+        // Backend sends type="tool_call" with tool + tool_arg
+        case 'tool_call': {
+          const tool = msg.tool as string;
+          const arg = msg.tool_arg as string;
+
+          if (tool === 'SWITCH_MODEL') {
+            const validProviders = ['openai', 'claude', 'glm', 'gemini', 'stark_protocol'];
+            if (validProviders.includes(arg)) {
+              useSettingsStore.getState().setModelPreference(arg as ModelProvider);
+            }
+          } else if (tool === 'TOGGLE_VOICE') {
+            useSettingsStore.getState().setVoiceEnabled(arg === 'on');
+          }
           break;
         }
 
