@@ -14,8 +14,10 @@ export default function MainPage() {
 
       {/* HUD Layout */}
       <div className="relative z-10 flex flex-col h-full">
-        {/* Top status bar */}
-        <HUDStatusBar />
+        {/* Top status bar — z-50 so dropdown renders above chat/panels */}
+        <div className="relative z-50">
+          <HUDStatusBar />
+        </div>
 
         {/* Main content area */}
         <div className="flex flex-1 min-h-0">

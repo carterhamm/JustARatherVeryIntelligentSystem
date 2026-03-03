@@ -104,8 +104,10 @@ export default function ChatArea() {
     return acc;
   }, []);
 
-  // Show a single "thinking" placeholder at the end when waiting for the first token
-  const showThinking = isThinking && !isStreaming;
+  // Show a single "thinking" placeholder ONLY when waiting for the first token
+  // and no streaming message has been added to the list yet.
+  const hasStreamingMessage = messages.some((m) => m.isStreaming);
+  const showThinking = isThinking && !isStreaming && !hasStreamingMessage;
 
   return (
     <div className="flex-1 flex flex-col h-full min-w-0 hud-boot-2 relative">
