@@ -49,7 +49,7 @@ export default function HUDNavPanel() {
       e.stopPropagation();
       if (deletingId === convId) {
         try {
-          await api.delete(`/chat/conversations/${convId}`);
+          await api.delete(`/conversations/${convId}`);
           const { setConversations, setCurrentConversation, clearMessages } = useChatStore.getState();
           const updated = conversations.filter((c) => c.id !== convId);
           setConversations(updated);

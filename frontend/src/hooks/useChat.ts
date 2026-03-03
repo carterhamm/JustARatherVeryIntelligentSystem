@@ -134,7 +134,7 @@ export function useChat() {
           const response = await api.post<{
             message: Message;
             conversation_id: string;
-          }>('/chat/message', {
+          }>('/message', {
             content: content.trim(),
             conversation_id: currentConversation?.id,
             model_provider: modelPreference,
@@ -160,7 +160,7 @@ export function useChat() {
 
   const createConversation = useCallback(async () => {
     try {
-      const conversation = await api.post<Conversation>('/chat/conversations', {
+      const conversation = await api.post<Conversation>('/conversations', {
         title: 'New Conversation',
       });
       addConversation(conversation);
@@ -176,8 +176,8 @@ export function useChat() {
     async (id: string) => {
       try {
         const [conversation, messagesData] = await Promise.all([
-          api.get<Conversation>(`/chat/conversations/${id}`),
-          api.get<Message[]>(`/chat/conversations/${id}/messages`),
+          api.get<Conversation>(`/conversations/${id}`),
+          api.get<Message[]>(`/conversations/${id}/messages`),
         ]);
         setCurrentConversation(conversation);
         setMessages(messagesData);
@@ -190,8 +190,9 @@ export function useChat() {
 
   const loadConversations = useCallback(async () => {
     try {
-      const data = await api.get<Conversation[]>('/chat/conversations');
-      setConversations(data);
+      const data = await api.get<{ conversations: Conversation[]; total: number }>('/conversations');
+      // Backend returns { conversations: [...], total } wrapper
+      setConversations(data.conversations);
     } catch {
       /* silently fail */
     }
