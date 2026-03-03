@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useChatStore, Message, Conversation } from '@/stores/chatStore';
 import { useUIStore } from '@/stores/uiStore';
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -26,14 +26,20 @@ export function useChat() {
   const modelPreference = useSettingsStore((s) => s.modelPreference);
   const voiceEnabled = useSettingsStore((s) => s.voiceEnabled);
 
+  // Track the current streaming message ID so token chunks can append
+  const streamingMsgId = useRef<string | null>(null);
+
   const handleWsMessage = useCallback(
     (data: unknown) => {
       const msg = data as Record<string, unknown>;
 
       switch (msg.type) {
-        case 'stream_start': {
+        // Backend sends type="start" with conversation_id + message_id
+        case 'start': {
+          const msgId = String(msg.message_id);
+          streamingMsgId.current = msgId;
           const assistantMsg: Message = {
-            id: msg.message_id as string,
+            id: msgId,
             role: 'assistant',
             content: '',
             timestamp: new Date().toISOString(),
@@ -46,13 +52,22 @@ export function useChat() {
           break;
         }
 
-        case 'stream_chunk': {
-          appendToMessage(msg.message_id as string, msg.content as string);
+        // Backend sends type="token" with content delta
+        case 'token': {
+          const id = streamingMsgId.current;
+          if (id && msg.content) {
+            appendToMessage(id, msg.content as string);
+          }
           break;
         }
 
-        case 'stream_end': {
-          updateMessage(msg.message_id as string, (msg.full_content as string) || '', false);
+        // Backend sends type="end" with done=true
+        case 'end': {
+          const id = streamingMsgId.current;
+          if (id) {
+            updateMessage(id, undefined, false);
+          }
+          streamingMsgId.current = null;
           setIsStreaming(false);
           setJarvisActivity(0.2);
           break;
@@ -86,14 +101,16 @@ export function useChat() {
           break;
         }
 
+        // Backend sends type="error" with error field
         case 'error': {
           setIsStreaming(false);
           setIsThinking(false);
           setJarvisActivity(0);
+          streamingMsgId.current = null;
           const errorMsg: Message = {
             id: `error-${Date.now()}`,
             role: 'system',
-            content: (msg.message as string) || 'An error occurred',
+            content: (msg.error as string) || 'An error occurred',
             timestamp: new Date().toISOString(),
           };
           addMessage(errorMsg);
@@ -121,38 +138,24 @@ export function useChat() {
       setIsThinking(true);
       setJarvisActivity(0.5);
 
-      if (isConnected) {
-        send({
-          type: 'chat_message',
-          content: content.trim(),
-          conversation_id: currentConversation?.id,
-          model_provider: modelPreference,
-          voice_enabled: voiceEnabled,
-        });
-      } else {
-        try {
-          const response = await api.post<{
-            message: Message;
-            conversation_id: string;
-          }>('/message', {
-            content: content.trim(),
-            conversation_id: currentConversation?.id,
-            model_provider: modelPreference,
-          });
+      // Backend ChatRequest expects "message" not "content"
+      send({
+        message: content.trim(),
+        conversation_id: currentConversation?.id,
+        model_provider: modelPreference,
+        voice_enabled: voiceEnabled,
+      });
 
-          addMessage(response.message);
-          setIsThinking(false);
-          setJarvisActivity(0.2);
-        } catch {
-          setIsThinking(false);
-          setJarvisActivity(0);
-          addMessage({
-            id: `error-${Date.now()}`,
-            role: 'system',
-            content: 'Failed to send message. Please try again.',
-            timestamp: new Date().toISOString(),
-          });
-        }
+      // If WS is not connected, show an error (no REST fallback endpoint)
+      if (!isConnected) {
+        setIsThinking(false);
+        setJarvisActivity(0);
+        addMessage({
+          id: `error-${Date.now()}`,
+          role: 'system',
+          content: 'Not connected to server. Please refresh the page.',
+          timestamp: new Date().toISOString(),
+        });
       }
     },
     [addMessage, currentConversation, isConnected, send, setIsThinking, setJarvisActivity, modelPreference, voiceEnabled]

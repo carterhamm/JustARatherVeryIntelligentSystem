@@ -28,7 +28,7 @@ interface ChatState {
   setCurrentConversation: (conversation: Conversation | null) => void;
   setMessages: (messages: Message[]) => void;
   addMessage: (message: Message) => void;
-  updateMessage: (id: string, content: string, isStreaming?: boolean) => void;
+  updateMessage: (id: string, content: string | undefined, isStreaming?: boolean) => void;
   appendToMessage: (id: string, chunk: string) => void;
   setIsStreaming: (isStreaming: boolean) => void;
   addConversation: (conversation: Conversation) => void;
@@ -57,7 +57,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set((state) => ({
       messages: state.messages.map((msg) =>
         msg.id === id
-          ? { ...msg, content, isStreaming: isStreaming ?? msg.isStreaming }
+          ? { ...msg, ...(content !== undefined && { content }), isStreaming: isStreaming ?? msg.isStreaming }
           : msg
       ),
     })),

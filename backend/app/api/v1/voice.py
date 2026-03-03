@@ -90,7 +90,7 @@ def get_voice_service() -> VoiceService:
 
             llm = LLMClient(api_key=settings.OPENAI_API_KEY)
             chat_service = ChatService(llm_client=llm)
-        except (ImportError, AttributeError):
+        except (ImportError, AttributeError, TypeError):
             logger.info(
                 "Chat service not available; voice chat will run in echo mode"
             )

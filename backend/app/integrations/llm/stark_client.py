@@ -1,14 +1,12 @@
-"""Stark Protocol LLM client — Gemma 3 27B on RunPod serverless vLLM.
+"""Stark Protocol LLM client — local Gemma 3 via LM Studio (OpenAI-compatible).
 
-Submits inference jobs to a RunPod serverless vLLM endpoint using the
-OpenAI-compatible chat completions route.  Polls for completion with
-exponential-backoff.  Handles cold starts (up to several minutes) with
-a 600 s timeout.
+Connects to a local LM Studio server running an OpenAI-compatible API.
+Supports both streaming and non-streaming chat completions.
+Handles reconnection on transient failures (e.g. Mac sleep/wake).
 """
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import time
 from typing import Any, AsyncGenerator, Optional
@@ -20,36 +18,32 @@ from app.integrations.llm.shield_gemma import ShieldGemmaFilter, FilterResult
 
 logger = logging.getLogger("jarvis.llm.stark_protocol")
 
-_MODEL_NAME = "google/gemma-3-27b-it"
+# Default model name — LM Studio serves whatever is loaded,
+# but we pass the identifier for logging / routing purposes.
+_DEFAULT_MODEL = "gemma-3-4b-it"
 
-# Polling configuration
-_POLL_INITIAL_INTERVAL = 0.5   # 500 ms
-_POLL_MAX_INTERVAL = 3.0       # 3 s
-_POLL_BACKOFF_FACTOR = 1.5
-_JOB_TIMEOUT = 600.0           # 10 min total (covers cold starts + model loading)
-
-# Retry on transient HTTP errors
+# Retry config for transient errors (e.g. LM Studio not running yet)
 _MAX_RETRIES = 3
 _RETRY_BASE_DELAY = 1.0
 
 
 class StarkProtocolClient(BaseLLMClient):
-    """Client for Gemma 3 27B running on RunPod serverless vLLM."""
+    """Client for local LLM inference via LM Studio's OpenAI-compatible API."""
 
     provider = LLMProvider.STARK_PROTOCOL
-    default_model = _MODEL_NAME
+    default_model = _DEFAULT_MODEL
 
     def __init__(
         self,
         endpoint_url: str,
-        api_key: str,
+        api_key: str = "lm-studio",
         max_retries: int = _MAX_RETRIES,
     ) -> None:
         self._endpoint_url = endpoint_url.rstrip("/")
         self._api_key = api_key
         self._max_retries = max_retries
         self._http = httpx.AsyncClient(
-            timeout=30.0,
+            timeout=120.0,  # local inference can take a while
             headers={
                 "Authorization": f"Bearer {api_key}",
                 "Content-Type": "application/json",
@@ -58,149 +52,7 @@ class StarkProtocolClient(BaseLLMClient):
         self._shield = ShieldGemmaFilter()
 
     # ------------------------------------------------------------------
-    # RunPod job lifecycle
-    # ------------------------------------------------------------------
-
-    async def _submit_job(
-        self,
-        messages: list[dict[str, str]],
-        temperature: float = 0.7,
-        max_tokens: int = 1024,
-    ) -> str:
-        """POST to /run with vLLM OpenAI-compatible format — returns the job ID."""
-        payload = {
-            "input": {
-                "openai_route": "/v1/chat/completions",
-                "openai_input": {
-                    "model": _MODEL_NAME,
-                    "messages": messages,
-                    "max_tokens": max_tokens,
-                    "temperature": temperature,
-                },
-            },
-        }
-        resp = await self._http.post(self._endpoint_url, json=payload)
-        resp.raise_for_status()
-        data = resp.json()
-        job_id = data.get("id")
-        if not job_id:
-            raise RuntimeError(f"RunPod returned no job ID: {data}")
-        logger.info("RunPod job submitted: %s", job_id)
-        return job_id
-
-    async def _poll_job(self, job_id: str) -> dict[str, Any]:
-        """Poll GET /status/{job_id} until COMPLETED or FAILED."""
-        status_url = self._endpoint_url.replace("/run", f"/status/{job_id}")
-        interval = _POLL_INITIAL_INTERVAL
-        start = time.monotonic()
-
-        while True:
-            elapsed = time.monotonic() - start
-            if elapsed > _JOB_TIMEOUT:
-                raise TimeoutError(
-                    f"RunPod job {job_id} timed out after {_JOB_TIMEOUT:.0f}s"
-                )
-
-            resp = await self._http.get(status_url)
-            resp.raise_for_status()
-            data = resp.json()
-            status = data.get("status", "UNKNOWN")
-
-            if status == "COMPLETED":
-                logger.info(
-                    "RunPod job %s completed in %.1fs", job_id, elapsed,
-                )
-                return data
-
-            if status == "FAILED":
-                error = data.get("error", "unknown error")
-                raise RuntimeError(f"RunPod job {job_id} failed: {error}")
-
-            # IN_QUEUE or IN_PROGRESS — keep polling
-            await asyncio.sleep(interval)
-            interval = min(interval * _POLL_BACKOFF_FACTOR, _POLL_MAX_INTERVAL)
-
-    async def _run_job(
-        self,
-        messages: list[dict[str, str]],
-        temperature: float = 0.7,
-        max_tokens: int = 1024,
-    ) -> dict[str, Any]:
-        """Submit + poll with retries on transient errors."""
-        last_exc: BaseException | None = None
-        for attempt in range(self._max_retries):
-            try:
-                job_id = await self._submit_job(messages, temperature, max_tokens)
-                return await self._poll_job(job_id)
-            except httpx.HTTPStatusError as exc:
-                if exc.response.status_code == 503:
-                    last_exc = exc
-                    delay = _RETRY_BASE_DELAY * (2 ** attempt)
-                    logger.warning(
-                        "RunPod 503 (no workers), attempt %d/%d — retry in %.1fs",
-                        attempt + 1, self._max_retries, delay,
-                    )
-                    await asyncio.sleep(delay)
-                    continue
-                raise
-            except (httpx.ConnectError, httpx.ReadTimeout, TimeoutError) as exc:
-                last_exc = exc
-                delay = _RETRY_BASE_DELAY * (2 ** attempt)
-                logger.warning(
-                    "RunPod transient error (%s), attempt %d/%d — retry in %.1fs",
-                    type(exc).__name__, attempt + 1, self._max_retries, delay,
-                )
-                await asyncio.sleep(delay)
-
-        raise RuntimeError(
-            f"RunPod request failed after {self._max_retries} retries"
-        ) from last_exc
-
-    @staticmethod
-    def _extract_output(data: dict[str, Any]) -> tuple[str, dict[str, int]]:
-        """Extract generated text and usage from RunPod vLLM job output.
-
-        The vLLM worker wraps OpenAI-format responses in a list:
-        {"output": [{"choices": [{"message": {"content": "..."}}], "usage": {...}}]}
-        """
-        output = data.get("output")
-        if output is None:
-            return "", {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
-
-        # vLLM worker returns output as a list of OpenAI responses
-        if isinstance(output, list) and output:
-            first = output[0]
-            if isinstance(first, dict):
-                # Extract content from choices
-                choices = first.get("choices", [])
-                if choices:
-                    choice = choices[0]
-                    # Chat completion format: choices[].message.content
-                    message = choice.get("message", {})
-                    content = message.get("content", "")
-                    if not content:
-                        # Completion format: choices[].text
-                        content = choice.get("text", "")
-                else:
-                    content = ""
-
-                # Extract real usage from vLLM
-                usage = first.get("usage", {})
-                token_usage = {
-                    "prompt_tokens": usage.get("prompt_tokens", 0),
-                    "completion_tokens": usage.get("completion_tokens", 0),
-                    "total_tokens": usage.get("total_tokens", 0),
-                }
-                return content, token_usage
-
-        # Fallback for unexpected formats
-        if isinstance(output, str):
-            return output, {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
-
-        return str(output), {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
-
-    # ------------------------------------------------------------------
-    # BaseLLMClient interface
+    # OpenAI-compatible chat completion (non-streaming)
     # ------------------------------------------------------------------
 
     async def chat_completion(
@@ -223,26 +75,57 @@ class StarkProtocolClient(BaseLLMClient):
                         f"I cannot process this request. Content flagged as "
                         f"potentially unsafe ({input_check.category}): {input_check.reason}"
                     ),
-                    "model": _MODEL_NAME,
+                    "model": model or _DEFAULT_MODEL,
                     "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
                     "finish_reason": "content_filter",
                     "tool_calls": None,
                 }
 
+        payload = {
+            "model": model or _DEFAULT_MODEL,
+            "messages": messages,
+            "temperature": temperature,
+            "max_tokens": max_tokens or 1024,
+            "stream": False,
+        }
+
         start = time.monotonic()
-        data = await self._run_job(messages, temperature, max_tokens or 1024)
+        data = await self._request_with_retry(payload)
         latency = time.monotonic() - start
 
-        content, usage = self._extract_output(data)
-        logger.info("Stark Protocol response: %.1fs, %d chars", latency, len(content))
+        # Parse standard OpenAI chat completion response
+        choices = data.get("choices", [])
+        if choices:
+            choice = choices[0]
+            content = choice.get("message", {}).get("content", "")
+            finish_reason = choice.get("finish_reason", "stop")
+        else:
+            content = ""
+            finish_reason = "stop"
+
+        usage = data.get("usage", {})
+        token_usage = {
+            "prompt_tokens": usage.get("prompt_tokens", 0),
+            "completion_tokens": usage.get("completion_tokens", 0),
+            "total_tokens": usage.get("total_tokens", 0),
+        }
+
+        logger.info(
+            "Stark Protocol response: %.1fs, %d chars, %d tokens",
+            latency, len(content), token_usage.get("total_tokens", 0),
+        )
 
         return {
             "content": content,
-            "model": _MODEL_NAME,
-            "usage": usage,
-            "finish_reason": "stop",
+            "model": data.get("model", model or _DEFAULT_MODEL),
+            "usage": token_usage,
+            "finish_reason": finish_reason,
             "tool_calls": None,
         }
+
+    # ------------------------------------------------------------------
+    # Streaming chat completion (SSE)
+    # ------------------------------------------------------------------
 
     async def chat_completion_stream(
         self,
@@ -251,39 +134,96 @@ class StarkProtocolClient(BaseLLMClient):
         temperature: float = 0.7,
         max_tokens: Optional[int] = None,
     ) -> AsyncGenerator[str, None]:
-        # RunPod serverless is request/response — simulate streaming by
-        # yielding the full response in chunks.
+        payload = {
+            "model": model or _DEFAULT_MODEL,
+            "messages": messages,
+            "temperature": temperature,
+            "max_tokens": max_tokens or 1024,
+            "stream": True,
+        }
+
+        url = f"{self._endpoint_url}/chat/completions"
+
+        last_exc: BaseException | None = None
+        for attempt in range(self._max_retries):
+            try:
+                async with self._http.stream(
+                    "POST", url, json=payload, timeout=180.0,
+                ) as response:
+                    response.raise_for_status()
+                    async for line in response.aiter_lines():
+                        if not line.startswith("data: "):
+                            continue
+                        data_str = line[6:].strip()
+                        if data_str == "[DONE]":
+                            return
+
+                        import json
+                        try:
+                            chunk = json.loads(data_str)
+                        except json.JSONDecodeError:
+                            continue
+
+                        choices = chunk.get("choices", [])
+                        if choices:
+                            delta = choices[0].get("delta", {})
+                            content = delta.get("content")
+                            if content:
+                                yield content
+                    return  # Stream completed successfully
+
+            except (httpx.ConnectError, httpx.ReadTimeout, httpx.RemoteProtocolError) as exc:
+                last_exc = exc
+                delay = _RETRY_BASE_DELAY * (2 ** attempt)
+                logger.warning(
+                    "LM Studio stream error (%s), attempt %d/%d — retry in %.1fs",
+                    type(exc).__name__, attempt + 1, self._max_retries, delay,
+                )
+                import asyncio
+                await asyncio.sleep(delay)
+
+        # If all retries failed, fall back to non-streaming
+        logger.warning("Streaming failed after %d retries, falling back to non-streaming", self._max_retries)
         result = await self.chat_completion(messages, model, temperature, max_tokens)
         content = result.get("content", "")
         chunk_size = 20
         for i in range(0, len(content), chunk_size):
             yield content[i : i + chunk_size]
 
+    # ------------------------------------------------------------------
+    # Token counting (approximate)
+    # ------------------------------------------------------------------
+
     async def count_tokens(
         self,
         text: str,
         model: Optional[str] = None,
     ) -> int:
+        # Approximate: ~4 chars per token for English
         return max(1, len(text) // 4)
 
-    async def health_check(self, retries: int = 2, delay: float = 3.0) -> bool:
-        """Check if the RunPod endpoint is reachable."""
+    # ------------------------------------------------------------------
+    # Health check
+    # ------------------------------------------------------------------
+
+    async def health_check(self, retries: int = 2, delay: float = 2.0) -> bool:
+        """Check if LM Studio is running and responsive."""
+        import asyncio
         for attempt in range(retries):
             try:
-                resp = await self._http.get(
-                    self._endpoint_url.replace("/run", "/health"),
-                )
+                resp = await self._http.get(f"{self._endpoint_url}/models")
                 if resp.status_code == 200:
                     data = resp.json()
-                    workers = data.get("workers", {})
-                    ready = workers.get("ready", 0)
-                    logger.info(
-                        "RunPod endpoint healthy (%d workers ready)", ready,
-                    )
+                    models = data.get("data", [])
+                    if models:
+                        model_ids = [m.get("id", "unknown") for m in models]
+                        logger.info("LM Studio healthy, models: %s", model_ids)
+                    else:
+                        logger.info("LM Studio healthy, no models loaded")
                     return True
             except Exception as exc:
                 logger.warning(
-                    "RunPod health check %d/%d failed: %s",
+                    "LM Studio health check %d/%d failed: %s",
                     attempt + 1, retries, exc,
                 )
                 if attempt < retries - 1:
@@ -291,4 +231,37 @@ class StarkProtocolClient(BaseLLMClient):
         return False
 
     def get_cheap_model(self) -> str:
-        return _MODEL_NAME
+        return _DEFAULT_MODEL
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    async def _request_with_retry(self, payload: dict) -> dict:
+        """POST to /chat/completions with retry on transient errors."""
+        import asyncio
+        url = f"{self._endpoint_url}/chat/completions"
+        last_exc: BaseException | None = None
+
+        for attempt in range(self._max_retries):
+            try:
+                resp = await self._http.post(url, json=payload)
+                resp.raise_for_status()
+                return resp.json()
+            except (httpx.ConnectError, httpx.ReadTimeout, httpx.RemoteProtocolError) as exc:
+                last_exc = exc
+                delay = _RETRY_BASE_DELAY * (2 ** attempt)
+                logger.warning(
+                    "LM Studio request error (%s), attempt %d/%d — retry in %.1fs",
+                    type(exc).__name__, attempt + 1, self._max_retries, delay,
+                )
+                await asyncio.sleep(delay)
+            except httpx.HTTPStatusError as exc:
+                # Non-transient HTTP error — don't retry
+                raise RuntimeError(
+                    f"LM Studio error {exc.response.status_code}: {exc.response.text}"
+                ) from exc
+
+        raise RuntimeError(
+            f"LM Studio request failed after {self._max_retries} retries"
+        ) from last_exc

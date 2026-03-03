@@ -68,7 +68,7 @@ def _build_client(provider: LLMProvider) -> BaseLLMClient:
         if not settings.STARK_PROTOCOL_ENABLED:
             raise ValueError("Stark Protocol is not enabled")
         endpoint = settings.STARK_PROTOCOL_ENDPOINT or settings.STARK_PROTOCOL_URL
-        api_key = settings.RUNPOD_API_KEY
+        api_key = settings.STARK_PROTOCOL_API_KEY or settings.RUNPOD_API_KEY or "lm-studio"
         return StarkProtocolClient(endpoint_url=endpoint, api_key=api_key)
 
     else:
