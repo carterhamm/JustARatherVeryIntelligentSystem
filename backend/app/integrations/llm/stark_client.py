@@ -42,8 +42,11 @@ class StarkProtocolClient(BaseLLMClient):
         self._endpoint_url = endpoint_url.rstrip("/")
         self._api_key = api_key
         self._max_retries = max_retries
+        # Use separate connect timeout (5s) vs read timeout (90s).
+        # Connect should be instant for local LM Studio; if it takes
+        # longer than 5s, the server isn't running.
         self._http = httpx.AsyncClient(
-            timeout=120.0,  # local inference can take a while
+            timeout=httpx.Timeout(90.0, connect=5.0),
             headers={
                 "Authorization": f"Bearer {api_key}",
                 "Content-Type": "application/json",
@@ -134,6 +137,9 @@ class StarkProtocolClient(BaseLLMClient):
         temperature: float = 0.7,
         max_tokens: Optional[int] = None,
     ) -> AsyncGenerator[str, None]:
+        import asyncio
+        import json as json_mod
+
         payload = {
             "model": model or _DEFAULT_MODEL,
             "messages": messages,
@@ -143,12 +149,16 @@ class StarkProtocolClient(BaseLLMClient):
         }
 
         url = f"{self._endpoint_url}/chat/completions"
+        # Use a shorter connect timeout (5s) — LM Studio is local, so
+        # connection should be near-instant. Read timeout stays generous
+        # for slow inference.
+        stream_timeout = httpx.Timeout(90.0, connect=5.0)
 
         last_exc: BaseException | None = None
         for attempt in range(self._max_retries):
             try:
                 async with self._http.stream(
-                    "POST", url, json=payload, timeout=180.0,
+                    "POST", url, json=payload, timeout=stream_timeout,
                 ) as response:
                     response.raise_for_status()
                     async for line in response.aiter_lines():
@@ -158,10 +168,9 @@ class StarkProtocolClient(BaseLLMClient):
                         if data_str == "[DONE]":
                             return
 
-                        import json
                         try:
-                            chunk = json.loads(data_str)
-                        except json.JSONDecodeError:
+                            chunk = json_mod.loads(data_str)
+                        except json_mod.JSONDecodeError:
                             continue
 
                         choices = chunk.get("choices", [])
@@ -172,23 +181,31 @@ class StarkProtocolClient(BaseLLMClient):
                                 yield content
                     return  # Stream completed successfully
 
-            except (httpx.ConnectError, httpx.ReadTimeout, httpx.RemoteProtocolError) as exc:
+            except httpx.ConnectError as exc:
+                # LM Studio isn't running — fail immediately, don't retry
+                raise RuntimeError(
+                    "Cannot connect to LM Studio at "
+                    f"{self._endpoint_url}. Is it running?"
+                ) from exc
+
+            except (httpx.ConnectTimeout, httpx.ReadTimeout, httpx.RemoteProtocolError) as exc:
                 last_exc = exc
                 delay = _RETRY_BASE_DELAY * (2 ** attempt)
                 logger.warning(
                     "LM Studio stream error (%s), attempt %d/%d — retry in %.1fs",
                     type(exc).__name__, attempt + 1, self._max_retries, delay,
                 )
-                import asyncio
                 await asyncio.sleep(delay)
 
-        # If all retries failed, fall back to non-streaming
-        logger.warning("Streaming failed after %d retries, falling back to non-streaming", self._max_retries)
-        result = await self.chat_completion(messages, model, temperature, max_tokens)
-        content = result.get("content", "")
-        chunk_size = 20
-        for i in range(0, len(content), chunk_size):
-            yield content[i : i + chunk_size]
+            except httpx.HTTPStatusError as exc:
+                raise RuntimeError(
+                    f"LM Studio returned HTTP {exc.response.status_code}"
+                ) from exc
+
+        raise RuntimeError(
+            f"LM Studio not responding after {self._max_retries} attempts. "
+            "Check that LM Studio is running and has a model loaded."
+        )
 
     # ------------------------------------------------------------------
     # Token counting (approximate)
@@ -248,7 +265,13 @@ class StarkProtocolClient(BaseLLMClient):
                 resp = await self._http.post(url, json=payload)
                 resp.raise_for_status()
                 return resp.json()
-            except (httpx.ConnectError, httpx.ReadTimeout, httpx.RemoteProtocolError) as exc:
+            except httpx.ConnectError as exc:
+                # LM Studio isn't running — fail immediately
+                raise RuntimeError(
+                    "Cannot connect to LM Studio at "
+                    f"{self._endpoint_url}. Is it running?"
+                ) from exc
+            except (httpx.ConnectTimeout, httpx.ReadTimeout, httpx.RemoteProtocolError) as exc:
                 last_exc = exc
                 delay = _RETRY_BASE_DELAY * (2 ** attempt)
                 logger.warning(
@@ -257,11 +280,11 @@ class StarkProtocolClient(BaseLLMClient):
                 )
                 await asyncio.sleep(delay)
             except httpx.HTTPStatusError as exc:
-                # Non-transient HTTP error — don't retry
                 raise RuntimeError(
                     f"LM Studio error {exc.response.status_code}: {exc.response.text}"
                 ) from exc
 
         raise RuntimeError(
-            f"LM Studio request failed after {self._max_retries} retries"
+            "LM Studio not responding after retries. "
+            "Check that LM Studio is running and has a model loaded."
         ) from last_exc

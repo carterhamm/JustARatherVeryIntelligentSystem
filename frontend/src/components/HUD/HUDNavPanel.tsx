@@ -170,8 +170,8 @@ export default function HUDNavPanel() {
                       {conv.title || 'New Session'}
                     </p>
                     <p className="text-[9px] text-gray-600 mt-0.5 font-mono">
-                      {formatTimestamp(conv.updatedAt)}
-                      {conv.messageCount > 0 && ` / ${conv.messageCount}`}
+                      {formatTimestamp(conv.updated_at)}
+                      {conv.message_count > 0 && ` / ${conv.message_count}`}
                     </p>
                   </div>
                   <button

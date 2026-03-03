@@ -173,8 +173,8 @@ export default function Sidebar() {
                         {conv.title || 'New Conversation'}
                       </p>
                       <p className="text-[10px] text-gray-600 mt-0.5">
-                        {formatTimestamp(conv.updatedAt)}
-                        {conv.messageCount > 0 && ` -- ${conv.messageCount} msg${conv.messageCount !== 1 ? 's' : ''}`}
+                        {formatTimestamp(conv.updated_at)}
+                        {conv.message_count > 0 && ` -- ${conv.message_count} msg${conv.message_count !== 1 ? 's' : ''}`}
                       </p>
                     </div>
                     {/* Delete button */}

@@ -11,11 +11,11 @@ export interface Message {
 export interface Conversation {
   id: string;
   title: string;
-  createdAt: string;
-  updatedAt: string;
-  messageCount: number;
+  created_at: string;
+  updated_at: string;
+  message_count: number;
   model?: string;
-  modelProvider?: string;
+  model_provider?: string;
 }
 
 interface ChatState {
