@@ -26,10 +26,13 @@ function ProfileSection() {
       {user ? (
         <div className="space-y-3">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 flex items-center justify-center" style={{
-              clipPath: 'polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)',
-              background: 'linear-gradient(135deg, rgba(0, 212, 255, 0.15), rgba(0, 128, 255, 0.1))',
-            }}>
+            <div
+              className="w-10 h-10 flex items-center justify-center rounded-2xl"
+              style={{
+                background: 'linear-gradient(135deg, rgba(0, 212, 255, 0.15), rgba(0, 128, 255, 0.1))',
+                border: '1px solid rgba(0, 212, 255, 0.2)',
+              }}
+            >
               <span className="text-sm font-display font-bold text-jarvis-blue">
                 {user.username?.charAt(0).toUpperCase() || 'U'}
               </span>
@@ -40,16 +43,14 @@ function ProfileSection() {
             </div>
           </div>
 
-          <div className="px-3 py-2 border border-jarvis-blue/10 bg-jarvis-darker/50"
-            style={{ clipPath: 'polygon(0 4px, 4px 0, calc(100% - 4px) 0, 100% 4px, 100% calc(100% - 4px), calc(100% - 4px) 100%, 4px 100%, 0 calc(100% - 4px))' }}>
+          <div className="glass-subtle rounded-xl px-4 py-2.5">
             <span className="hud-label text-[8px] block mb-0.5">USER ID</span>
             <p className="text-[10px] text-gray-400 font-mono truncate">{user.id}</p>
           </div>
 
           <button
             onClick={logout}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2 text-xs font-medium text-hud-red border border-hud-red/20 bg-hud-red/5 hover:bg-hud-red/10 transition-all"
-            style={{ clipPath: 'polygon(0 4px, 4px 0, calc(100% - 4px) 0, 100% 4px, 100% calc(100% - 4px), calc(100% - 4px) 100%, 4px 100%, 0 calc(100% - 4px))' }}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-medium text-hud-red rounded-xl border border-hud-red/20 bg-hud-red/5 hover:bg-hud-red/10 transition-all"
           >
             <LogOut size={13} />
             SIGN OUT
@@ -80,21 +81,16 @@ function VoiceSection() {
         </div>
         <button
           onClick={() => setVoiceEnabled(!voiceEnabled)}
-          className={clsx('relative w-9 h-5 transition-colors', {
+          className={clsx('relative w-10 h-6 rounded-full transition-colors', {
             'bg-jarvis-blue/20 border border-jarvis-blue/30': voiceEnabled,
             'bg-gray-800 border border-gray-700': !voiceEnabled,
           })}
-          style={{ clipPath: 'polygon(0 3px, 3px 0, calc(100% - 3px) 0, 100% 3px, 100% calc(100% - 3px), calc(100% - 3px) 100%, 3px 100%, 0 calc(100% - 3px))' }}
         >
           <div
-            className={clsx('absolute top-0.5 w-4 h-4 transition-all', {
-              'bg-jarvis-blue': voiceEnabled,
-              'bg-gray-600': !voiceEnabled,
+            className={clsx('absolute top-1 w-4 h-4 rounded-full transition-all', {
+              'bg-jarvis-blue left-5': voiceEnabled,
+              'bg-gray-600 left-1': !voiceEnabled,
             })}
-            style={{
-              left: voiceEnabled ? '18px' : '2px',
-              clipPath: 'polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)',
-            }}
           />
         </button>
       </div>
@@ -132,17 +128,19 @@ function ApiKeysSection() {
 
       <div className="space-y-1.5">
         {services.map((service) => (
-          <div key={service.name}
-            className="px-3 py-2 flex items-center justify-between border border-jarvis-blue/8 bg-jarvis-darker/30"
-            style={{ clipPath: 'polygon(0 4px, 4px 0, calc(100% - 4px) 0, 100% 4px, 100% calc(100% - 4px), calc(100% - 4px) 100%, 4px 100%, 0 calc(100% - 4px))' }}>
+          <div
+            key={service.name}
+            className="glass-subtle rounded-xl px-4 py-2.5 flex items-center justify-between"
+          >
             <div>
               <p className="text-xs text-gray-300">{service.name}</p>
               <p className="text-[9px] text-gray-600 font-mono">{service.key}</p>
             </div>
             <div className="flex items-center gap-1.5">
-              <div className={clsx('hud-status-dot', {
-                'online': service.status === 'connected' || service.status === 'active',
-              })} style={{ width: 5, height: 5 }} />
+              <div
+                className="status-dot online"
+                style={{ width: 5, height: 5 }}
+              />
               <span className="text-[9px] text-gray-600 uppercase font-mono">{service.status}</span>
             </div>
           </div>
@@ -168,9 +166,7 @@ function AboutSection() {
           { label: 'FRONTEND', value: 'React + TypeScript' },
           { label: 'BACKEND', value: 'FastAPI + WebSocket' },
         ].map((item) => (
-          <div key={item.label}
-            className="px-3 py-2 border border-jarvis-blue/8 bg-jarvis-darker/30"
-            style={{ clipPath: 'polygon(0 4px, 4px 0, calc(100% - 4px) 0, 100% 4px, 100% calc(100% - 4px), calc(100% - 4px) 100%, 4px 100%, 0 calc(100% - 4px))' }}>
+          <div key={item.label} className="glass-subtle rounded-xl px-4 py-2.5">
             <span className="hud-label text-[8px] block mb-0.5">{item.label}</span>
             <p className="text-xs text-gray-300">{item.value}</p>
           </div>
@@ -178,7 +174,9 @@ function AboutSection() {
       </div>
 
       <div className="text-center pt-2">
-        <div className="hud-divider mb-2"><div className="hud-divider-dot" /></div>
+        <div className="hud-divider mb-2">
+          <div className="hud-divider-dot" />
+        </div>
         <p className="text-[9px] text-gray-700 font-mono">STARK INDUSTRIES</p>
       </div>
     </div>
@@ -191,8 +189,12 @@ export default function SettingsPanel() {
 
   useEffect(() => {
     const handler = (e: Event) => {
-      const customEvent = e as CustomEvent<{ open: boolean }>;
-      setIsOpen(customEvent.detail.open);
+      const customEvent = e as CustomEvent<{ open?: boolean }>;
+      if (customEvent.detail?.open !== undefined) {
+        setIsOpen(customEvent.detail.open);
+      } else {
+        setIsOpen((prev) => !prev);
+      }
     };
     window.addEventListener('jarvis-settings-toggle', handler);
     return () => window.removeEventListener('jarvis-settings-toggle', handler);
@@ -200,16 +202,20 @@ export default function SettingsPanel() {
 
   const handleClose = useCallback(() => {
     setIsOpen(false);
-    window.dispatchEvent(new CustomEvent('jarvis-settings-toggle', { detail: { open: false } }));
   }, []);
 
   const renderSection = () => {
     switch (activeSection) {
-      case 'profile': return <ProfileSection />;
-      case 'model': return <ModelSection />;
-      case 'voice': return <VoiceSection />;
-      case 'api-keys': return <ApiKeysSection />;
-      case 'about': return <AboutSection />;
+      case 'profile':
+        return <ProfileSection />;
+      case 'model':
+        return <ModelSection />;
+      case 'voice':
+        return <VoiceSection />;
+      case 'api-keys':
+        return <ApiKeysSection />;
+      case 'about':
+        return <AboutSection />;
     }
   };
 
@@ -221,41 +227,42 @@ export default function SettingsPanel() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.15 }}
-            className="fixed inset-0 z-40 bg-black/50"
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 z-40 panel-backdrop"
             onClick={handleClose}
           />
 
           <motion.div
-            initial={{ x: '100%' }}
-            animate={{ x: 0 }}
-            exit={{ x: '100%' }}
+            initial={{ opacity: 0, x: 40, scale: 0.97 }}
+            animate={{ opacity: 1, x: 0, scale: 1 }}
+            exit={{ opacity: 0, x: 40, scale: 0.97 }}
             transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-            className="fixed right-0 top-0 h-full w-full max-w-sm z-50 bg-hud-panel-solid border-l border-jarvis-blue/15 flex flex-col"
-            style={{ backdropFilter: 'blur(20px)' }}
+            className="fixed right-5 top-5 bottom-5 w-full max-w-sm z-50 glass-heavy rounded-3xl flex flex-col overflow-hidden"
           >
             {/* Header */}
-            <div className="flex items-center justify-between px-4 py-2.5 border-b border-jarvis-blue/10">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.05]">
               <span className="hud-label text-[10px]">SETTINGS</span>
               <button
                 onClick={handleClose}
-                className="w-7 h-7 flex items-center justify-center text-gray-500 hover:text-jarvis-blue transition-colors"
+                className="glass-circle w-8 h-8 flex items-center justify-center"
               >
-                <X size={14} />
+                <X size={14} className="text-gray-400" />
               </button>
             </div>
 
             {/* Tabs */}
-            <div className="flex border-b border-jarvis-blue/10 px-1">
+            <div className="flex border-b border-white/[0.05] px-2 gap-0.5">
               {sections.map((section) => (
                 <button
                   key={section.id}
                   onClick={() => setActiveSection(section.id)}
                   className={clsx(
-                    'flex items-center gap-1 px-2.5 py-2 text-[10px] font-medium transition-all border-b-2 -mb-px',
+                    'flex items-center gap-1.5 px-3 py-2.5 text-[10px] font-medium transition-all rounded-t-lg border-b-2 -mb-px',
                     {
-                      'border-jarvis-blue text-jarvis-blue': activeSection === section.id,
-                      'border-transparent text-gray-600 hover:text-gray-400': activeSection !== section.id,
+                      'border-jarvis-blue text-jarvis-blue bg-jarvis-blue/[0.05]':
+                        activeSection === section.id,
+                      'border-transparent text-gray-600 hover:text-gray-400':
+                        activeSection !== section.id,
                     },
                   )}
                 >
@@ -266,7 +273,7 @@ export default function SettingsPanel() {
             </div>
 
             {/* Content */}
-            <div className="flex-1 overflow-y-auto p-4">{renderSection()}</div>
+            <div className="flex-1 overflow-y-auto p-5">{renderSection()}</div>
           </motion.div>
         </>
       )}

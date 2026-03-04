@@ -442,7 +442,7 @@ export default function DataImportPanel() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-40 bg-black/40"
+            className="fixed inset-0 z-40 panel-backdrop"
             onClick={handleClose}
           />
 
@@ -452,7 +452,7 @@ export default function DataImportPanel() {
             animate={{ x: 0 }}
             exit={{ x: '-100%' }}
             transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-            className="fixed left-0 top-0 h-full w-full max-w-md z-50 glass-panel border-r border-jarvis-blue/15 shadow-jarvis-lg flex flex-col"
+            className="fixed left-5 top-5 bottom-5 w-full max-w-md z-50 glass-heavy rounded-3xl flex flex-col overflow-hidden"
           >
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-jarvis-blue/10">

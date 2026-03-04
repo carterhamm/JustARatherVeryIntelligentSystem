@@ -1,40 +1,32 @@
-import HUDStatusBar from '@/components/HUD/HUDStatusBar';
-import HUDNavPanel from '@/components/HUD/HUDNavPanel';
-import HUDDiagnosticsPanel from '@/components/HUD/HUDDiagnosticsPanel';
-import ChatArea from '@/components/HUD/ChatArea';
+import JarvisCore from '@/components/JarvisCore/JarvisCore';
+import StatusBar from '@/components/Jarvis/StatusBar';
+import FloatingChat from '@/components/Jarvis/FloatingChat';
+import CommandDock from '@/components/Jarvis/CommandDock';
+import SessionsPanel from '@/components/Jarvis/SessionsPanel';
+import DiagnosticsPanel from '@/components/Jarvis/DiagnosticsPanel';
 import SettingsPanel from '@/components/SettingsPanel';
 import DataImportPanel from '@/components/DataImportPanel';
 import KnowledgePanel from '@/components/KnowledgePanel';
 
 export default function MainPage() {
   return (
-    <div className="relative h-screen w-screen overflow-hidden bg-jarvis-darker">
-      {/* Holographic grid background */}
-      <div className="holo-grid" />
-
-      {/* HUD Layout */}
-      <div className="relative z-10 flex flex-col h-full">
-        {/* Top status bar — z-50 so dropdown renders above chat/panels */}
-        <div className="relative z-50">
-          <HUDStatusBar />
-        </div>
-
-        {/* Main content area */}
-        <div className="flex flex-1 min-h-0">
-          {/* Left nav */}
-          <HUDNavPanel />
-
-          {/* Center chat */}
-          <ChatArea />
-
-          {/* Right diagnostics (hidden on small screens) */}
-          <div className="hidden lg:flex">
-            <HUDDiagnosticsPanel />
-          </div>
-        </div>
+    <div className="h-screen w-screen bg-black overflow-hidden relative">
+      {/* 3D Background — fills entire viewport */}
+      <div className="absolute inset-0 z-0 pointer-events-none">
+        <JarvisCore />
       </div>
 
+      {/* Scanline overlay */}
+      <div className="scanline-overlay" />
+
+      {/* Floating UI Layer */}
+      <StatusBar />
+      <FloatingChat />
+      <CommandDock />
+
       {/* Panel overlays */}
+      <SessionsPanel />
+      <DiagnosticsPanel />
       <SettingsPanel />
       <DataImportPanel />
       <KnowledgePanel />
