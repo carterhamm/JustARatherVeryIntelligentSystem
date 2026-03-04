@@ -1,4 +1,3 @@
-import JarvisCore from '@/components/JarvisCore/JarvisCore';
 import StatusBar from '@/components/Jarvis/StatusBar';
 import FloatingChat from '@/components/Jarvis/FloatingChat';
 import CommandDock from '@/components/Jarvis/CommandDock';
@@ -11,9 +10,23 @@ import KnowledgePanel from '@/components/KnowledgePanel';
 export default function MainPage() {
   return (
     <div className="h-screen w-screen bg-black overflow-hidden relative">
-      {/* 3D Background — fills entire viewport */}
-      <div className="absolute inset-0 z-0 pointer-events-none">
-        <JarvisCore />
+      {/* Subtle background — grid + radial glow */}
+      <div className="absolute inset-0 pointer-events-none">
+        <div
+          className="absolute inset-0 opacity-[0.04]"
+          style={{
+            backgroundImage:
+              'linear-gradient(rgba(0,212,255,0.4) 1px, transparent 1px), linear-gradient(90deg, rgba(0,212,255,0.4) 1px, transparent 1px)',
+            backgroundSize: '80px 80px',
+          }}
+        />
+        <div
+          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[900px] h-[900px] rounded-full"
+          style={{
+            background:
+              'radial-gradient(circle, rgba(0,212,255,0.06) 0%, rgba(0,128,255,0.02) 40%, transparent 70%)',
+          }}
+        />
       </div>
 
       {/* Scanline overlay */}
