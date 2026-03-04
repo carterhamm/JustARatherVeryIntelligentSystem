@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { useChatStore, Message, Conversation } from '@/stores/chatStore';
 import { useUIStore } from '@/stores/uiStore';
 import { useSettingsStore, type ModelProvider } from '@/stores/settingsStore';
+import { useAuthStore } from '@/stores/authStore';
 import { useWebSocket } from './useWebSocket';
 import { api } from '@/services/api';
 
@@ -28,6 +29,8 @@ export function useChat() {
 
   // Track the current streaming message ID so token chunks can append
   const streamingMsgId = useRef<string | null>(null);
+  // Track last error to deduplicate rapidly repeating errors
+  const lastErrorRef = useRef<string>('');
 
   const handleWsMessage = useCallback(
     (data: unknown) => {
@@ -123,10 +126,29 @@ export function useChat() {
           setIsThinking(false);
           setJarvisActivity(0);
           streamingMsgId.current = null;
+
+          const errorText = (msg.error as string) || 'An error occurred';
+
+          // Auth errors: log out and redirect to login — don't spam messages
+          const isAuthError =
+            errorText.includes('Invalid token') ||
+            errorText.includes('Token required') ||
+            errorText.includes('Authentication failed');
+          if (isAuthError) {
+            useAuthStore.getState().logout();
+            break;
+          }
+
+          // Deduplicate: skip if same error text as the last one
+          if (errorText === lastErrorRef.current) break;
+          lastErrorRef.current = errorText;
+          // Reset dedup after 5s so the same error can appear again later
+          setTimeout(() => { lastErrorRef.current = ''; }, 5000);
+
           const errorMsg: Message = {
             id: `error-${Date.now()}`,
             role: 'system',
-            content: (msg.error as string) || 'An error occurred',
+            content: errorText,
             timestamp: new Date().toISOString(),
           };
           addMessage(errorMsg);

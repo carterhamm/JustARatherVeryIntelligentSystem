@@ -9,6 +9,12 @@ interface WebSocketConfig {
   onDisconnect?: ConnectionHandler;
 }
 
+// Close codes that should NOT trigger reconnection
+const NO_RECONNECT_CODES = new Set([
+  1000, // Normal closure
+  1008, // Policy violation (invalid token / auth failure)
+]);
+
 class WebSocketManager {
   private static instance: WebSocketManager;
   private ws: WebSocket | null = null;
@@ -22,6 +28,7 @@ class WebSocketManager {
   private connectHandlers: Set<ConnectionHandler> = new Set();
   private disconnectHandlers: Set<ConnectionHandler> = new Set();
   private _isConnected = false;
+  private _authFailed = false;
 
   static getInstance(): WebSocketManager {
     if (!WebSocketManager.instance) {
@@ -34,8 +41,13 @@ class WebSocketManager {
     return this._isConnected;
   }
 
+  get authFailed(): boolean {
+    return this._authFailed;
+  }
+
   connect(config: WebSocketConfig): void {
     this.config = config;
+    this._authFailed = false;
 
     if (config.onMessage) this.messageHandlers.add(config.onMessage);
     if (config.onConnect) this.connectHandlers.add(config.onConnect);
@@ -46,6 +58,8 @@ class WebSocketManager {
 
   private createConnection(): void {
     if (!this.config) return;
+    // Don't reconnect if auth already failed
+    if (this._authFailed) return;
 
     const url = this.config.token
       ? `${this.config.url}?token=${this.config.token}`
@@ -76,16 +90,35 @@ class WebSocketManager {
 
           if (data.type === 'pong') return;
 
+          // Detect auth errors from the server — these arrive as error
+          // messages just before the server closes the connection.
+          if (data.type === 'error') {
+            const err = (data.error || '') as string;
+            const isAuthError =
+              err.includes('Invalid token') ||
+              err.includes('Token required') ||
+              err.includes('Authentication failed');
+            if (isAuthError) {
+              this._authFailed = true;
+            }
+          }
+
           this.messageHandlers.forEach((handler) => handler(data));
         } catch {
           this.messageHandlers.forEach((handler) => handler(event.data));
         }
       };
 
-      this.ws.onclose = () => {
+      this.ws.onclose = (event: CloseEvent) => {
         this._isConnected = false;
         this.stopHeartbeat();
         this.disconnectHandlers.forEach((handler) => handler());
+
+        // Don't reconnect on auth failures or deliberate closures
+        if (this._authFailed || NO_RECONNECT_CODES.has(event.code)) {
+          return;
+        }
+
         this.attemptReconnect();
       };
 
@@ -98,6 +131,7 @@ class WebSocketManager {
   }
 
   private attemptReconnect(): void {
+    if (this._authFailed) return;
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
       return;
     }
@@ -159,6 +193,7 @@ class WebSocketManager {
       this.ws = null;
     }
     this._isConnected = false;
+    this._authFailed = false;
     this.messageHandlers.clear();
     this.connectHandlers.clear();
     this.disconnectHandlers.clear();
