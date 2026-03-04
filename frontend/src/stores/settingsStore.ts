@@ -6,16 +6,19 @@ export type ModelProvider = 'openai' | 'claude' | 'gemini' | 'glm' | 'stark_prot
 interface SettingsState {
   modelPreference: ModelProvider;
   voiceEnabled: boolean;
+  use24HourTime: boolean;
   isLoading: boolean;
 
   setModelPreference: (provider: ModelProvider) => void;
   setVoiceEnabled: (enabled: boolean) => void;
+  setUse24HourTime: (enabled: boolean) => void;
   loadPreferences: () => Promise<void>;
   savePreferences: () => Promise<void>;
 }
 
 const STORAGE_KEY = 'jarvis-model-preference';
 const VOICE_STORAGE_KEY = 'jarvis-voice-enabled';
+const TIME_FORMAT_KEY = 'jarvis-24h-time';
 
 function getStoredPreference(): ModelProvider {
   try {
@@ -32,7 +35,13 @@ function getStoredPreference(): ModelProvider {
 export const useSettingsStore = create<SettingsState>((set, get) => ({
   modelPreference: getStoredPreference(),
   voiceEnabled: localStorage.getItem(VOICE_STORAGE_KEY) === 'true',
+  use24HourTime: localStorage.getItem(TIME_FORMAT_KEY) === 'true',
   isLoading: false,
+
+  setUse24HourTime: (enabled: boolean) => {
+    localStorage.setItem(TIME_FORMAT_KEY, String(enabled));
+    set({ use24HourTime: enabled });
+  },
 
   setVoiceEnabled: (enabled: boolean) => {
     localStorage.setItem(VOICE_STORAGE_KEY, String(enabled));

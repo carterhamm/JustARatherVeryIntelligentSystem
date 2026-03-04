@@ -57,20 +57,20 @@ export default function GlassInput({
   const hasContent = content.trim().length > 0;
 
   return (
-    <div className="glass-capsule px-2.5 py-2 flex items-end gap-2 transition-all duration-300 hover:shadow-glass-glow">
+    <div className="glass-capsule px-2 py-1.5 flex items-center gap-1.5 transition-all duration-300 hover:shadow-glass-glow">
       {/* Voice toggle */}
       {onVoiceToggle && (
         <button
           onClick={onVoiceToggle}
           disabled={disabled || isLoading}
-          className={clsx('glass-circle flex-shrink-0 w-10 h-10 flex items-center justify-center', {
+          className={clsx('glass-circle flex-shrink-0 w-9 h-9 flex items-center justify-center', {
             'active !bg-hud-red/15 !border-hud-red/30': isRecording,
           })}
         >
           {isRecording ? (
-            <MicOff size={16} className="text-hud-red" />
+            <MicOff size={15} className="text-hud-red" />
           ) : (
-            <Mic size={16} className="text-jarvis-blue/60" />
+            <Mic size={15} className="text-jarvis-blue/60" />
           )}
         </button>
       )}
@@ -85,7 +85,7 @@ export default function GlassInput({
           placeholder="Message J.A.R.V.I.S. ..."
           disabled={disabled || isLoading}
           rows={1}
-          className="w-full resize-none bg-transparent border-none text-sm text-gray-200 placeholder:text-gray-600 disabled:opacity-50 focus:outline-none px-3 py-2.5 font-sans leading-relaxed"
+          className="w-full resize-none bg-transparent border-none text-sm text-gray-200 placeholder:text-gray-600 disabled:opacity-50 focus:outline-none px-3 py-1.5 font-sans leading-normal"
         />
       </div>
 
@@ -93,16 +93,16 @@ export default function GlassInput({
       <button
         onClick={handleSend}
         disabled={!hasContent || isLoading || disabled}
-        className={clsx('glass-circle flex-shrink-0 w-10 h-10 flex items-center justify-center transition-all', {
+        className={clsx('glass-circle flex-shrink-0 w-9 h-9 flex items-center justify-center transition-all', {
           'opacity-30 cursor-not-allowed': !hasContent || isLoading || disabled,
           '!bg-jarvis-gold/12 !border-jarvis-gold/25': hasContent && !isLoading && !disabled,
         })}
       >
         {isLoading ? (
-          <Loader2 size={16} className="animate-spin text-jarvis-blue/60" />
+          <Loader2 size={15} className="animate-spin text-jarvis-blue/60" />
         ) : (
           <Send
-            size={16}
+            size={15}
             className={clsx({
               'text-jarvis-gold': hasContent && !disabled,
               'text-gray-600': !hasContent || disabled,

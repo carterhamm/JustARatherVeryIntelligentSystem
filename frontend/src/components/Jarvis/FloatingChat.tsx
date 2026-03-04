@@ -114,7 +114,7 @@ export default function FloatingChat() {
   const showThinking = awaitingResponse && !isStreaming;
 
   return (
-    <div className="fixed inset-x-0 top-[72px] bottom-[100px] z-20 flex flex-col items-center pointer-events-none">
+    <div className="fixed inset-x-0 top-[72px] bottom-[24px] z-20 flex flex-col items-center pointer-events-none">
       {/* Messages area */}
       {hasMessages || currentConversation || showThinking ? (
         <div className="w-full max-w-3xl flex-1 overflow-y-auto px-5 sm:px-8 py-6 pointer-events-auto chat-scroll-mask">
@@ -157,7 +157,7 @@ export default function FloatingChat() {
       )}
 
       {/* Input bar */}
-      <div className="w-full max-w-3xl px-5 sm:px-8 pt-2 pb-1 pointer-events-auto boot-3">
+      <div className="w-full max-w-3xl px-5 sm:px-8 pt-2 pb-2 pointer-events-auto boot-3">
         <GlassInput
           onSend={sendMessage}
           onVoiceToggle={handleVoiceToggle}

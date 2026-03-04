@@ -25,19 +25,19 @@ function DockIcon({ icon: Icon, label, active, accent, onClick }: DockIconProps)
   const [hovered, setHovered] = useState(false);
 
   return (
-    <div className="relative flex flex-col items-center">
+    <div className="relative flex items-center">
       <button
         onClick={onClick}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
         className={clsx(
-          'glass-circle w-11 h-11 flex items-center justify-center transition-all',
+          'glass-circle w-9 h-9 flex items-center justify-center transition-all',
           active && '!bg-jarvis-blue/15 !border-jarvis-blue/30 shadow-glow-cyan',
         )}
         style={accent ? { borderColor: `${accent}33`, boxShadow: active ? `0 0 12px ${accent}33` : undefined } : undefined}
       >
         <Icon
-          size={17}
+          size={15}
           className={clsx(
             'transition-colors',
             active ? 'text-jarvis-blue' : 'text-gray-500',
@@ -46,19 +46,19 @@ function DockIcon({ icon: Icon, label, active, accent, onClick }: DockIconProps)
         />
       </button>
 
-      {/* Tooltip */}
+      {/* Tooltip — to the right */}
       {hovered && (
-        <div className="absolute -top-8 left-1/2 -translate-x-1/2 px-2.5 py-1 glass rounded-lg whitespace-nowrap z-50 pointer-events-none">
+        <div className="absolute left-full top-1/2 -translate-y-1/2 ml-3 px-2.5 py-1 glass rounded-lg whitespace-nowrap z-50 pointer-events-none">
           <span className="text-[9px] font-mono text-gray-300 uppercase tracking-wider">
             {label}
           </span>
         </div>
       )}
 
-      {/* Active indicator dot */}
+      {/* Active indicator dot — to the left */}
       {active && (
         <div
-          className="w-1 h-1 rounded-full bg-jarvis-blue mt-1"
+          className="absolute -left-1.5 top-1/2 -translate-y-1/2 w-1 h-1 rounded-full bg-jarvis-blue"
           style={accent ? { backgroundColor: accent } : undefined}
         />
       )}
@@ -79,8 +79,8 @@ export default function CommandDock() {
   };
 
   return (
-    <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-30 pointer-events-auto boot-4">
-      <div className="glass-capsule px-3 py-2.5 flex items-center gap-2">
+    <div className="fixed left-4 top-1/2 -translate-y-1/2 z-30 pointer-events-auto boot-4">
+      <div className="glass-capsule px-2 py-2.5 flex flex-col items-center gap-1.5">
         <DockIcon
           icon={MessageSquare}
           label="Sessions"
@@ -89,7 +89,7 @@ export default function CommandDock() {
         <DockIcon
           icon={Cpu}
           label="Model"
-          onClick={() => dispatch('jarvis-settings-toggle')}
+          onClick={() => dispatch('jarvis-model-toggle')}
         />
         <DockIcon
           icon={voiceEnabled ? Mic : MicOff}
@@ -100,7 +100,7 @@ export default function CommandDock() {
         />
 
         {/* Divider */}
-        <div className="w-px h-7 bg-white/[0.06] mx-0.5" />
+        <div className="w-5 h-px bg-white/[0.06] my-0.5" />
 
         <DockIcon
           icon={Activity}
@@ -121,7 +121,7 @@ export default function CommandDock() {
         />
 
         {/* Divider */}
-        <div className="w-px h-7 bg-white/[0.06] mx-0.5" />
+        <div className="w-5 h-px bg-white/[0.06] my-0.5" />
 
         <DockIcon
           icon={Settings}
