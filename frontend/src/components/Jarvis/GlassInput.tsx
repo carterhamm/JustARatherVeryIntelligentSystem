@@ -76,7 +76,7 @@ export default function GlassInput({
       )}
 
       {/* Text input */}
-      <div className="flex-1 relative min-w-0">
+      <div className="flex-1 relative min-w-0 flex items-center">
         <textarea
           ref={textareaRef}
           value={content}
@@ -85,7 +85,7 @@ export default function GlassInput({
           placeholder="Message J.A.R.V.I.S. ..."
           disabled={disabled || isLoading}
           rows={1}
-          className="w-full resize-none bg-transparent border-none text-sm text-gray-200 placeholder:text-gray-600 disabled:opacity-50 focus:outline-none px-3 py-1.5 font-sans leading-normal"
+          className="w-full resize-none bg-transparent border-none text-sm text-gray-200 placeholder:text-gray-600 disabled:opacity-50 focus:outline-none px-3 py-[8px] font-sans leading-5"
         />
       </div>
 

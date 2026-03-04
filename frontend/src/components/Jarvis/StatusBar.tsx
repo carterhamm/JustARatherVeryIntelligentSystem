@@ -57,26 +57,30 @@ export default function StatusBar() {
 
   const modelLabel = providerLabels[modelPreference] || modelPreference;
 
+  const openModelPicker = () => {
+    window.dispatchEvent(new CustomEvent('jarvis-model-toggle'));
+  };
+
   return (
     <div className="fixed top-4 left-4 right-4 z-30 flex justify-between items-start pointer-events-none">
       {/* Left capsule — Logo + Status */}
-      <div className="glass-capsule pointer-events-auto px-5 py-2.5 flex items-center gap-3 boot-1 ml-14">
+      <div className="glass-capsule pointer-events-auto h-10 px-4 flex items-center gap-2.5 boot-1">
         {/* Hex logo */}
         <div
-          className="w-7 h-7 flex items-center justify-center flex-shrink-0"
+          className="w-5 h-5 flex items-center justify-center flex-shrink-0"
           style={{
             clipPath: 'polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)',
             background: 'linear-gradient(135deg, rgba(0, 212, 255, 0.25), rgba(0, 128, 255, 0.15))',
           }}
         >
-          <span className="text-[9px] font-display font-bold text-jarvis-blue">J</span>
+          <span className="text-[8px] font-display font-bold text-jarvis-blue">J</span>
         </div>
 
         <span className="font-display text-[11px] font-bold tracking-[0.2em] text-jarvis-blue glow-text hidden sm:block">
           J.A.R.V.I.S.
         </span>
 
-        <div className="w-px h-5 bg-white/[0.06]" />
+        <div className="w-px h-4 bg-white/[0.06]" />
 
         <div className="flex items-center gap-1.5">
           <div className={clsx('status-dot', statusClass)} />
@@ -85,23 +89,26 @@ export default function StatusBar() {
       </div>
 
       {/* Right capsule — Model + Time + Connection */}
-      <div className="glass-capsule pointer-events-auto px-4 py-2.5 flex items-center gap-3 boot-1">
-        {/* Current model badge — passive display */}
-        <div className="flex items-center gap-1.5">
+      <div className="glass-capsule pointer-events-auto h-10 px-4 flex items-center gap-3 boot-1">
+        {/* Current model badge — clickable */}
+        <button
+          onClick={openModelPicker}
+          className="flex items-center gap-1.5 hover:opacity-80 transition-opacity"
+        >
           <div className="w-1.5 h-1.5 rounded-full bg-jarvis-cyan shadow-[0_0_4px_rgba(0,212,255,0.4)]" />
           <span className="text-[10px] font-mono text-jarvis-cyan tracking-wider">
             {modelLabel}
           </span>
-        </div>
+        </button>
 
-        <div className="w-px h-5 bg-white/[0.06]" />
+        <div className="w-px h-4 bg-white/[0.06]" />
 
         {/* Time */}
         <span className="font-mono text-[11px] text-gray-400 tracking-wider tabular-nums">
           {time}
         </span>
 
-        <div className="w-px h-5 bg-white/[0.06]" />
+        <div className="w-px h-4 bg-white/[0.06]" />
 
         {/* Connection */}
         <div className="flex items-center gap-1.5">
