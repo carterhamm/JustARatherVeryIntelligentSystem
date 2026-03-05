@@ -79,8 +79,8 @@ export default function CommandDock() {
   };
 
   return (
-    <div className="fixed left-4 top-[calc(50%-40px)] -translate-y-1/2 z-30 pointer-events-auto boot-4">
-      <div className="glass-capsule px-2 py-2.5 flex flex-col items-center gap-1.5">
+    <div className="fixed left-4 inset-y-0 z-30 pointer-events-none flex items-center boot-4">
+      <div className="glass-capsule px-2 py-2.5 flex flex-col items-center gap-1.5 pointer-events-auto">
         <DockIcon
           icon={MessageSquare}
           label="Sessions"
