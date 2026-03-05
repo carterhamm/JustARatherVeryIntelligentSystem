@@ -76,6 +76,12 @@ export default function SettingsPanel() {
 
   const handleClose = useCallback(() => setIsOpen(false), []);
 
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setIsOpen(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   return (
     <AnimatePresence>
       {isOpen && (

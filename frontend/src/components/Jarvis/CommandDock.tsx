@@ -79,7 +79,7 @@ export default function CommandDock() {
   };
 
   return (
-    <div className="fixed left-4 top-[calc(50%-20px)] -translate-y-1/2 z-30 pointer-events-auto boot-4">
+    <div className="fixed left-4 top-[calc(50%-40px)] -translate-y-1/2 z-30 pointer-events-auto boot-4">
       <div className="glass-capsule px-2 py-2.5 flex flex-col items-center gap-1.5">
         <DockIcon
           icon={MessageSquare}

@@ -450,6 +450,12 @@ export default function KnowledgePanel() {
     setIsOpen(false);
   }, []);
 
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setIsOpen(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   const handleSelectEntity = useCallback((entity: KnowledgeEntity) => {
     setSelectedEntity(entity);
     setView('detail');

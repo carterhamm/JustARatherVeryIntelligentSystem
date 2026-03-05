@@ -39,6 +39,12 @@ export default function SessionsPanel() {
     return () => window.removeEventListener('jarvis-sessions-toggle', handler);
   }, []);
 
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   const handleNewConversation = useCallback(async () => {
     if (isCreating) return;
     setIsCreating(true);

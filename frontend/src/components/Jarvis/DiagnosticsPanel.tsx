@@ -81,6 +81,12 @@ export default function DiagnosticsPanel() {
     return () => window.removeEventListener('jarvis-diagnostics-toggle', handler);
   }, []);
 
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   return (
     <AnimatePresence>
       {open && (
