@@ -1,8 +1,8 @@
-"""Stark Protocol LLM client — local Gemma 3 via LM Studio (OpenAI-compatible).
+"""Stark Protocol LLM client — Gemma 3 via OpenAI-compatible API.
 
-Connects to a local LM Studio server running an OpenAI-compatible API.
+Connects to an OpenAI-compatible inference server (Modal/vLLM, LM Studio, etc.).
 Supports both streaming and non-streaming chat completions.
-Handles reconnection on transient failures (e.g. Mac sleep/wake).
+Handles reconnection on transient failures (e.g. cold starts, sleep/wake).
 """
 
 from __future__ import annotations
@@ -42,11 +42,15 @@ class StarkProtocolClient(BaseLLMClient):
         self._endpoint_url = endpoint_url.rstrip("/")
         self._api_key = api_key
         self._max_retries = max_retries
-        # Use separate connect timeout (5s) vs read timeout (90s).
-        # Connect should be instant for local LM Studio; if it takes
-        # longer than 5s, the server isn't running.
+        self._is_remote = not any(
+            h in endpoint_url for h in ("localhost", "127.0.0.1", "0.0.0.0")
+        )
+        # Remote (Modal/cloud): long timeouts for cold starts.
+        # Local (LM Studio): short connect timeout.
+        connect_timeout = 120.0 if self._is_remote else 5.0
+        read_timeout = 300.0 if self._is_remote else 90.0
         self._http = httpx.AsyncClient(
-            timeout=httpx.Timeout(90.0, connect=5.0),
+            timeout=httpx.Timeout(read_timeout, connect=connect_timeout),
             headers={
                 "Authorization": f"Bearer {api_key}",
                 "Content-Type": "application/json",
@@ -224,8 +228,12 @@ class StarkProtocolClient(BaseLLMClient):
     # ------------------------------------------------------------------
 
     async def health_check(self, retries: int = 2, delay: float = 2.0) -> bool:
-        """Check if LM Studio is running and responsive."""
+        """Check if Stark Protocol endpoint is running and responsive."""
         import asyncio
+        # Remote endpoints may need longer waits for cold starts
+        if self._is_remote:
+            retries = max(retries, 3)
+            delay = max(delay, 5.0)
         for attempt in range(retries):
             try:
                 resp = await self._http.get(f"{self._endpoint_url}/models")
@@ -234,13 +242,13 @@ class StarkProtocolClient(BaseLLMClient):
                     models = data.get("data", [])
                     if models:
                         model_ids = [m.get("id", "unknown") for m in models]
-                        logger.info("LM Studio healthy, models: %s", model_ids)
+                        logger.info("Stark Protocol healthy, models: %s", model_ids)
                     else:
-                        logger.info("LM Studio healthy, no models loaded")
+                        logger.info("Stark Protocol healthy, no models loaded")
                     return True
             except Exception as exc:
                 logger.warning(
-                    "LM Studio health check %d/%d failed: %s",
+                    "Stark Protocol health check %d/%d failed: %s",
                     attempt + 1, retries, exc,
                 )
                 if attempt < retries - 1:
@@ -266,25 +274,34 @@ class StarkProtocolClient(BaseLLMClient):
                 resp.raise_for_status()
                 return resp.json()
             except httpx.ConnectError as exc:
-                # LM Studio isn't running — fail immediately
-                raise RuntimeError(
-                    "Cannot connect to LM Studio at "
-                    f"{self._endpoint_url}. Is it running?"
-                ) from exc
+                if self._is_remote:
+                    # Remote: might be a transient network issue, retry
+                    last_exc = exc
+                    delay = _RETRY_BASE_DELAY * (2 ** attempt)
+                    logger.warning(
+                        "Stark Protocol connect error, attempt %d/%d — retry in %.1fs",
+                        attempt + 1, self._max_retries, delay,
+                    )
+                    await asyncio.sleep(delay)
+                else:
+                    raise RuntimeError(
+                        "Cannot connect to Stark Protocol at "
+                        f"{self._endpoint_url}. Is the server running?"
+                    ) from exc
             except (httpx.ConnectTimeout, httpx.ReadTimeout, httpx.RemoteProtocolError) as exc:
                 last_exc = exc
                 delay = _RETRY_BASE_DELAY * (2 ** attempt)
                 logger.warning(
-                    "LM Studio request error (%s), attempt %d/%d — retry in %.1fs",
+                    "Stark Protocol request error (%s), attempt %d/%d — retry in %.1fs",
                     type(exc).__name__, attempt + 1, self._max_retries, delay,
                 )
                 await asyncio.sleep(delay)
             except httpx.HTTPStatusError as exc:
                 raise RuntimeError(
-                    f"LM Studio error {exc.response.status_code}: {exc.response.text}"
+                    f"Stark Protocol error {exc.response.status_code}: {exc.response.text}"
                 ) from exc
 
         raise RuntimeError(
-            "LM Studio not responding after retries. "
-            "Check that LM Studio is running and has a model loaded."
+            "Stark Protocol not responding after retries. "
+            "The server may be starting up (cold start). Try again in a minute."
         ) from last_exc
