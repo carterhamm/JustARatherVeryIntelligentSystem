@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { Send, Mic, MicOff, Loader2 } from 'lucide-react';
+import gsap from 'gsap';
 import clsx from 'clsx';
 
 interface GlassInputProps {
@@ -19,6 +20,8 @@ export default function GlassInput({
 }: GlassInputProps) {
   const [content, setContent] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const sendBtnRef = useRef<HTMLButtonElement>(null);
 
   const adjustHeight = useCallback(() => {
     const textarea = textareaRef.current;
@@ -33,9 +36,50 @@ export default function GlassInput({
     adjustHeight();
   }, [content, adjustHeight]);
 
+  // GSAP boot animation
+  useEffect(() => {
+    if (containerRef.current) {
+      gsap.fromTo(
+        containerRef.current,
+        { opacity: 0, y: 20, scale: 0.95 },
+        { opacity: 1, y: 0, scale: 1, duration: 0.5, ease: 'power3.out', delay: 0.6 },
+      );
+    }
+  }, []);
+
+  const handleFocus = () => {
+    if (containerRef.current) {
+      gsap.to(containerRef.current, {
+        boxShadow: '0 0 30px rgba(0, 212, 255, 0.15), 0 8px 32px rgba(0, 0, 0, 0.4)',
+        borderColor: 'rgba(0, 212, 255, 0.15)',
+        duration: 0.3,
+        ease: 'power2.out',
+      });
+    }
+  };
+
+  const handleBlur = () => {
+    if (containerRef.current) {
+      gsap.to(containerRef.current, {
+        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.04)',
+        borderColor: 'rgba(255, 255, 255, 0.08)',
+        duration: 0.3,
+        ease: 'power2.out',
+      });
+    }
+  };
+
   const handleSend = useCallback(() => {
     const trimmed = content.trim();
     if (trimmed && !isLoading && !disabled) {
+      // Send pulse animation
+      if (sendBtnRef.current) {
+        gsap.fromTo(
+          sendBtnRef.current,
+          { scale: 0.85 },
+          { scale: 1, duration: 0.4, ease: 'elastic.out(1, 0.3)' },
+        );
+      }
       onSend(trimmed);
       setContent('');
       if (textareaRef.current) {
@@ -57,7 +101,10 @@ export default function GlassInput({
   const hasContent = content.trim().length > 0;
 
   return (
-    <div className="glass-capsule px-2 py-1.5 flex items-center gap-1.5 transition-all duration-300 hover:shadow-glass-glow">
+    <div
+      ref={containerRef}
+      className="glass-capsule px-2 py-1.5 flex items-center gap-1.5 transition-all duration-300 opacity-0"
+    >
       {/* Voice toggle */}
       {onVoiceToggle && (
         <button
@@ -82,6 +129,8 @@ export default function GlassInput({
           value={content}
           onChange={(e) => setContent(e.target.value)}
           onKeyDown={handleKeyDown}
+          onFocus={handleFocus}
+          onBlur={handleBlur}
           placeholder="Message J.A.R.V.I.S. ..."
           disabled={disabled || isLoading}
           rows={1}
@@ -91,6 +140,7 @@ export default function GlassInput({
 
       {/* Send button */}
       <button
+        ref={sendBtnRef}
         onClick={handleSend}
         disabled={!hasContent || isLoading || disabled}
         className={clsx('glass-circle flex-shrink-0 w-9 h-9 flex items-center justify-center transition-all', {

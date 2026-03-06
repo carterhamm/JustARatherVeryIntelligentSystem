@@ -1,9 +1,10 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { atomDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { Copy, Check } from 'lucide-react';
 import { Message } from '@/stores/chatStore';
+import gsap from 'gsap';
 import clsx from 'clsx';
 
 interface HoloMessageProps {
@@ -70,18 +71,46 @@ function TypingIndicator() {
 export default function HoloMessage({ message }: HoloMessageProps) {
   const isUser = message.role === 'user';
   const isSystem = message.role === 'system';
+  const msgRef = useRef<HTMLDivElement>(null);
+
+  // Strip any leaked tool tags like {{TOGGLE_VOICE:off}} from display
+  const displayContent = useMemo(
+    () => message.content.replace(/\{\{\w+:\w+\}\}/g, '').trim(),
+    [message.content],
+  );
 
   const timeDisplay = useMemo(() => {
     const date = new Date(message.timestamp);
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   }, [message.timestamp]);
 
+  // GSAP entry animation
+  useEffect(() => {
+    if (msgRef.current && !message.isStreaming) {
+      gsap.fromTo(
+        msgRef.current,
+        {
+          opacity: 0,
+          y: 12,
+          scale: 0.98,
+        },
+        {
+          opacity: 1,
+          y: 0,
+          scale: 1,
+          duration: 0.4,
+          ease: 'power3.out',
+        },
+      );
+    }
+  }, []);
+
   // System/error messages
   if (isSystem) {
     return (
       <div className="flex justify-center my-2 animate-fade-in">
         <div className="glass-subtle rounded-xl px-4 py-2 max-w-lg border-hud-red/10">
-          <p className="text-[11px] text-center text-gray-400 font-mono">{message.content}</p>
+          <p className="text-[11px] text-center text-gray-400 font-mono">{displayContent}</p>
         </div>
       </div>
     );
@@ -89,7 +118,8 @@ export default function HoloMessage({ message }: HoloMessageProps) {
 
   return (
     <div
-      className={clsx('flex mb-4 animate-slide-in-up', {
+      ref={msgRef}
+      className={clsx('flex mb-4', {
         'justify-end': isUser,
         'justify-start': !isUser,
       })}
@@ -108,10 +138,12 @@ export default function HoloMessage({ message }: HoloMessageProps) {
               <span className="text-[7px] font-bold text-jarvis-blue">J</span>
             </div>
             <span className="hud-label text-[8px]">J.A.R.V.I.S.</span>
+            <span className="text-[7px] font-mono text-jarvis-blue/20">{timeDisplay}</span>
           </div>
         )}
         {isUser && (
           <div className="flex items-center justify-end gap-1.5 mb-1.5">
+            <span className="text-[7px] font-mono text-jarvis-gold/20">{timeDisplay}</span>
             <span className="text-[9px] font-mono text-jarvis-gold/50 tracking-wider uppercase">
               You
             </span>
@@ -178,7 +210,7 @@ export default function HoloMessage({ message }: HoloMessageProps) {
                   },
                 }}
               >
-                {message.content}
+                {displayContent}
               </ReactMarkdown>
             </div>
           )}
@@ -188,7 +220,7 @@ export default function HoloMessage({ message }: HoloMessageProps) {
           )}
         </div>
 
-        {/* Timestamp — shows on hover */}
+        {/* Timestamp — shows on hover (hidden since we moved it inline) */}
         <div
           className={clsx(
             'text-[9px] text-gray-600 mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity font-mono',
