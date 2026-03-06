@@ -131,10 +131,10 @@ export default function GlassInput({
           onKeyDown={handleKeyDown}
           onFocus={handleFocus}
           onBlur={handleBlur}
-          placeholder="Message J.A.R.V.I.S. ..."
+          placeholder="Message J.A.R.V.I.S."
           disabled={disabled || isLoading}
           rows={1}
-          className="w-full resize-none bg-transparent border-none text-sm text-gray-200 placeholder:text-gray-600 disabled:opacity-50 focus:outline-none px-3 py-[8px] font-sans leading-5"
+          className="w-full resize-none bg-transparent border-none text-sm text-gray-200 placeholder:text-gray-600 placeholder:text-center disabled:opacity-50 focus:outline-none px-3 py-[8px] font-sans leading-5"
         />
       </div>
 
