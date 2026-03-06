@@ -8,41 +8,51 @@ import GlassInput from './GlassInput';
 
 function EmptyState() {
   return (
-    <div className="flex-1 flex flex-col items-center justify-end pb-8 px-4 boot-2">
-      {/* Transparent spacer so the 3D core is visible in center */}
-      <div className="flex-1" />
-
-      {/* Minimal bottom-aligned prompt */}
+    <div className="flex-1 flex flex-col items-center justify-center px-4 boot-2">
       <div className="text-center">
-        <h2 className="text-sm font-display font-bold tracking-[0.25em] text-jarvis-blue/80 glow-text mb-2">
+        {/* Arc Reactor */}
+        <div className="relative inline-block mb-6">
+          <div className="arc-reactor">
+            <div className="arc-ring arc-ring-1" />
+            <div className="arc-ring arc-ring-2" />
+            <div className="arc-ring arc-ring-3" />
+            <div className="arc-ring arc-ring-4" />
+            <div className="arc-segment arc-segment-1" />
+            <div className="arc-segment arc-segment-2" />
+            <div className="arc-segment arc-segment-3" />
+            <div className="arc-reactor-core" />
+          </div>
+        </div>
+
+        <h2 className="text-sm font-display font-bold tracking-[0.25em] text-jarvis-blue glow-text mb-2">
           SYSTEMS ONLINE
         </h2>
-        <p className="text-[11px] text-gray-500/70 leading-relaxed font-mono tracking-wide mb-4">
+        <p className="text-[11px] text-gray-500 leading-relaxed font-mono tracking-wide mb-6">
           All subsystems operational. Awaiting directives.
         </p>
 
-        <div className="flex items-center justify-center gap-5 mb-4">
+        <div className="flex items-center justify-center gap-5">
           <div className="flex flex-col items-center gap-1">
-            <div className="status-dot online" style={{ width: 4, height: 4 }} />
-            <span className="text-[7px] font-mono text-gray-600/70 tracking-wider">CORE</span>
+            <div className="status-dot online" style={{ width: 5, height: 5 }} />
+            <span className="text-[8px] font-mono text-gray-600 tracking-wider">CORE</span>
           </div>
-          <div className="w-px h-3 bg-white/[0.04]" />
+          <div className="w-px h-4 bg-white/[0.05]" />
           <div className="flex flex-col items-center gap-1">
-            <div className="status-dot online" style={{ width: 4, height: 4 }} />
-            <span className="text-[7px] font-mono text-gray-600/70 tracking-wider">UPLINK</span>
+            <div className="status-dot online" style={{ width: 5, height: 5 }} />
+            <span className="text-[8px] font-mono text-gray-600 tracking-wider">UPLINK</span>
           </div>
-          <div className="w-px h-3 bg-white/[0.04]" />
+          <div className="w-px h-4 bg-white/[0.05]" />
           <div className="flex flex-col items-center gap-1">
-            <div className="status-dot online" style={{ width: 4, height: 4 }} />
-            <span className="text-[7px] font-mono text-gray-600/70 tracking-wider">VOICE</span>
+            <div className="status-dot online" style={{ width: 5, height: 5 }} />
+            <span className="text-[8px] font-mono text-gray-600 tracking-wider">VOICE</span>
           </div>
         </div>
 
-        <div className="hud-divider max-w-[160px] mx-auto mb-3">
+        <div className="mt-6 hud-divider max-w-[200px] mx-auto">
           <div className="hud-divider-dot" />
         </div>
 
-        <p className="text-[8px] text-gray-600/60 font-mono tracking-[0.15em]">
+        <p className="mt-4 text-[9px] text-gray-600 font-mono tracking-wider">
           TYPE OR SPEAK TO BEGIN
         </p>
       </div>
