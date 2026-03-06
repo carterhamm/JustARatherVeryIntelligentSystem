@@ -185,8 +185,6 @@ export default function AuthPage() {
         ))}
       </div>
 
-      {/* Scanline */}
-      <div className="scanline-overlay" />
 
       {/* Corner brackets */}
       {(['tl', 'tr', 'bl', 'br'] as const).map((pos) => {

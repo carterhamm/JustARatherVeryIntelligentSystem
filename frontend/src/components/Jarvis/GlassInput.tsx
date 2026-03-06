@@ -36,6 +36,18 @@ export default function GlassInput({
     adjustHeight();
   }, [content, adjustHeight]);
 
+  // CMD+K / Ctrl+K to focus input
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        textareaRef.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   // GSAP boot animation
   useEffect(() => {
     if (containerRef.current) {

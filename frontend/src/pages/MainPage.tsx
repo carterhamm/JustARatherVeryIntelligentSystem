@@ -30,8 +30,6 @@ export default function MainPage() {
         />
       </div>
 
-      {/* Scanline overlay */}
-      <div className="scanline-overlay" />
 
       {/* Floating UI Layer */}
       <StatusBar />

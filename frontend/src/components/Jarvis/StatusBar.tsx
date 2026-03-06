@@ -205,12 +205,12 @@ export default function StatusBar() {
         <div className="w-px h-4 bg-white/[0.06]" />
 
         {/* Date + Time */}
-        <div className="flex flex-col items-end gap-0">
-          <span className="font-mono text-[11px] text-gray-400 tracking-wider tabular-nums leading-tight">
-            {time}
-          </span>
-          <span className="text-[7px] font-mono text-gray-600 tracking-wider hidden sm:block leading-tight">
+        <div className="flex items-center gap-1.5">
+          <span className="text-[10px] font-mono text-gray-600 tracking-wider hidden sm:block">
             {date}
+          </span>
+          <span className="font-mono text-[11px] text-gray-400 tracking-wider tabular-nums">
+            {time}
           </span>
         </div>
 
