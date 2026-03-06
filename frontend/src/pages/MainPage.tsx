@@ -10,6 +10,7 @@ import SettingsPanel from '@/components/SettingsPanel';
 import DataImportPanel from '@/components/DataImportPanel';
 import KnowledgePanel from '@/components/KnowledgePanel';
 import HUDAmbient from '@/components/Jarvis/HUDAmbient';
+import MiniDiagnostics from '@/components/Jarvis/MiniDiagnostics';
 
 // Lazy-load heavy 3D + particle components
 const JarvisCore = lazy(() => import('@/components/JarvisCore/JarvisCore'));
@@ -83,6 +84,7 @@ export default function MainPage() {
       <StatusBar />
       <FloatingChat />
       <CommandDock />
+      <MiniDiagnostics />
 
       {/* Panel overlays */}
       <ModelPickerFloat />

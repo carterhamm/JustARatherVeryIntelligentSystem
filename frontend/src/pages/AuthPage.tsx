@@ -1,8 +1,9 @@
-import { useState, FormEvent, useMemo } from 'react';
+import { useState, FormEvent, useMemo, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { isWebAuthnAvailable } from '@/utils/webauthn';
 import { Loader2, Shield, Fingerprint, User, Mail, ArrowRight, AlertTriangle } from 'lucide-react';
+import gsap from 'gsap';
 import clsx from 'clsx';
 
 type AuthStep = 'identify' | 'authenticate' | 'register';
@@ -21,6 +22,42 @@ export default function AuthPage() {
   const navigate = useNavigate();
 
   const webauthnSupported = useMemo(() => isWebAuthnAvailable(), []);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLDivElement>(null);
+  const footerRef = useRef<HTMLDivElement>(null);
+
+  // GSAP boot-up sequence
+  useEffect(() => {
+    const tl = gsap.timeline();
+
+    if (headerRef.current) {
+      tl.fromTo(
+        headerRef.current,
+        { opacity: 0, y: -10 },
+        { opacity: 1, y: 0, duration: 0.5, ease: 'power3.out' },
+        0.2,
+      );
+    }
+
+    if (cardRef.current) {
+      tl.fromTo(
+        cardRef.current,
+        { opacity: 0, scale: 0.95, y: 15 },
+        { opacity: 1, scale: 1, y: 0, duration: 0.6, ease: 'power3.out' },
+        0.35,
+      );
+    }
+
+    if (footerRef.current) {
+      tl.fromTo(
+        footerRef.current,
+        { opacity: 0, y: 10 },
+        { opacity: 1, y: 0, duration: 0.4, ease: 'power3.out' },
+        0.55,
+      );
+    }
+  }, []);
 
   // Particles
   const particles = useMemo(
@@ -110,7 +147,7 @@ export default function AuthPage() {
   };
 
   return (
-    <div className="relative min-h-screen w-full flex items-center justify-center bg-black overflow-hidden">
+    <div ref={containerRef} className="relative min-h-screen w-full flex items-center justify-center bg-black overflow-hidden">
       {/* Background */}
       <div className="absolute inset-0 pointer-events-none">
         {/* Grid */}
@@ -151,15 +188,44 @@ export default function AuthPage() {
       {/* Scanline */}
       <div className="scanline-overlay" />
 
+      {/* Corner brackets */}
+      {(['tl', 'tr', 'bl', 'br'] as const).map((pos) => {
+        const isTop = pos.startsWith('t');
+        const isLeft = pos.endsWith('l');
+        return (
+          <div
+            key={pos}
+            className="absolute pointer-events-none z-10"
+            style={{ [isTop ? 'top' : 'bottom']: '16px', [isLeft ? 'left' : 'right']: '16px' }}
+          >
+            <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
+              <path
+                d={
+                  isTop && isLeft
+                    ? 'M0 16 L0 0 L16 0'
+                    : isTop && !isLeft
+                      ? 'M24 0 L40 0 L40 16'
+                      : !isTop && isLeft
+                        ? 'M0 24 L0 40 L16 40'
+                        : 'M24 40 L40 40 L40 24'
+                }
+                stroke="rgba(0, 212, 255, 0.15)"
+                strokeWidth="1"
+              />
+            </svg>
+          </div>
+        );
+      })}
+
       {/* Auth Card */}
       <div className="relative z-10 w-full max-w-md mx-5">
         {/* Header label */}
-        <div className="text-center mb-5 boot-1">
+        <div ref={headerRef} className="text-center mb-5 opacity-0">
           <span className="hud-label text-[10px]">STARK INDUSTRIES — SECURE ACCESS TERMINAL</span>
         </div>
 
         {/* Main panel */}
-        <div className="glass-heavy rounded-3xl p-8 boot-2">
+        <div ref={cardRef} className="glass-heavy rounded-3xl p-8 opacity-0">
           {/* Branding */}
           <div className="text-center mb-6">
             <div
@@ -403,7 +469,7 @@ export default function AuthPage() {
         </div>
 
         {/* Footer */}
-        <div className="text-center mt-4 boot-3">
+        <div ref={footerRef} className="text-center mt-4 opacity-0">
           <div className="hud-divider mb-2">
             <div className="hud-divider-dot" />
           </div>
