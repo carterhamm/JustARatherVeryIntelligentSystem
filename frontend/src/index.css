@@ -575,6 +575,12 @@
     clip-path: polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%);
   }
 
+  /* Boot progress animation */
+  @keyframes bootProgress {
+    0% { width: 0%; }
+    100% { width: 100%; }
+  }
+
   /* Old hud-boot classes kept for backward compat */
   .hud-boot-1 { animation: floatIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.1s both; }
   .hud-boot-2 { animation: floatIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.2s both; }
