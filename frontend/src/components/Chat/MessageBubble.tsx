@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { atomDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
@@ -66,12 +66,18 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   }, [message.timestamp]);
 
+  // Strip any leaked tool tags like {{TOGGLE_VOICE:off}} from display
+  const displayContent = useMemo(
+    () => message.content.replace(/\{\{\w+:\w+\}\}/g, '').trim(),
+    [message.content],
+  );
+
   if (isSystem) {
     return (
       <div className="flex justify-center my-3">
         <div className="px-4 py-1.5 border border-jarvis-blue/10 bg-hud-panel/50 max-w-lg"
           style={{ clipPath: 'polygon(0 4px, 4px 0, calc(100% - 4px) 0, 100% 4px, 100% calc(100% - 4px), calc(100% - 4px) 100%, 4px 100%, 0 calc(100% - 4px))' }}>
-          <p className="text-[10px] text-center text-gray-500 font-mono">{message.content}</p>
+          <p className="text-[10px] text-center text-gray-500 font-mono">{displayContent}</p>
         </div>
       </div>
     );
@@ -163,7 +169,7 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
                   },
                 }}
               >
-                {message.content}
+                {displayContent}
               </ReactMarkdown>
             </div>
           )}

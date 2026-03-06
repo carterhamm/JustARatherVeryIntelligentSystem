@@ -57,8 +57,10 @@ class Settings(BaseSettings):
     STARK_PROTOCOL_API_KEY: str = "lm-studio"
     STARK_PROTOCOL_ENABLED: bool = False
 
-    # -- JARVIS Voice (local Coqui TTS XTTS-v2) ------------------------------
-    JARVIS_VOICE_SERVER: str = ""  # path to jarvis_voice_training dir
+    # -- JARVIS Voice (Coqui TTS XTTS-v2) ------------------------------------
+    JARVIS_VOICE_SERVER: str = ""  # path to jarvis_voice_training dir (local)
+    JARVIS_VOICE_URL: str = ""  # remote endpoint URL (Modal deployment)
+    JARVIS_VOICE_API_KEY: str = ""  # API key for remote endpoint
     JARVIS_VOICE_ENABLED: bool = False
 
     # -- Default LLM Provider -------------------------------------------------

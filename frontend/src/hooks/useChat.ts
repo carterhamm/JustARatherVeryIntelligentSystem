@@ -104,6 +104,15 @@ export function useChat() {
           break;
         }
 
+        // Backend sends type="replace" — corrected text with tool tags stripped
+        case 'replace': {
+          const id = streamingMsgId.current;
+          if (id && msg.content) {
+            updateMessage(id, msg.content as string);
+          }
+          break;
+        }
+
         // Backend sends type="tool_call" with tool + tool_arg
         case 'tool_call': {
           const tool = msg.tool as string;

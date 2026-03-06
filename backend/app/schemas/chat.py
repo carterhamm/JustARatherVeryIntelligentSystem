@@ -156,7 +156,7 @@ class ChatStreamChunk(BaseModel):
 
     type: str = Field(
         ...,
-        description='Chunk type: "start", "token", "end", "error", or "tool_call".',
+        description='Chunk type: "start", "token", "end", "error", "tool_call", or "replace".',
     )
     content: Optional[str] = Field(None, description="Token content for type=token.")
     conversation_id: Optional[uuid.UUID] = Field(

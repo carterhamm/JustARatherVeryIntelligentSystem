@@ -490,15 +490,27 @@ async def chat_websocket(
                         )
                         logger.info("Tool call executed: %s(%s)", tc["tool"], tc["arg"])
 
+            # Strip tool tags from displayed/spoken text
+            clean_text = ChatService.strip_tool_tags(full_response_text)
+
+            # If tags were stripped, send corrected final text to frontend
+            if clean_text != full_response_text:
+                await websocket.send_json(
+                    ChatStreamChunk(
+                        type="replace",
+                        content=clean_text,
+                    ).model_dump(mode="json")
+                )
+
             # Synthesize voice if requested
-            if request.voice_enabled and full_response_text.strip():
+            if request.voice_enabled and clean_text.strip():
                 try:
                     if request.model_provider == "stark_protocol":
-                        # Use local JARVIS voice for Stark Protocol
+                        # Use JARVIS voice for Stark Protocol
                         from app.api.v1.voice import _get_jarvis_tts
                         jarvis_tts = _get_jarvis_tts()
                         if jarvis_tts:
-                            audio_bytes = await jarvis_tts.synthesize(full_response_text)
+                            audio_bytes = await jarvis_tts.synthesize(clean_text)
                             await websocket.send_bytes(audio_bytes)
                         else:
                             logger.warning("JARVIS local TTS not available")
@@ -507,7 +519,7 @@ async def chat_websocket(
                         from app.api.v1.voice import get_voice_service
                         voice_svc = get_voice_service()
                         audio_bytes = await voice_svc.synthesize(
-                            text=full_response_text,
+                            text=clean_text,
                             voice_id=settings.ELEVENLABS_VOICE_ID,
                         )
                         await websocket.send_bytes(audio_bytes)

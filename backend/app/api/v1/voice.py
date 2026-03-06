@@ -77,14 +77,24 @@ _jarvis_tts = None
 
 
 def _get_jarvis_tts():
-    """Lazily create the local JARVIS TTS client."""
+    """Lazily create the JARVIS TTS client (remote or local)."""
     global _jarvis_tts
     if _jarvis_tts is None:
         from app.config import settings as app_settings
-        if app_settings.JARVIS_VOICE_ENABLED and app_settings.JARVIS_VOICE_SERVER:
-            from app.integrations.jarvis_tts import JarvisTTSClient
-            _jarvis_tts = JarvisTTSClient(voice_server_dir=app_settings.JARVIS_VOICE_SERVER)
-            logger.info("JARVIS local TTS initialized: %s", app_settings.JARVIS_VOICE_SERVER)
+        if not app_settings.JARVIS_VOICE_ENABLED:
+            return None
+        from app.integrations.jarvis_tts import JarvisTTSClient
+        if app_settings.JARVIS_VOICE_URL:
+            _jarvis_tts = JarvisTTSClient(
+                remote_url=app_settings.JARVIS_VOICE_URL,
+                api_key=app_settings.JARVIS_VOICE_API_KEY,
+            )
+            logger.info("JARVIS TTS initialized (remote): %s", app_settings.JARVIS_VOICE_URL)
+        elif app_settings.JARVIS_VOICE_SERVER:
+            _jarvis_tts = JarvisTTSClient(
+                voice_server_dir=app_settings.JARVIS_VOICE_SERVER,
+            )
+            logger.info("JARVIS TTS initialized (local): %s", app_settings.JARVIS_VOICE_SERVER)
     return _jarvis_tts
 
 
