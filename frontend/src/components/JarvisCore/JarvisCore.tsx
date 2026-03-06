@@ -1,6 +1,8 @@
 import { Suspense } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { EffectComposer, Bloom } from '@react-three/postprocessing';
+import { EffectComposer, Bloom, Vignette, ChromaticAberration } from '@react-three/postprocessing';
+import { BlendFunction } from 'postprocessing';
+import { Vector2 } from 'three';
 import { useUIStore } from '@/stores/uiStore';
 import GlowingCore from './GlowingCore';
 import WireframeSpheres from './WireframeSpheres';
@@ -19,7 +21,7 @@ function JarvisScene() {
   return (
     <>
       {/* Ambient light */}
-      <ambientLight intensity={0.1} color="#0040ff" />
+      <ambientLight intensity={0.08} color="#0040ff" />
 
       {/* Core visualization elements */}
       <GlowingCore
@@ -40,8 +42,19 @@ function JarvisScene() {
         <Bloom
           luminanceThreshold={0.1}
           luminanceSmoothing={0.9}
-          intensity={1.5}
+          intensity={1.8}
           mipmapBlur
+        />
+        <ChromaticAberration
+          blendFunction={BlendFunction.NORMAL}
+          offset={new Vector2(0.0005, 0.0005)}
+          radialModulation={true}
+          modulationOffset={0.5}
+        />
+        <Vignette
+          darkness={0.5}
+          offset={0.3}
+          blendFunction={BlendFunction.NORMAL}
         />
       </EffectComposer>
     </>

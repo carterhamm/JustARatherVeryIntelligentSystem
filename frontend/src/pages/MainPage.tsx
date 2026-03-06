@@ -74,8 +74,10 @@ export default function MainPage() {
         />
       </div>
 
-      {/* Layer 3: Scanline overlay */}
+      {/* Layer 3: Visual overlays */}
       <div className="scanline-overlay z-[2]" />
+      <div className="vignette-overlay" />
+      <div className="noise-overlay" />
 
       {/* Layer 4: HUD ambient elements */}
       <HUDAmbient />

@@ -581,6 +581,95 @@
     100% { width: 100%; }
   }
 
+  /* ═══════════════════════════════════════════════════════════════
+     VIGNETTE OVERLAY — subtle darkening at edges
+     ═══════════════════════════════════════════════════════════════ */
+
+  .vignette-overlay {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 3;
+    background: radial-gradient(
+      ellipse at center,
+      transparent 50%,
+      rgba(0, 0, 0, 0.4) 100%
+    );
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
+     GLOW ACCENTS — colored glow decorations
+     ═══════════════════════════════════════════════════════════════ */
+
+  .glow-line-h {
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(0, 212, 255, 0.15),
+      rgba(0, 212, 255, 0.3),
+      rgba(0, 212, 255, 0.15),
+      transparent
+    );
+  }
+
+  .glow-line-v {
+    width: 1px;
+    background: linear-gradient(
+      180deg,
+      transparent,
+      rgba(0, 212, 255, 0.15),
+      rgba(0, 212, 255, 0.3),
+      rgba(0, 212, 255, 0.15),
+      transparent
+    );
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
+     HOLOGRAPHIC SHIMMER — subtle moving highlight
+     ═══════════════════════════════════════════════════════════════ */
+
+  .holo-shimmer {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .holo-shimmer::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      105deg,
+      transparent 40%,
+      rgba(0, 212, 255, 0.04) 45%,
+      rgba(0, 212, 255, 0.08) 50%,
+      rgba(0, 212, 255, 0.04) 55%,
+      transparent 60%
+    );
+    animation: shimmerSlide 6s ease-in-out infinite;
+    pointer-events: none;
+  }
+
+  @keyframes shimmerSlide {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
+     NOISE TEXTURE — subtle CRT noise
+     ═══════════════════════════════════════════════════════════════ */
+
+  .noise-overlay {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 4;
+    opacity: 0.015;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='1'/%3E%3C/svg%3E");
+    background-repeat: repeat;
+    mix-blend-mode: overlay;
+  }
+
   /* Old hud-boot classes kept for backward compat */
   .hud-boot-1 { animation: floatIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.1s both; }
   .hud-boot-2 { animation: floatIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.2s both; }
