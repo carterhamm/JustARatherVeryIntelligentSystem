@@ -230,13 +230,14 @@ class StarkProtocolClient(BaseLLMClient):
     async def health_check(self, retries: int = 2, delay: float = 2.0) -> bool:
         """Check if Stark Protocol endpoint is running and responsive."""
         import asyncio
-        # Remote endpoints may need longer waits for cold starts
-        if self._is_remote:
-            retries = max(retries, 3)
-            delay = max(delay, 5.0)
+        # Use a short timeout for health checks — don't block app startup
+        health_timeout = httpx.Timeout(10.0, connect=5.0)
         for attempt in range(retries):
             try:
-                resp = await self._http.get(f"{self._endpoint_url}/models")
+                resp = await self._http.get(
+                    f"{self._endpoint_url}/models",
+                    timeout=health_timeout,
+                )
                 if resp.status_code == 200:
                     data = resp.json()
                     models = data.get("data", [])
