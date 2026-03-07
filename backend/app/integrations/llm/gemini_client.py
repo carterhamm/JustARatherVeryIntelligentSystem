@@ -112,11 +112,12 @@ class GeminiClient(BaseLLMClient):
         last_exc: BaseException | None = None
         for attempt in range(self._max_retries):
             try:
-                async for chunk in self._client.aio.models.generate_content_stream(
+                stream = await self._client.aio.models.generate_content_stream(
                     model=model_name,
                     contents=contents,
                     config=config,
-                ):
+                )
+                async for chunk in stream:
                     if chunk.text:
                         yield chunk.text
                 return
