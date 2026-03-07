@@ -279,6 +279,7 @@ async def chat_session(
                     except asyncio.TimeoutError:
                         clear_thinking()
                         show_cursor()
+                        move_cursor(chat_row)
                         sys.stdout.write(
                             f"\n    {JARVIS_ERROR_RED}Response timed out.{RESET}\n"
                         )
@@ -337,12 +338,14 @@ async def chat_session(
                             "token" in error_text.lower()
                             or "auth" in error_text.lower()
                         ):
+                            move_cursor(chat_row)
                             sys.stdout.write(
                                 f"\n    {JARVIS_ERROR_RED}Session expired. "
                                 f"Run: jarvis login{RESET}\n"
                             )
                             sys.stdout.flush()
                             return
+                        move_cursor(chat_row)
                         sys.stdout.write(
                             f"\n    {JARVIS_ERROR_RED}{error_text}{RESET}\n"
                         )

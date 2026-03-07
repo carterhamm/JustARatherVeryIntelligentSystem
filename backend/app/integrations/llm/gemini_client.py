@@ -110,38 +110,23 @@ class GeminiClient(BaseLLMClient):
         if system_text:
             config.system_instruction = system_text
 
-        # Retry only the stream creation, not iteration (which would
-        # duplicate already-yielded tokens).
-        stream = await self._create_stream_with_retry(
-            model_name, contents, config,
-        )
-        async for chunk in stream:
-            if chunk.text:
-                yield chunk.text
-
-    async def _create_stream_with_retry(
-        self,
-        model_name: str,
-        contents: list,
-        config: types.GenerateContentConfig,
-    ):
-        """Create a Gemini stream with retry on transient errors."""
         last_exc: BaseException | None = None
         for attempt in range(self._max_retries):
             try:
-                # Fresh client each attempt — the genai.Client can hold
-                # stale async connection state between calls.
-                client = genai.Client(api_key=self._api_key)
-                return await client.aio.models.generate_content_stream(
+                stream = await self._client.aio.models.generate_content_stream(
                     model=model_name,
                     contents=contents,
                     config=config,
                 )
+                async for chunk in stream:
+                    if chunk.text:
+                        yield chunk.text
+                return
             except Exception as exc:
                 last_exc = exc
                 delay = self._retry_base_delay * (2 ** attempt)
                 logger.warning(
-                    "Gemini stream creation failed (attempt %d/%d): %s [%s] — retry in %.1fs",
+                    "Gemini stream failed (attempt %d/%d): %s [%s] — retry in %.1fs",
                     attempt + 1, self._max_retries,
                     type(exc).__name__, exc, delay,
                 )
