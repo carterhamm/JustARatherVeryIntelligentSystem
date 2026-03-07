@@ -11,7 +11,6 @@ from prompt_toolkit import PromptSession
 from prompt_toolkit.formatted_text import HTML
 from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.styles import Style
-from prompt_toolkit.keys import Keys
 
 # JARVIS colour palette for prompt_toolkit styles
 JARVIS_STYLE = Style.from_dict({
@@ -73,18 +72,13 @@ class JarvisInput:
             idx = ids.index(self.provider) if self.provider in ids else 0
             self.provider = ids[(idx + 1) % len(ids)]
 
-        # Enter: submit (unless shift+enter for newline)
+        # Enter: submit
         @self._kb.add("enter")
         def _submit(event):
             buf = event.app.current_buffer
             text = buf.text.strip()
             if text:
                 buf.validate_and_handle()
-
-        # Shift+Enter: insert newline
-        @self._kb.add("s-enter")
-        def _newline(event):
-            event.app.current_buffer.insert_text("\n")
 
         # Double Ctrl+C to exit
         @self._kb.add("c-c")
@@ -128,8 +122,6 @@ class JarvisInput:
             ("class:bottom-toolbar.sep", "  │  "),
             ("class:bottom-toolbar.key", "Enter "),
             ("class:bottom-toolbar.hint", "send  "),
-            ("class:bottom-toolbar.key", "Shift+Enter "),
-            ("class:bottom-toolbar.hint", "newline  "),
             ("class:bottom-toolbar.sep", "│  "),
             ("class:bottom-toolbar.key", "/help "),
             ("class:bottom-toolbar.hint", "commands"),

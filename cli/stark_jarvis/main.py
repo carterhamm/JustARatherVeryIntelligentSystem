@@ -206,7 +206,6 @@ def _print_help() -> None:
 {BOLD}Interactive Shortcuts{RESET}
   Ctrl+T                              Cycle model provider
   Enter                               Send message
-  Shift+Enter                         New line
   Ctrl+C (x2)                         Exit
 
 {BOLD}Examples{RESET}
