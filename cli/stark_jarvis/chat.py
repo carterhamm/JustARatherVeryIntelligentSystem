@@ -21,6 +21,7 @@ from stark_jarvis.display import (
     set_terminal_bg_black,
     reset_terminal_bg,
     clear_screen,
+    show_cursor,
     print_assistant,
     print_assistant_end,
     print_error,
@@ -159,6 +160,7 @@ async def chat_session(
                         raw = await asyncio.wait_for(ws.recv(), timeout=120.0)
                     except asyncio.TimeoutError:
                         clear_thinking()
+                        show_cursor()
                         print_error("Response timed out.")
                         streaming = False
                         break
@@ -209,6 +211,7 @@ async def chat_session(
 
                     elif msg_type == "error":
                         clear_thinking()
+                        show_cursor()
                         error_text = msg.get("error", "Unknown error")
                         if (
                             "token" in error_text.lower()
@@ -236,6 +239,7 @@ async def chat_session(
         stop_anim.set()
         if anim_thread.is_alive():
             anim_thread.join(timeout=0.5)
+        show_cursor()
         reset_terminal_bg()
 
 

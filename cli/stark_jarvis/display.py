@@ -39,14 +39,7 @@ _spinner_active = False
 _spinner_thread: threading.Thread | None = None
 _spinner_provider = ""
 
-# Inner ring arcs rotate CW, center pulses
-_RING_FRAMES = [
-    ("◜", "◝", "◟", "◞", "◉"),   # (TL, TR, BL, BR, center)
-    ("◟", "◜", "◞", "◝", "◎"),
-    ("◞", "◟", "◝", "◜", "○"),
-    ("◝", "◞", "◜", "◟", "◎"),
-]
-_RING_SMALL = ["◐", "◓", "◑", "◒"]
+_SPINNER_FRAMES = ["◐", "◓", "◑", "◒"]
 
 # ── Geometry ─────────────────────────────────────────────────────────────
 _BOX_W = 43  # inner width of banner box
@@ -81,13 +74,11 @@ def provider_styled(provider: str) -> str:
 # ── Terminal control ─────────────────────────────────────────────────────
 
 def set_terminal_bg_black() -> None:
-    """Set terminal default background to pure black via OSC 11."""
     sys.stdout.write("\x1b]11;rgb:00/00/00\x1b\\")
     sys.stdout.flush()
 
 
 def reset_terminal_bg() -> None:
-    """Reset terminal background to default via OSC 111."""
     sys.stdout.write("\x1b]111\x1b\\")
     sys.stdout.flush()
 
@@ -97,22 +88,19 @@ def clear_screen() -> None:
     sys.stdout.flush()
 
 
-# ── Banner building ──────────────────────────────────────────────────────
+def hide_cursor() -> None:
+    sys.stdout.write("\x1b[?25l")
+    sys.stdout.flush()
 
-def _ring_lines(frame: tuple[str, str, str, str, str]) -> list[str]:
-    """Build the 5-line double-ring block. Outer static, inner arcs animated."""
-    tl, tr, bl, br, c = frame
-    return [
-        f"\u256d{'─' * 13}\u256e",          # ╭─────────────╮  (15 chars)
-        f"│  {tl} ━━━━━ {tr}  │",           # │  ◜ ━━━━━ ◝  │  (15 chars)
-        f"│  ┃   {c}   ┃  │",               # │  ┃   ◉   ┃  │  (15 chars)
-        f"│  {bl} ━━━━━ {br}  │",           # │  ◟ ━━━━━ ◞  │  (15 chars)
-        f"\u2570{'─' * 13}\u256f",           # ╰─────────────╯  (15 chars)
-    ]
 
+def show_cursor() -> None:
+    sys.stdout.write("\x1b[?25h")
+    sys.stdout.flush()
+
+
+# ── Banner ───────────────────────────────────────────────────────────────
 
 def _box_lines(
-    ring_frame: tuple[str, str, str, str, str] | None = None,
     status: str = _STATUS_CONNECTED,
     status_color: str = "",
 ) -> list[str]:
@@ -124,62 +112,50 @@ def _box_lines(
     sl, sr = _pad(len(_SUBTITLE))
     stl, str_ = _pad(len(status))
 
-    out: list[str] = []
-    out.append(f"{B}\u2554{'═' * w}\u2557")
-    out.append(f"\u2551{' ' * w}\u2551")
-    out.append(f"\u2551{' ' * tl}{_TITLE}{' ' * tr}\u2551")
-    out.append(
-        f"\u2551{' ' * sl}{DIM}{JARVIS_BLUE}{_SUBTITLE}{RESET}{B}{' ' * sr}\u2551"
-    )
-    out.append(f"\u2551{' ' * w}\u2551")
-
-    if ring_frame:
-        rl, rr = _pad(15)  # ring block is 15 chars wide
-        for rline in _ring_lines(ring_frame):
-            out.append(
-                f"\u2551{' ' * rl}{JARVIS_BLUE}{rline}{RESET}{B}{' ' * rr}\u2551"
-            )
-        out.append(f"\u2551{' ' * w}\u2551")
-
     sc = status_color if status_color else f"{DIM}{JARVIS_BLUE}"
-    out.append(f"\u2551{' ' * stl}{sc}{status}{RESET}{B}{' ' * str_}\u2551")
-    out.append(f"\u2551{' ' * w}\u2551")
-    out.append(f"\u255a{'═' * w}\u255d{RESET}")
 
-    return out
+    return [
+        f"{B}\u2554{'═' * w}\u2557",
+        f"\u2551{' ' * w}\u2551",
+        f"\u2551{' ' * tl}{_TITLE}{' ' * tr}\u2551",
+        f"\u2551{' ' * sl}{DIM}{JARVIS_BLUE}{_SUBTITLE}{RESET}{B}{' ' * sr}\u2551",
+        f"\u2551{' ' * w}\u2551",
+        f"\u2551{' ' * stl}{sc}{status}{RESET}{B}{' ' * str_}\u2551",
+        f"\u2551{' ' * w}\u2551",
+        f"\u255a{'═' * w}\u255d{RESET}",
+    ]
 
 
 def print_banner() -> None:
-    """Print the connected banner with static ring, centered."""
-    bv = _BOX_W + 2  # visible box width
+    """Print the connected banner, centered."""
+    bv = _BOX_W + 2
     print()
-    for line in _box_lines(ring_frame=_RING_FRAMES[0]):
+    for line in _box_lines():
         print(_center(line, bv))
     print()
 
 
 def _banner_line_count() -> int:
-    """Lines the banner occupies: 16 box lines + 2 blank = 18."""
-    # With ring: 16 box lines. print_banner adds 1 blank above + 1 below = 18
-    return 18
+    """Lines the banner occupies: 8 box lines + 2 blank = 10."""
+    return 10
 
 
 def run_connecting_animation(
     provider: str,
     stop_event: threading.Event,
 ) -> None:
-    """Animate connecting banner with spinning ring. Runs in a background thread."""
+    """Show animated connecting status inside the banner box."""
     bv = _BOX_W + 2
     label = PROVIDER_LABELS.get(provider, provider)
     color = PROVIDER_COLORS.get(provider, JARVIS_BLUE)
-    status = f"Connecting [{label}]..."
 
     i = 0
     while not stop_event.is_set():
-        frame = _RING_FRAMES[i % len(_RING_FRAMES)]
-        box = _box_lines(ring_frame=frame, status=status, status_color=color)
+        spinner = _SPINNER_FRAMES[i % len(_SPINNER_FRAMES)]
+        status = f"{spinner} Connecting [{label}]..."
+        box = _box_lines(status=status, status_color=color)
 
-        buf = "\x1b[H\n"  # cursor home + blank line
+        buf = "\x1b[H\n"
         for line in box:
             buf += _center(line, bv) + "\x1b[K\n"
         buf += "\n"
@@ -187,7 +163,7 @@ def run_connecting_animation(
         sys.stdout.write(buf)
         sys.stdout.flush()
         i += 1
-        stop_event.wait(0.1)
+        stop_event.wait(0.12)
 
 
 def fill_to_bottom(used_lines: int) -> None:
@@ -223,6 +199,7 @@ def print_assistant(content: str) -> None:
 
 
 def print_assistant_end() -> None:
+    show_cursor()
     print(f"{RESET}\n")
 
 
@@ -234,6 +211,7 @@ def print_divider() -> None:
 
 def print_thinking(provider: str = "") -> None:
     global _spinner_active, _spinner_thread, _spinner_provider
+    hide_cursor()
     _spinner_active = True
     _spinner_provider = provider
     _spinner_thread = threading.Thread(target=_spin, daemon=True)
@@ -253,7 +231,7 @@ def clear_thinking() -> None:
 def _spin() -> None:
     i = 0
     while _spinner_active:
-        frame = _RING_SMALL[i % len(_RING_SMALL)]
+        frame = _SPINNER_FRAMES[i % len(_SPINNER_FRAMES)]
         label = PROVIDER_LABELS.get(_spinner_provider, "")
         color = PROVIDER_COLORS.get(_spinner_provider, JARVIS_BLUE)
         suffix = f" [{label}]" if label else ""
