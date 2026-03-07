@@ -240,10 +240,13 @@ def unlock() -> tuple[str, str]:
         if resp.status_code == 200:
             data = resp.json()
             _clear_failures()
+            access_token = data["access_token"]
+            refresh_token = data["refresh_token"]
+            config.save_session(access_token, refresh_token)
             username = data.get("user", {}).get("username", jarvis_user)
             print(f"\n  {_GREEN}Authenticated as {username}.{_RESET}")
             print(f"  {_GREEN}Stark Secure Server — session active.{_RESET}\n")
-            return data["access_token"], data["refresh_token"]
+            return access_token, refresh_token
         else:
             _record_failure()
             sys.exit(1)

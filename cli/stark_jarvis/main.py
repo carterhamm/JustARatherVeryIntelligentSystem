@@ -113,6 +113,12 @@ def _run() -> None:
     # ── Everything below needs auth ──
     from stark_jarvis.config import config
 
+    # Auto-purge if inactive too long
+    if config.check_auto_purge():
+        print(f"\n  {DIM}Session expired. All JARVIS data purged from this machine.{RESET}")
+        print(f"  {JARVIS_BLUE}Run:{RESET}  jarvis login\n")
+        sys.exit(0)
+
     if not config.is_setup():
         print_banner()
         print_system("CLI not configured.\n")
@@ -120,9 +126,15 @@ def _run() -> None:
         print(f"  {DIM}Sets up Stark Secure Server access.{RESET}\n")
         sys.exit(0)
 
-    # 4-layer unlock
-    from stark_jarvis.auth import unlock
-    access_token, refresh_token = unlock()
+    # Check for existing valid session
+    session = config.get_session()
+    if session:
+        access_token, refresh_token = session
+        config.touch_session()
+    else:
+        # 4-layer unlock
+        from stark_jarvis.auth import unlock
+        access_token, refresh_token = unlock()
 
     # ── One-shot mode ──
     if args and command not in COMMANDS:

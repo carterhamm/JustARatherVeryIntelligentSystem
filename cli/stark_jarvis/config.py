@@ -6,11 +6,17 @@ import json
 import hashlib
 import base64
 import os
+import shutil
+import time
 from pathlib import Path
 from typing import Any, Optional
 
 # Default JARVIS server
 DEFAULT_SERVER = "https://app.malibupoint.dev"
+
+# Session timing
+SESSION_TTL = 1800      # 30 minutes — session valid without re-auth
+PURGE_TTL = 5400        # 90 minutes — wipe all JARVIS data from machine
 
 # Config lives in ~/.jarvis/
 CONFIG_DIR = Path.home() / ".jarvis"
@@ -88,6 +94,51 @@ class JarvisConfig:
             for k in ("gate_username_hash", "gate_password_hash", "sht_hash", "server_url")
         )
 
+    # ── Session management ────────────────────────────────────────────────
+
+    def save_session(self, access_token: str, refresh_token: str) -> None:
+        """Store session tokens and mark last activity."""
+        self._data["session_access"] = access_token
+        self._data["session_refresh"] = refresh_token
+        self._data["last_active"] = time.time()
+        self._save()
+
+    def touch_session(self) -> None:
+        """Update last activity timestamp."""
+        self._data["last_active"] = time.time()
+        self._save()
+
+    def get_session(self) -> Optional[tuple[str, str]]:
+        """Return (access_token, refresh_token) if session is still valid, else None."""
+        last_active = self._data.get("last_active")
+        if not last_active:
+            return None
+        elapsed = time.time() - last_active
+        if elapsed > SESSION_TTL:
+            self.clear_session()
+            return None
+        access = self._data.get("session_access", "")
+        refresh = self._data.get("session_refresh", "")
+        if not access or not refresh:
+            return None
+        return access, refresh
+
+    def clear_session(self) -> None:
+        """Remove session tokens only (keep gate creds + config)."""
+        for k in ("session_access", "session_refresh", "last_active"):
+            self._data.pop(k, None)
+        self._save()
+
+    def check_auto_purge(self) -> bool:
+        """If inactive for > PURGE_TTL, wipe everything. Returns True if purged."""
+        last_active = self._data.get("last_active")
+        if not last_active:
+            return False
+        if time.time() - last_active > PURGE_TTL:
+            self.purge()
+            return True
+        return False
+
     # ── Cleanup ──────────────────────────────────────────────────────────
 
     def clear_all(self) -> None:
@@ -96,6 +147,12 @@ class JarvisConfig:
         self._save()
         if SALT_FILE.exists():
             SALT_FILE.unlink()
+
+    def purge(self) -> None:
+        """Remove entire ~/.jarvis/ directory."""
+        self._data = {}
+        if CONFIG_DIR.exists():
+            shutil.rmtree(CONFIG_DIR)
 
 
 config = JarvisConfig()
