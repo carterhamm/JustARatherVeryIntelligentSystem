@@ -25,6 +25,8 @@ from stark_jarvis.display import (
     set_terminal_bg_black,
     reset_terminal_bg,
     clear_screen,
+    enter_alt_screen,
+    leave_alt_screen,
     show_cursor,
     print_user_message,
     print_assistant,
@@ -60,11 +62,12 @@ async def chat_session(
     # Set up rich input UI
     jarvis_input = JarvisInput(initial_provider=provider)
 
-    # Full-screen: black background + clear
+    # Run connecting animation in the alternate screen buffer so it
+    # doesn't pollute the normal scrollback.
+    enter_alt_screen()
     set_terminal_bg_black()
     clear_screen()
 
-    # Start connecting animation in background thread
     stop_anim = threading.Event()
     anim_thread = threading.Thread(
         target=run_connecting_animation,
@@ -87,10 +90,9 @@ async def chat_session(
                 early = await asyncio.wait_for(ws.recv(), timeout=0.5)
                 early_msg = json.loads(early) if isinstance(early, str) else {}
                 if early_msg.get("type") == "error":
-                    # Token expired — re-authenticate and retry
                     stop_anim.set()
                     anim_thread.join(timeout=0.5)
-                    reset_terminal_bg()
+                    leave_alt_screen()
                     show_cursor()
                     print_error("Session expired. Re-authenticating...")
                     from stark_jarvis.auth import unlock
@@ -102,10 +104,9 @@ async def chat_session(
             except asyncio.TimeoutError:
                 pass  # No immediate error — connection is healthy
             except websockets.exceptions.ConnectionClosed:
-                # Server closed before we could read — same as auth failure
                 stop_anim.set()
                 anim_thread.join(timeout=0.5)
-                reset_terminal_bg()
+                leave_alt_screen()
                 show_cursor()
                 print_error("Session expired. Re-authenticating...")
                 from stark_jarvis.auth import unlock
@@ -114,12 +115,12 @@ async def chat_session(
                 await chat_session(new_access, new_refresh, model_provider)
                 return
 
-            # Stop connecting animation
+            # Stop animation and return to normal screen buffer
             stop_anim.set()
             anim_thread.join(timeout=0.5)
+            leave_alt_screen()
 
-            # ── Print banner once — it scrolls with content ──
-            clear_screen()
+            # Banner prints in normal buffer — scrolls with content
             print_banner()
             print_system_centered(
                 "Connected. Type your message, or /help for commands."
@@ -301,8 +302,8 @@ async def chat_session(
         stop_anim.set()
         if anim_thread.is_alive():
             anim_thread.join(timeout=0.5)
+        leave_alt_screen()   # no-op if already left, safe to call twice
         show_cursor()
-        reset_terminal_bg()
 
 
 def _print_help_to_chat() -> None:
