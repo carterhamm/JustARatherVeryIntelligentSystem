@@ -29,7 +29,7 @@ class GeminiClient(BaseLLMClient):
     def __init__(
         self,
         api_key: str,
-        default_model: str = "gemini-3-flash",
+        default_model: str = "gemini-2.5-flash",
         max_retries: int = _MAX_RETRIES,
         retry_base_delay: float = _RETRY_BASE_DELAY,
     ) -> None:
@@ -160,7 +160,7 @@ class GeminiClient(BaseLLMClient):
         return max(1, len(text) // 4)
 
     def get_cheap_model(self) -> str:
-        return "gemini-3-flash"
+        return "gemini-2.5-flash"
 
     @staticmethod
     def _prepare_messages(
