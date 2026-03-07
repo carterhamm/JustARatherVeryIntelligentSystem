@@ -5,6 +5,7 @@ Uses prompt_toolkit for multi-line input, key bindings, and styled toolbar.
 
 from __future__ import annotations
 
+import shutil
 from typing import Optional
 
 from prompt_toolkit import PromptSession
@@ -17,17 +18,14 @@ JARVIS_STYLE = Style.from_dict({
     # Input area
     "": "#e5e7eb",                          # default text — light gray
     "prompt": "#00d4ff bold",               # prompt arrow — jarvis blue
-    "prompt.model": "#00d4ff bold",          # model label in prompt — jarvis blue
+    "separator": "#333340",                 # dim separator line
 
-    # Bottom toolbar
-    "bottom-toolbar": "bg:#0f0f14 #4b5563",
-    "bottom-toolbar.key": "#00d4ff bold",
-    "bottom-toolbar.model": "#00d4ff bold",
-    "bottom-toolbar.provider-claude": "#ff8c00 bold",
-    "bottom-toolbar.provider-gemini": "#3b82f6 bold",
-    "bottom-toolbar.provider-stark_protocol": "#ef4444 bold",
-    "bottom-toolbar.sep": "#4b5563",
-    "bottom-toolbar.hint": "#4b5563",
+    # Bottom toolbar — no background
+    "bottom-toolbar": "noinherit",
+    "bottom-toolbar.separator": "#333340",
+    "bottom-toolbar.provider-claude": "#ff8c00",
+    "bottom-toolbar.provider-gemini": "#3b82f6",
+    "bottom-toolbar.provider-stark_protocol": "#ef4444",
 
     # Model picker overlay
     "dialog": "bg:#1a1a2e",
@@ -89,7 +87,6 @@ class JarvisInput:
                 event.app.current_buffer.text = ""
                 raise KeyboardInterrupt
             self._last_ctrl_c = now
-            # Clear current input and show hint
             event.app.current_buffer.text = ""
             sys.stdout.write(f"\n  \x1b[38;2;75;85;99mPress Ctrl+C again to exit\x1b[0m\n")
             sys.stdout.flush()
@@ -111,26 +108,25 @@ class JarvisInput:
         return self._session
 
     def _toolbar(self) -> list:
-        """Build the bottom toolbar showing model + shortcuts."""
-        provider_style = PROVIDER_STYLE_MAP.get(self.provider, "class:bottom-toolbar.model")
+        """Bottom bar: separator line with model name right-aligned."""
+        provider_style = PROVIDER_STYLE_MAP.get(self.provider, "class:bottom-toolbar.provider-claude")
         provider_label = PROVIDER_LABELS.get(self.provider, self.provider)
 
+        cols = shutil.get_terminal_size().columns
+        label_len = len(provider_label) + 1  # space before label
+        line_len = max(cols - label_len, 10)
+
         return [
-            ("class:bottom-toolbar.key", " Ctrl+T "),
-            ("class:bottom-toolbar.hint", "model "),
-            (provider_style, f" {provider_label} "),
-            ("class:bottom-toolbar.sep", "  │  "),
-            ("class:bottom-toolbar.key", "Enter "),
-            ("class:bottom-toolbar.hint", "send  "),
-            ("class:bottom-toolbar.sep", "│  "),
-            ("class:bottom-toolbar.key", "/help "),
-            ("class:bottom-toolbar.hint", "commands"),
+            ("class:bottom-toolbar.separator", "─" * line_len),
+            (provider_style, f" {provider_label}"),
         ]
 
     def _prompt_text(self) -> list:
-        """Build the styled prompt prefix."""
+        """Prompt prefix with separator line above."""
+        cols = shutil.get_terminal_size().columns
         return [
-            ("class:prompt", "❯ "),
+            ("class:separator", "─" * cols + "\n"),
+            ("class:prompt", "  ❯ "),
         ]
 
     def get_input(self) -> str:
