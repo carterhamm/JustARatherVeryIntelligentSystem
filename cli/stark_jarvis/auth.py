@@ -1,4 +1,4 @@
-"""Authentication — first-time setup, login, and session unlock via System Handshake Token."""
+"""Authentication — first-time setup, login, and session unlock via Secure Handshake Token."""
 
 from __future__ import annotations
 
@@ -39,18 +39,17 @@ def _check_server(server_url: str) -> bool:
         print(f"{_RED}Cannot reach server at {server_url}{_RESET}")
         sys.exit(1)
     except Exception:
-        # Old server without setup-status endpoint — assume setup is done
         return False
 
 
-def prompt_handshake(confirm: bool = False) -> str:
-    """Prompt for the System Handshake Token."""
-    token = getpass.getpass(f"{_BLUE}System Handshake Token: {_RESET}")
+def prompt_sht(confirm: bool = False) -> str:
+    """Prompt for the Secure Handshake Token."""
+    token = getpass.getpass(f"{_BLUE}Secure Handshake Token: {_RESET}")
     if not token:
-        print(f"{_RED}Handshake token cannot be empty.{_RESET}")
+        print(f"{_RED}Token cannot be empty.{_RESET}")
         sys.exit(1)
     if confirm:
-        token2 = getpass.getpass(f"{_BLUE}Confirm Handshake Token: {_RESET}")
+        token2 = getpass.getpass(f"{_BLUE}Confirm Secure Handshake Token: {_RESET}")
         if token != token2:
             print(f"{_RED}Tokens do not match.{_RESET}")
             sys.exit(1)
@@ -61,6 +60,14 @@ def _first_time_setup(server_url: str) -> None:
     """Run first-time owner account creation."""
     print(f"\n  {_GOLD}{_BOLD}J.A.R.V.I.S. — First Time Setup{_RESET}")
     print(f"  {_DIM}No owner account exists. Creating one now.{_RESET}\n")
+
+    # Require the Secure Handshake Token first (must match server's SETUP_TOKEN)
+    print(f"  {_GOLD}Enter the Secure Handshake Token configured on the server.{_RESET}")
+    print(f"  {_DIM}This proves you are the owner.{_RESET}\n")
+    sht = getpass.getpass(f"  {_BLUE}Secure Handshake Token: {_RESET}")
+    if not sht:
+        print(f"  {_RED}Token cannot be empty.{_RESET}")
+        sys.exit(1)
 
     username = input(f"  {_BLUE}Username: {_RESET}").strip()
     if not username or len(username) < 3:
@@ -81,7 +88,7 @@ def _first_time_setup(server_url: str) -> None:
         print(f"  {_RED}Passwords do not match.{_RESET}")
         sys.exit(1)
 
-    # Register via API
+    # Register via API with the SHT as auth
     try:
         resp = httpx.post(
             f"{server_url}/api/v1/auth/register",
@@ -90,6 +97,7 @@ def _first_time_setup(server_url: str) -> None:
                 "username": username,
                 "password": password,
             },
+            headers={"X-Setup-Token": sht},
             timeout=15.0,
         )
         resp.raise_for_status()
@@ -107,15 +115,11 @@ def _first_time_setup(server_url: str) -> None:
     user = data.get("user", {})
     uname = user.get("username", username)
 
-    print(f"\n  {_GREEN}Owner account created: {uname}{_RESET}\n")
+    print(f"\n  {_GREEN}Owner account created: {uname}{_RESET}")
 
-    # Set System Handshake Token
-    print(f"  {_GOLD}Set your System Handshake Token.{_RESET}")
-    print(f"  {_DIM}This is your quick passphrase to unlock JARVIS from the terminal.{_RESET}\n")
-    handshake = prompt_handshake(confirm=True)
-
-    config.save_auth(access_token, refresh_token, handshake)
-    print(f"\n  {_GREEN}J.A.R.V.I.S. is ready, Sir.{_RESET}\n")
+    # Use the same SHT to encrypt local credentials
+    config.save_auth(access_token, refresh_token, sht)
+    print(f"  {_GREEN}J.A.R.V.I.S. is ready, Sir.{_RESET}\n")
 
 
 def login(server_url: str, email: Optional[str] = None) -> None:
@@ -158,25 +162,25 @@ def login(server_url: str, email: Optional[str] = None) -> None:
     user = data.get("user", {})
     username = user.get("username", "Sir")
 
-    # Set the System Handshake Token
-    print(f"\n  {_GOLD}Set your System Handshake Token.{_RESET}")
+    # Set the Secure Handshake Token for future CLI sessions
+    print(f"\n  {_GOLD}Set your Secure Handshake Token.{_RESET}")
     print(f"  {_DIM}This unlocks J.A.R.V.I.S. each time you open the terminal.{_RESET}\n")
-    handshake = prompt_handshake(confirm=True)
+    sht = prompt_sht(confirm=True)
 
-    config.save_auth(access_token, refresh_token, handshake)
+    config.save_auth(access_token, refresh_token, sht)
     print(f"\n  {_GREEN}Authenticated as {username}. J.A.R.V.I.S. is ready, Sir.{_RESET}\n")
 
 
 def unlock() -> tuple[str, str]:
-    """Unlock stored credentials with System Handshake Token."""
+    """Unlock stored credentials with Secure Handshake Token."""
     if not config.has_auth():
         print(f"  {_RED}No stored session. Run: jarvis login{_RESET}")
         sys.exit(1)
 
-    handshake = prompt_handshake()
-    access, refresh = config.load_auth(handshake)
+    sht = prompt_sht()
+    access, refresh = config.load_auth(sht)
     if access is None:
-        print(f"  {_RED}Incorrect System Handshake Token.{_RESET}")
+        print(f"  {_RED}Incorrect Secure Handshake Token.{_RESET}")
         sys.exit(1)
     return access, refresh
 

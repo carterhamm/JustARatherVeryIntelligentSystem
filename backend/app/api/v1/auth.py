@@ -1,15 +1,16 @@
 """Authentication endpoints — register, login, refresh, profile, preferences, passkeys.
 
-JARVIS is a single-owner system. Registration is locked after the first user
-is created. All subsequent access uses login + System Handshake Token.
+JARVIS is a single-owner system. Registration requires the Secure Handshake
+Token (SETUP_TOKEN) and is locked after the first user is created.
 """
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.core.dependencies import get_current_active_user, get_db
 from app.models.user import User
 from app.schemas.auth import (
@@ -40,11 +41,28 @@ async def setup_status(db: AsyncSession = Depends(get_db)) -> dict[str, bool]:
     return {"setup_complete": bool(count and count > 0)}
 
 
-# -- Single-owner registration (first user only) --------------------------
+# -- Single-owner registration (requires Secure Handshake Token) ----------
 
 @router.post("/register", response_model=AuthResponse, status_code=201)
-async def register(payload: UserCreate, db: AsyncSession = Depends(get_db)) -> AuthResponse:
-    """Create the owner account. Locked after the first user exists."""
+async def register(
+    payload: UserCreate,
+    db: AsyncSession = Depends(get_db),
+    x_setup_token: str | None = Header(None),
+) -> AuthResponse:
+    """Create the owner account. Requires SETUP_TOKEN header. Locked after first user."""
+    # Verify Secure Handshake Token
+    if not settings.SETUP_TOKEN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Registration is disabled. SETUP_TOKEN not configured on server.",
+        )
+    if not x_setup_token or x_setup_token != settings.SETUP_TOKEN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid Secure Handshake Token.",
+        )
+
+    # Only one user ever
     count = await db.scalar(select(func.count()).select_from(User))
     if count and count > 0:
         raise HTTPException(

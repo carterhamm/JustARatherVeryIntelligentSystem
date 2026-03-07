@@ -36,7 +36,7 @@ dependencies = [
 jarvis = "stark_jarvis.main:main"
 
 [project.urls]
-Homepage = "https://github.com/AESharak/JustARatherVeryIntelligentSystem"
+Homepage = "https://github.com/carterhamm/JustARatherVeryIntelligentSystem"
 
 [tool.setuptools.packages.find]
 include = ["stark_jarvis*"]

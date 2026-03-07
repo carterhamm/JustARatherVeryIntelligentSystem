@@ -145,6 +145,9 @@ class Settings(BaseSettings):
 
     AES_KEY: str = ""
 
+    # -- Setup Token (required to create the owner account) -------------------
+    SETUP_TOKEN: str = ""
+
     @field_validator("JWT_SECRET_KEY", mode="before")
     @classmethod
     def _ensure_jwt_secret(cls, v: object) -> str:
