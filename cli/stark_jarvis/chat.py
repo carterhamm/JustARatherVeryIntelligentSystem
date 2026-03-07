@@ -1,9 +1,12 @@
 """WebSocket chat client — streams JARVIS responses with rich terminal UI.
 
-Layout is free-flowing: the banner prints once at the top of the
-scrollback, then messages stream downward.  The user can scroll up
-through the terminal's scrollback buffer to review history.  The input
-prompt renders inline (no bottom-toolbar gap) so it stays compact.
+Layout:
+  Rows 1-10:  Banner (static)
+  Row 11-12:  Status + blank (static)
+  Rows 13-N3: Chat area (scroll region — messages appear here)
+  Row N-2:    Top separator ─────
+  Row N-1:    ❯ input
+  Row N:      Bottom separator ────── Claude
 """
 
 from __future__ import annotations
@@ -20,22 +23,30 @@ import websockets.exceptions
 from stark_jarvis.config import config
 from stark_jarvis.display import (
     JARVIS_BLUE, JARVIS_ERROR_RED, DIM, BOLD, RESET,
+    PROVIDER_COLORS, PROVIDER_LABELS,
     print_banner,
+    banner_line_count,
     run_connecting_animation,
     set_terminal_bg_black,
     reset_terminal_bg,
     clear_screen,
-    enter_alt_screen,
-    leave_alt_screen,
+    hide_cursor,
     show_cursor,
+    move_cursor,
+    set_scroll_region,
+    reset_scroll_region,
+    draw_static_input,
     print_user_message,
     print_assistant,
     print_assistant_end,
     print_error,
+    print_system,
     print_system_centered,
     print_thinking,
     clear_thinking,
+    print_divider,
     provider_styled,
+    _term_size,
 )
 from stark_jarvis.input_ui import JarvisInput
 
@@ -62,12 +73,11 @@ async def chat_session(
     # Set up rich input UI
     jarvis_input = JarvisInput(initial_provider=provider)
 
-    # Run connecting animation in the alternate screen buffer so it
-    # doesn't pollute the normal scrollback.
-    enter_alt_screen()
+    # Full-screen: black background + clear
     set_terminal_bg_black()
     clear_screen()
 
+    # Start connecting animation in background thread
     stop_anim = threading.Event()
     anim_thread = threading.Thread(
         target=run_connecting_animation,
@@ -90,9 +100,10 @@ async def chat_session(
                 early = await asyncio.wait_for(ws.recv(), timeout=0.5)
                 early_msg = json.loads(early) if isinstance(early, str) else {}
                 if early_msg.get("type") == "error":
+                    # Token expired — re-authenticate and retry
                     stop_anim.set()
                     anim_thread.join(timeout=0.5)
-                    leave_alt_screen()
+                    reset_terminal_bg()
                     show_cursor()
                     print_error("Session expired. Re-authenticating...")
                     from stark_jarvis.auth import unlock
@@ -104,9 +115,10 @@ async def chat_session(
             except asyncio.TimeoutError:
                 pass  # No immediate error — connection is healthy
             except websockets.exceptions.ConnectionClosed:
+                # Server closed before we could read — same as auth failure
                 stop_anim.set()
                 anim_thread.join(timeout=0.5)
-                leave_alt_screen()
+                reset_terminal_bg()
                 show_cursor()
                 print_error("Session expired. Re-authenticating...")
                 from stark_jarvis.auth import unlock
@@ -115,31 +127,58 @@ async def chat_session(
                 await chat_session(new_access, new_refresh, model_provider)
                 return
 
-            # Stop animation and return to normal screen buffer
+            # Stop connecting animation
             stop_anim.set()
             anim_thread.join(timeout=0.5)
-            leave_alt_screen()
 
-            # Banner prints in normal buffer — scrolls with content
+            # ── Draw the full-screen layout ──
+            clear_screen()
             print_banner()
             print_system_centered(
                 "Connected. Type your message, or /help for commands."
             )
             print()
 
+            # Calculate layout rows
+            cols, rows = _term_size()
+            chat_top = banner_line_count() + 3    # first row of chat area
+            input_row = rows - 2                   # top separator of input area
+            scroll_bottom = input_row - 1          # last row of chat scroll region
+
+            # Draw static input area (below scroll region)
+            draw_static_input(input_row, provider)
+
+            # Set scroll region to chat area only
+            set_scroll_region(chat_top, scroll_bottom)
+
+            # Track position in chat area
+            chat_row = chat_top
+
             while True:
+                # Sync provider from input UI (user may have cycled)
                 provider = jarvis_input.provider
+
+                # Reset scroll region so prompt_toolkit can render freely,
+                # then move cursor to input area.
+                reset_scroll_region()
+                move_cursor(input_row)
 
                 try:
                     user_input = await jarvis_input.async_get_input()
                 except (EOFError, KeyboardInterrupt):
+                    move_cursor(chat_row)
                     sys.stdout.write(
                         f"\n  {DIM}{JARVIS_BLUE}Goodbye, Sir.{RESET}\n"
                     )
                     sys.stdout.flush()
                     break
                 except Exception:
+                    # prompt_toolkit can fail in edge cases — recover gracefully
                     continue
+                finally:
+                    # Restore scroll region and redraw input area
+                    set_scroll_region(chat_top, scroll_bottom)
+                    draw_static_input(input_row, provider)
 
                 if not user_input:
                     continue
@@ -148,6 +187,7 @@ async def chat_session(
                 cmd = user_input.strip().lower()
 
                 if cmd in ("exit", "quit", "/exit", "/quit"):
+                    move_cursor(chat_row)
                     sys.stdout.write(
                         f"\n  {DIM}{JARVIS_BLUE}Goodbye, Sir.{RESET}\n"
                     )
@@ -155,20 +195,24 @@ async def chat_session(
                     break
 
                 if cmd in ("/model", "/provider"):
+                    move_cursor(chat_row)
                     sys.stdout.write(
                         f"\n  {DIM}{JARVIS_BLUE}Current provider: "
                         f"{provider_styled(provider)}{RESET}\n\n"
                     )
                     sys.stdout.flush()
+                    chat_row = min(chat_row + 3, scroll_bottom)
                     continue
 
                 if cmd.startswith("/model ") or cmd.startswith("/provider "):
                     new_provider = cmd.split(None, 1)[1].strip()
                     valid = ("claude", "gemini", "stark_protocol")
+                    move_cursor(chat_row)
                     if new_provider in valid:
                         provider = new_provider
                         jarvis_input.provider = new_provider
                         config.model_provider = new_provider
+                        draw_static_input(input_row, provider)
                         sys.stdout.write(
                             f"\n  {DIM}{JARVIS_BLUE}Switched to "
                             f"{provider_styled(new_provider)}{RESET}\n\n"
@@ -179,23 +223,37 @@ async def chat_session(
                             f"Options: {', '.join(valid)}{RESET}\n"
                         )
                     sys.stdout.flush()
+                    chat_row = min(chat_row + 3, scroll_bottom)
                     continue
 
                 if cmd == "/new":
                     conversation_id = None
+                    move_cursor(chat_row)
                     sys.stdout.write(
                         f"\n  {DIM}{JARVIS_BLUE}New conversation started.{RESET}\n\n"
                     )
                     sys.stdout.flush()
+                    chat_row = min(chat_row + 3, scroll_bottom)
                     continue
 
                 if cmd in ("/help", "/?"):
+                    move_cursor(chat_row)
                     _print_help_to_chat()
+                    chat_row = min(chat_row + 20, scroll_bottom)
                     continue
 
                 # ── Send message ──
+                # Print user message in chat area
+                move_cursor(chat_row)
                 print_user_message(user_input)
 
+                # Estimate lines used by user message
+                msg_lines = 1
+                for line in user_input.split('\n'):
+                    msg_lines += max(1, (len(line) + 4 + cols - 1) // cols)
+                chat_row = min(chat_row + msg_lines + 2, scroll_bottom)
+
+                # Build and send payload
                 payload = {
                     "message": user_input,
                     "model_provider": provider,
@@ -206,11 +264,14 @@ async def chat_session(
 
                 await ws.send(json.dumps(payload))
 
+                # Spinner appears in chat area (cursor is there)
                 print_thinking(provider)
 
                 # Stream response
                 streaming = True
                 first_token = True
+                response_chars = 0
+                response_newlines = 0
 
                 while streaming:
                     try:
@@ -218,10 +279,12 @@ async def chat_session(
                     except asyncio.TimeoutError:
                         clear_thinking()
                         show_cursor()
+                        move_cursor(chat_row)
                         sys.stdout.write(
                             f"\n    {JARVIS_ERROR_RED}Response timed out.{RESET}\n"
                         )
                         sys.stdout.flush()
+                        chat_row = min(chat_row + 3, scroll_bottom)
                         streaming = False
                         break
 
@@ -245,6 +308,8 @@ async def chat_session(
                         if content:
                             if first_token:
                                 first_token = False
+                            response_chars += len(content)
+                            response_newlines += content.count('\n')
                             print_assistant(content)
 
                     elif msg_type == "replace":
@@ -259,6 +324,7 @@ async def chat_session(
                                 provider = arg
                                 jarvis_input.provider = arg
                                 config.model_provider = arg
+                                draw_static_input(input_row, provider)
 
                     elif msg_type == "end":
                         print_assistant_end()
@@ -272,20 +338,30 @@ async def chat_session(
                             "token" in error_text.lower()
                             or "auth" in error_text.lower()
                         ):
+                            move_cursor(chat_row)
                             sys.stdout.write(
                                 f"\n    {JARVIS_ERROR_RED}Session expired. "
                                 f"Run: jarvis login{RESET}\n"
                             )
                             sys.stdout.flush()
                             return
+                        move_cursor(chat_row)
                         sys.stdout.write(
                             f"\n    {JARVIS_ERROR_RED}{error_text}{RESET}\n"
                         )
                         sys.stdout.flush()
+                        chat_row = min(chat_row + 3, scroll_bottom)
                         streaming = False
 
                     elif msg_type == "pong":
                         pass
+
+                # Update chat_row after response
+                if response_chars > 0:
+                    resp_lines = response_newlines + max(
+                        1, (response_chars + cols - 1) // cols
+                    )
+                    chat_row = min(chat_row + resp_lines + 2, scroll_bottom)
 
     except websockets.exceptions.InvalidStatusCode as exc:
         if exc.status_code in (401, 403):
@@ -302,8 +378,9 @@ async def chat_session(
         stop_anim.set()
         if anim_thread.is_alive():
             anim_thread.join(timeout=0.5)
-        leave_alt_screen()   # no-op if already left, safe to call twice
+        reset_scroll_region()
         show_cursor()
+        reset_terminal_bg()
 
 
 def _print_help_to_chat() -> None:

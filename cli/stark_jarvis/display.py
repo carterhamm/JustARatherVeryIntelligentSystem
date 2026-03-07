@@ -99,18 +99,6 @@ def clear_screen() -> None:
     sys.stdout.flush()
 
 
-def enter_alt_screen() -> None:
-    """Switch to alternate screen buffer (animation/splash use only)."""
-    sys.stdout.write("\x1b[?1049h")
-    sys.stdout.flush()
-
-
-def leave_alt_screen() -> None:
-    """Return to normal screen buffer (restores prior content)."""
-    sys.stdout.write("\x1b[?1049l")
-    sys.stdout.flush()
-
-
 def hide_cursor() -> None:
     sys.stdout.write("\x1b[?25l")
     sys.stdout.flush()
