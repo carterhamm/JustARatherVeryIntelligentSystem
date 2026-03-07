@@ -111,3 +111,8 @@ class CLIAuthRequest(BaseModel):
     """CLI authentication: SHT + JARVIS username → JWT tokens."""
     sht: str = Field(min_length=1, max_length=256)
     username: str = Field(min_length=1, max_length=64)
+
+
+class SetSHTRequest(BaseModel):
+    """Set the Secure Handshake Token (requires auth)."""
+    sht: str = Field(min_length=4, max_length=256)

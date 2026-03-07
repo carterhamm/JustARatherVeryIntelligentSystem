@@ -12,11 +12,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.core.dependencies import get_current_active_user, get_db
-from app.core.security import create_access_token, create_refresh_token
+from app.core.security import create_access_token, create_refresh_token, hash_password, verify_password
 from app.models.user import User
 from app.schemas.auth import (
     AuthResponse,
     CLIAuthRequest,
+    SetSHTRequest,
     LookupRequest,
     LookupResponse,
     PasskeyLoginBeginRequest,
@@ -137,6 +138,26 @@ async def passkey_login_complete(
     )
 
 
+# -- SHT management --------------------------------------------------------
+
+@router.post("/set-sht", status_code=200)
+async def set_sht(
+    payload: SetSHTRequest,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, str]:
+    """Set the Secure Handshake Token. Requires existing auth (JWT).
+
+    The SHT is stored as a bcrypt hash in the user's preferences.
+    It is required for all future CLI and site access.
+    """
+    prefs = current_user.preferences or {}
+    prefs["sht_hash"] = hash_password(payload.sht)
+    current_user.preferences = prefs
+    await db.commit()
+    return {"status": "ok", "message": "Secure Handshake Token set."}
+
+
 # -- CLI authentication (SHT + username → tokens) -------------------------
 
 @router.post("/cli-login", response_model=AuthResponse)
@@ -146,24 +167,27 @@ async def cli_login(
 ) -> AuthResponse:
     """CLI authentication: verify SHT and username, return JWT tokens.
 
-    Rate-limited the same as normal login (5 failures = 15 min lockout).
+    The SHT is checked against the bcrypt hash stored in the user's
+    preferences (set via /set-sht). Rate-limited: 5 failures = 15 min lockout.
     """
     cli_key = f"cli:{payload.username}"
     await AuthService._check_login_rate_limit(cli_key)
-
-    if not settings.SETUP_TOKEN or payload.sht != settings.SETUP_TOKEN:
-        await AuthService._record_failed_login(cli_key)
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Invalid Secure Handshake Token.",
-        )
 
     user = await AuthService.get_user_by_username(db, payload.username)
     if not user or not user.is_active:
         await AuthService._record_failed_login(cli_key)
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Account not found.",
+            detail="Access denied.",
+        )
+
+    # Verify SHT against stored hash
+    sht_hash = (user.preferences or {}).get("sht_hash")
+    if not sht_hash or not verify_password(payload.sht, sht_hash):
+        await AuthService._record_failed_login(cli_key)
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied.",
         )
 
     await AuthService._clear_login_attempts(cli_key)
