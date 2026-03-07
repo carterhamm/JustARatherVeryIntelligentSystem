@@ -7,9 +7,8 @@ import threading
 import time
 
 # ── JARVIS colour palette (matching web UI) ──────────────────────────────
-# These map to the CSS custom properties from the JARVIS web frontend.
+# All UI uses JARVIS blue (#00d4ff) as the primary colour.
 JARVIS_BLUE = "\x1b[38;2;0;212;255m"       # #00d4ff — primary cyan
-JARVIS_GOLD = "\x1b[38;2;255;170;0m"       # #ffaa00 — accent gold
 JARVIS_RED = "\x1b[38;2;239;68;68m"        # #ef4444 — errors / stark protocol
 JARVIS_GREEN = "\x1b[38;2;52;211;153m"     # #34d399 — success
 JARVIS_DIM = "\x1b[38;2;75;85;99m"         # #4b5563 — muted text
@@ -55,8 +54,10 @@ def print_banner() -> None:
     print(f"""
 {JARVIS_BLUE}{BOLD}  ╔═══════════════════════════════════════════╗
   ║                                           ║
-  ║     J.A.R.V.I.S.  {JARVIS_GOLD}Terminal Client{JARVIS_BLUE}         ║
-  ║     {DIM}{JARVIS_BLUE}Just A Rather Very Intelligent System{RESET}{JARVIS_BLUE}{BOLD}  ║
+  ║         J.A.R.V.I.S.  Terminal            ║
+  ║   {DIM}{JARVIS_BLUE}Just A Rather Very Intelligent System{RESET}{JARVIS_BLUE}{BOLD}  ║
+  ║                                           ║
+  ║     {DIM}{JARVIS_BLUE}Stark Secure Server — Connected{RESET}{JARVIS_BLUE}{BOLD}      ║
   ║                                           ║
   ╚═══════════════════════════════════════════╝{RESET}
 """)

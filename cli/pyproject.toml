@@ -3,16 +3,16 @@ requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "stark-jarvis"
-version = "0.1.0"
-description = "J.A.R.V.I.S. Terminal Client — access your AI assistant from any terminal"
+name = "malibupoint"
+version = "0.2.0"
+description = "J.A.R.V.I.S. Terminal Client — Stark Secure Server access from any terminal"
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.10"
 authors = [
     {name = "Stark Industries"},
 ]
-keywords = ["jarvis", "ai", "assistant", "cli", "terminal"]
+keywords = ["jarvis", "ai", "assistant", "cli", "terminal", "stark"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Environment :: Console",

@@ -1,9 +1,10 @@
 """CLI entry point — argument parsing and command dispatch.
 
 Routing rules:
-- Any command that needs auth will auto-redirect to login if not configured.
+- `jarvis login` → first-time setup (gate credentials + SHT + account)
+- `jarvis` → 4-layer auth then interactive chat
+- `jarvis "message"` → 4-layer auth then one-shot
 - Unknown commands are treated as one-shot messages.
-- Never crashes — all exceptions are caught and shown as friendly errors.
 """
 
 from __future__ import annotations
@@ -14,7 +15,7 @@ import traceback
 
 from stark_jarvis import __version__
 from stark_jarvis.display import (
-    JARVIS_BLUE, JARVIS_GOLD, JARVIS_RED, DIM, BOLD, RESET,
+    JARVIS_BLUE, DIM, BOLD, RESET,
     print_banner, print_system, print_error, print_success,
 )
 
@@ -72,16 +73,15 @@ def _run() -> None:
 
     # ── login ──
     if command == "login":
-        if len(args) < 2:
-            print_error("Usage: jarvis login <server-url> [--email <email>]")
-            sys.exit(1)
-        server_url = args[1]
-        # Ensure URL has a scheme
+        from stark_jarvis.config import DEFAULT_SERVER
+        if len(args) >= 2:
+            server_url = args[1]
+        else:
+            server_url = DEFAULT_SERVER
         if not server_url.startswith("http://") and not server_url.startswith("https://"):
             server_url = f"https://{server_url}"
-        email = _extract_flag(args, "--email", "-e")
         from stark_jarvis.auth import login
-        login(server_url, email=email)
+        login(server_url)
         return
 
     # ── logout ──
@@ -110,27 +110,21 @@ def _run() -> None:
         _print_help()
         return
 
-    # ── Everything below needs auth — auto-redirect to login ──
+    # ── Everything below needs auth ──
     from stark_jarvis.config import config
 
-    if not config.server_url:
+    if not config.is_setup():
         print_banner()
-        print_system("No server configured.\n")
-        print(f"  {JARVIS_GOLD}Run:{RESET}  jarvis login <your-server-url>")
-        print(f"  {DIM}e.g.  jarvis login https://your-app.up.railway.app{RESET}\n")
+        print_system("CLI not configured.\n")
+        print(f"  {JARVIS_BLUE}Run:{RESET}  jarvis login")
+        print(f"  {DIM}Sets up Stark Secure Server access.{RESET}\n")
         sys.exit(0)
 
-    if not config.has_auth():
-        print_banner()
-        print_system("Not authenticated.\n")
-        print(f"  {JARVIS_GOLD}Run:{RESET}  jarvis login {config.server_url}\n")
-        sys.exit(0)
-
-    # Unlock session
+    # 4-layer unlock
     from stark_jarvis.auth import unlock
     access_token, refresh_token = unlock()
 
-    # ── One-shot mode: any non-command args form the message ──
+    # ── One-shot mode ──
     if args and command not in COMMANDS:
         oneshot_message = " ".join(args)
         from stark_jarvis.oneshot import oneshot
@@ -170,26 +164,38 @@ def _show_status() -> None:
     server = config.server_url
     print(f"  {JARVIS_BLUE}Server{RESET}    {server or f'{DIM}Not configured{RESET}'}")
 
-    if config.has_auth():
-        print(f"  {JARVIS_BLUE}Auth{RESET}      {DIM}Stored (encrypted){RESET}")
+    if config.is_setup():
+        print(f"  {JARVIS_BLUE}Auth{RESET}      {DIM}Configured (4-layer){RESET}")
     else:
-        print(f"  {JARVIS_BLUE}Auth{RESET}      {DIM}Not logged in{RESET}")
+        print(f"  {JARVIS_BLUE}Auth{RESET}      {DIM}Not configured{RESET}")
+
+    jarvis_user = config.get("jarvis_username")
+    if jarvis_user:
+        print(f"  {JARVIS_BLUE}User{RESET}      {jarvis_user}")
 
     print(f"  {JARVIS_BLUE}Provider{RESET}  {provider_styled(config.model_provider)}")
     print()
 
 
 def _print_help() -> None:
+    from stark_jarvis.config import DEFAULT_SERVER
     print(f"""
 {JARVIS_BLUE}{BOLD}J.A.R.V.I.S. Terminal Client{RESET}  {DIM}v{__version__}{RESET}
+{DIM}Stark Secure Server{RESET}
 
 {BOLD}Usage{RESET}
-  jarvis                              Interactive chat
-  jarvis "message"                    One-shot query
-  jarvis login <url>                  Connect to a JARVIS server
+  jarvis                              Interactive chat (requires auth)
+  jarvis "message"                    One-shot query (requires auth)
+  jarvis login [url]                  Setup CLI access (defaults to {DEFAULT_SERVER})
   jarvis logout                       Clear stored credentials
   jarvis purge                        Remove all data from this machine
   jarvis status                       Show connection info
+
+{BOLD}Authentication (4 layers){RESET}
+  1. Gate Username                    Static CLI access credential
+  2. Gate Password                    Static CLI access credential
+  3. Secure Handshake Token           Server-verified (same as website)
+  4. JARVIS Username                  Your account on the server
 
 {BOLD}Options{RESET}
   --model, -m <provider>              claude, gemini, stark_protocol
@@ -201,20 +207,17 @@ def _print_help() -> None:
   Ctrl+T                              Cycle model provider
   Enter                               Send message
   Shift+Enter                         New line
-  Ctrl+C                              Exit
+  Ctrl+C (x2)                         Exit
 
 {BOLD}Examples{RESET}
   {DIM}# First time setup{RESET}
-  jarvis login https://your-app.up.railway.app
+  jarvis login
 
   {DIM}# Interactive chat{RESET}
   jarvis
 
   {DIM}# Quick question{RESET}
   jarvis "What time is it in Tokyo?"
-
-  {DIM}# Use Gemini{RESET}
-  jarvis -m gemini "Summarize this paper"
 """)
 
 

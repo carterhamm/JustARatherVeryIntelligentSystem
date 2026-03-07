@@ -12,7 +12,7 @@ import websockets.exceptions
 
 from stark_jarvis.config import config
 from stark_jarvis.display import (
-    JARVIS_BLUE, JARVIS_GOLD, DIM, BOLD, RESET,
+    JARVIS_BLUE, DIM, BOLD, RESET,
     print_assistant,
     print_assistant_end,
     print_error,
@@ -197,18 +197,18 @@ def _print_help() -> None:
     print(f"""
   {JARVIS_BLUE}{BOLD}Commands{RESET}
   {DIM}{'─' * 44}{RESET}
-  {JARVIS_GOLD}/model <provider>{RESET}  Switch provider
-  {JARVIS_GOLD}/model{RESET}             Show current provider
-  {JARVIS_GOLD}/new{RESET}               Start new conversation
-  {JARVIS_GOLD}/help{RESET}              Show this help
-  {JARVIS_GOLD}exit{RESET}               Quit
+  {JARVIS_BLUE}/model <provider>{RESET}  Switch provider
+  {JARVIS_BLUE}/model{RESET}             Show current provider
+  {JARVIS_BLUE}/new{RESET}               Start new conversation
+  {JARVIS_BLUE}/help{RESET}              Show this help
+  {JARVIS_BLUE}exit{RESET}               Quit
 
   {JARVIS_BLUE}{BOLD}Shortcuts{RESET}
   {DIM}{'─' * 44}{RESET}
-  {JARVIS_GOLD}Ctrl+T{RESET}             Cycle model provider
-  {JARVIS_GOLD}Enter{RESET}              Send message
-  {JARVIS_GOLD}Shift+Enter{RESET}        New line
-  {JARVIS_GOLD}Ctrl+C{RESET}             Exit
+  {JARVIS_BLUE}Ctrl+T{RESET}             Cycle model provider
+  {JARVIS_BLUE}Enter{RESET}              Send message
+  {JARVIS_BLUE}Shift+Enter{RESET}        New line
+  {JARVIS_BLUE}Ctrl+C{RESET}             Exit
 
   {JARVIS_BLUE}{BOLD}Providers{RESET}
   {DIM}{'─' * 44}{RESET}

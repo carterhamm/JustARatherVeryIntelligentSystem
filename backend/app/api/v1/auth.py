@@ -12,9 +12,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.core.dependencies import get_current_active_user, get_db
+from app.core.security import create_access_token, create_refresh_token
 from app.models.user import User
 from app.schemas.auth import (
     AuthResponse,
+    CLIAuthRequest,
     LookupRequest,
     LookupResponse,
     PasskeyLoginBeginRequest,
@@ -132,6 +134,44 @@ async def passkey_login_complete(
     """Complete WebAuthn authentication, return tokens with user data."""
     return await AuthService.complete_authentication(
         db, identifier=payload.identifier, credential=payload.credential,
+    )
+
+
+# -- CLI authentication (SHT + username → tokens) -------------------------
+
+@router.post("/cli-login", response_model=AuthResponse)
+async def cli_login(
+    payload: CLIAuthRequest,
+    db: AsyncSession = Depends(get_db),
+) -> AuthResponse:
+    """CLI authentication: verify SHT and username, return JWT tokens.
+
+    Rate-limited the same as normal login (5 failures = 15 min lockout).
+    """
+    cli_key = f"cli:{payload.username}"
+    await AuthService._check_login_rate_limit(cli_key)
+
+    if not settings.SETUP_TOKEN or payload.sht != settings.SETUP_TOKEN:
+        await AuthService._record_failed_login(cli_key)
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid Secure Handshake Token.",
+        )
+
+    user = await AuthService.get_user_by_username(db, payload.username)
+    if not user or not user.is_active:
+        await AuthService._record_failed_login(cli_key)
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account not found.",
+        )
+
+    await AuthService._clear_login_attempts(cli_key)
+
+    return AuthResponse(
+        access_token=create_access_token(user.id),
+        refresh_token=create_refresh_token(user.id),
+        user=UserResponse.model_validate(user),
     )
 
 

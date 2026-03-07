@@ -1,4 +1,4 @@
-"""Persistent configuration — stores server URL + encrypted auth tokens."""
+"""Persistent configuration — stores gate credentials, SHT hash, and settings."""
 
 from __future__ import annotations
 
@@ -7,7 +7,10 @@ import hashlib
 import base64
 import os
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
+
+# Default JARVIS server
+DEFAULT_SERVER = "https://app.malibupoint.dev"
 
 # Config lives in ~/.jarvis/
 CONFIG_DIR = Path.home() / ".jarvis"
@@ -24,27 +27,6 @@ def _get_salt() -> bytes:
     SALT_FILE.write_bytes(salt)
     SALT_FILE.chmod(0o600)
     return salt
-
-
-def _derive_key(password: str) -> bytes:
-    """Derive a 32-byte Fernet key from a password + salt."""
-    salt = _get_salt()
-    dk = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, iterations=600_000, dklen=32)
-    return base64.urlsafe_b64encode(dk)
-
-
-def _encrypt(data: str, password: str) -> str:
-    """Encrypt a string with the given password."""
-    from cryptography.fernet import Fernet
-    key = _derive_key(password)
-    return Fernet(key).encrypt(data.encode()).decode()
-
-
-def _decrypt(token: str, password: str) -> str:
-    """Decrypt a string with the given password."""
-    from cryptography.fernet import Fernet
-    key = _derive_key(password)
-    return Fernet(key).decrypt(token.encode()).decode()
 
 
 class JarvisConfig:
@@ -66,6 +48,17 @@ class JarvisConfig:
         CONFIG_FILE.write_text(json.dumps(self._data, indent=2))
         CONFIG_FILE.chmod(0o600)
 
+    # ── Generic get/set ──────────────────────────────────────────────────
+
+    def get(self, key: str, default: Any = None) -> Any:
+        return self._data.get(key, default)
+
+    def set(self, key: str, value: Any) -> None:
+        self._data[key] = value
+        self._save()
+
+    # ── Server URL ───────────────────────────────────────────────────────
+
     @property
     def server_url(self) -> Optional[str]:
         return self._data.get("server_url")
@@ -74,6 +67,8 @@ class JarvisConfig:
     def server_url(self, url: str) -> None:
         self._data["server_url"] = url.rstrip("/")
         self._save()
+
+    # ── Model provider ───────────────────────────────────────────────────
 
     @property
     def model_provider(self) -> str:
@@ -84,40 +79,21 @@ class JarvisConfig:
         self._data["model_provider"] = provider
         self._save()
 
-    def save_auth(self, access_token: str, refresh_token: str, password: str) -> None:
-        """Encrypt and store auth tokens."""
-        self._data["access_token"] = _encrypt(access_token, password)
-        self._data["refresh_token"] = _encrypt(refresh_token, password)
-        self._data["auth_check"] = _encrypt("jarvis_auth_ok", password)
-        self._save()
+    # ── Setup check ──────────────────────────────────────────────────────
 
-    def load_auth(self, password: str) -> tuple[Optional[str], Optional[str]]:
-        """Decrypt and return (access_token, refresh_token). Returns (None, None) on failure."""
-        try:
-            # Verify password first
-            check = self._data.get("auth_check")
-            if not check or _decrypt(check, password) != "jarvis_auth_ok":
-                return None, None
-            access = _decrypt(self._data["access_token"], password)
-            refresh = _decrypt(self._data["refresh_token"], password)
-            return access, refresh
-        except Exception:
-            return None, None
+    def is_setup(self) -> bool:
+        """True if first-time setup has been completed."""
+        return all(
+            self._data.get(k)
+            for k in ("gate_username_hash", "gate_password_hash", "sht_hash", "server_url")
+        )
 
-    def has_auth(self) -> bool:
-        return "access_token" in self._data and "auth_check" in self._data
-
-    def clear_auth(self) -> None:
-        """Remove stored credentials."""
-        for key in ("access_token", "refresh_token", "auth_check"):
-            self._data.pop(key, None)
-        self._save()
+    # ── Cleanup ──────────────────────────────────────────────────────────
 
     def clear_all(self) -> None:
         """Nuke everything — full logout + unlink."""
         self._data = {}
         self._save()
-        # Remove salt too so nothing can be recovered
         if SALT_FILE.exists():
             SALT_FILE.unlink()
 

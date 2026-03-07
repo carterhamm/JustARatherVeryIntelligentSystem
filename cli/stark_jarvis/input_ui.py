@@ -18,12 +18,12 @@ JARVIS_STYLE = Style.from_dict({
     # Input area
     "": "#e5e7eb",                          # default text — light gray
     "prompt": "#00d4ff bold",               # prompt arrow — jarvis blue
-    "prompt.model": "#ffaa00 bold",         # model label in prompt
+    "prompt.model": "#00d4ff bold",          # model label in prompt — jarvis blue
 
     # Bottom toolbar
     "bottom-toolbar": "bg:#0f0f14 #4b5563",
     "bottom-toolbar.key": "#00d4ff bold",
-    "bottom-toolbar.model": "#ffaa00 bold",
+    "bottom-toolbar.model": "#00d4ff bold",
     "bottom-toolbar.provider-claude": "#ff8c00 bold",
     "bottom-toolbar.provider-gemini": "#3b82f6 bold",
     "bottom-toolbar.provider-stark_protocol": "#ef4444 bold",
@@ -61,11 +61,12 @@ class JarvisInput:
     def __init__(self, initial_provider: str = "claude") -> None:
         self.provider = initial_provider
         self._picker_active = False
+        self._last_ctrl_c: float = 0
 
         # Key bindings
         self._kb = KeyBindings()
 
-        # Ctrl+M: cycle model
+        # Ctrl+T: cycle model
         @self._kb.add("c-t")
         def _cycle_model(event):
             ids = [p[0] for p in PROVIDERS]
@@ -85,11 +86,19 @@ class JarvisInput:
         def _newline(event):
             event.app.current_buffer.insert_text("\n")
 
-        # Ctrl+C: exit
+        # Double Ctrl+C to exit
         @self._kb.add("c-c")
         def _exit(event):
+            import time, sys
+            now = time.time()
+            if now - self._last_ctrl_c < 1.5:
+                event.app.current_buffer.text = ""
+                raise KeyboardInterrupt
+            self._last_ctrl_c = now
+            # Clear current input and show hint
             event.app.current_buffer.text = ""
-            raise KeyboardInterrupt
+            sys.stdout.write(f"\n  \x1b[38;2;75;85;99mPress Ctrl+C again to exit\x1b[0m\n")
+            sys.stdout.flush()
 
         self._session: Optional[PromptSession] = None
 
