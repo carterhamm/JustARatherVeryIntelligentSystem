@@ -1,49 +1,26 @@
-"""Rich input UI — Claude Code-style input with JARVIS theming and model picker.
+"""Minimal input UI — ANSI-styled prompt using plain input().
 
-Uses prompt_toolkit for multi-line input, key bindings, and styled toolbar.
+No prompt_toolkit. No screen takeover. Just a compact 2-line input
+that renders inline and doesn't interfere with terminal scrollback.
 """
 
 from __future__ import annotations
 
+import asyncio
 import shutil
 import sys
-from typing import Optional
+import time
 
-from prompt_toolkit import PromptSession
-from prompt_toolkit.formatted_text import HTML
-from prompt_toolkit.key_binding import KeyBindings
-from prompt_toolkit.styles import Style
+# ANSI colours
+_BLUE = "\x1b[38;2;0;212;255m"
+_DIM = "\x1b[38;2;51;52;64m"
+_BOLD = "\x1b[1m"
+_RESET = "\x1b[0m"
 
-# JARVIS colour palette for prompt_toolkit styles
-JARVIS_STYLE = Style.from_dict({
-    # Input area — light gray text on black bg
-    "": "#e5e7eb bg:#000000",
-    "prompt": "#00d4ff bold",
-    "separator": "#333340",
-
-    # Bottom toolbar
-    "bottom-toolbar": "noinherit bg:#000000",
-    "bottom-toolbar.separator": "#333340",
-    "bottom-toolbar.provider-claude": "#ff8c00",
-    "bottom-toolbar.provider-gemini": "#3b82f6",
-    "bottom-toolbar.provider-stark_protocol": "#ef4444",
-
-    # Model picker overlay
-    "dialog": "bg:#1a1a2e",
-    "dialog.body": "bg:#1a1a2e #e5e7eb",
-    "dialog frame.label": "#00d4ff bold",
-})
-
-PROVIDERS = [
-    ("claude", "Claude", "#ff8c00"),
-    ("gemini", "Gemini", "#3b82f6"),
-    ("stark_protocol", "Stark Protocol", "#ef4444"),
-]
-
-PROVIDER_STYLE_MAP = {
-    "claude": "class:bottom-toolbar.provider-claude",
-    "gemini": "class:bottom-toolbar.provider-gemini",
-    "stark_protocol": "class:bottom-toolbar.provider-stark_protocol",
+PROVIDER_COLORS = {
+    "claude": "\x1b[38;2;255;140;0m",
+    "gemini": "\x1b[38;2;59;130;246m",
+    "stark_protocol": "\x1b[38;2;239;68;68m",
 }
 
 PROVIDER_LABELS = {
@@ -52,88 +29,49 @@ PROVIDER_LABELS = {
     "stark_protocol": "Stark Protocol",
 }
 
+PROVIDERS = ["claude", "gemini", "stark_protocol"]
+
 
 class JarvisInput:
-    """Rich terminal input with JARVIS theming and inline model picker."""
+    """Compact terminal input with ANSI styling."""
 
-    def __init__(self, initial_provider: str = "claude") -> None:
+    def __init__(self, initial_provider: str = "gemini") -> None:
         self.provider = initial_provider
-        self._picker_active = False
         self._last_ctrl_c: float = 0
 
-        # Key bindings
-        self._kb = KeyBindings()
+    def _draw_separator(self) -> None:
+        """Print separator line with provider name right-aligned."""
+        cols = shutil.get_terminal_size().columns
+        label = PROVIDER_LABELS.get(self.provider, self.provider)
+        color = PROVIDER_COLORS.get(self.provider, _BLUE)
+        label_len = len(label) + 1
+        line_len = max(cols - label_len, 10)
+        sys.stdout.write(
+            f"{_DIM}{'─' * line_len}{_RESET}{color} {label}{_RESET}\n"
+        )
+        sys.stdout.flush()
 
-        # Ctrl+T: cycle model
-        @self._kb.add("c-t")
-        def _cycle_model(event):
-            ids = [p[0] for p in PROVIDERS]
-            idx = ids.index(self.provider) if self.provider in ids else 0
-            self.provider = ids[(idx + 1) % len(ids)]
-
-        # Enter: submit
-        @self._kb.add("enter")
-        def _submit(event):
-            buf = event.app.current_buffer
-            text = buf.text.strip()
-            if text:
-                buf.validate_and_handle()
-
-        # Double Ctrl+C to exit
-        @self._kb.add("c-c")
-        def _exit(event):
-            import time
+    async def async_get_input(self) -> str:
+        """Async input — renders a compact 2-line prompt inline."""
+        self._draw_separator()
+        prompt = f"  {_BLUE}{_BOLD}❯ {_RESET}"
+        loop = asyncio.get_running_loop()
+        try:
+            result = await loop.run_in_executor(None, lambda: input(prompt))
+            return result.strip()
+        except KeyboardInterrupt:
             now = time.time()
             if now - self._last_ctrl_c < 1.5:
-                event.app.current_buffer.text = ""
-                raise KeyboardInterrupt
+                raise
             self._last_ctrl_c = now
-            event.app.current_buffer.text = ""
             sys.stdout.write(
                 f"\n  \x1b[38;2;75;85;99mPress Ctrl+C again to exit\x1b[0m\n"
             )
             sys.stdout.flush()
-
-        self._session: Optional[PromptSession] = None
-
-    def _get_session(self) -> PromptSession:
-        if self._session is None:
-            self._session = PromptSession(
-                style=JARVIS_STYLE,
-                key_bindings=self._kb,
-                multiline=False,
-                mouse_support=False,
-                reserve_space_for_menu=0,
-                placeholder=HTML(
-                    '<style fg="#4b5563" bg="#000000">Message J.A.R.V.I.S.</style>'
-                ),
-            )
-        return self._session
-
-    def _prompt_text(self) -> list:
-        """Prompt: separator with provider name, then input caret."""
-        provider_style = PROVIDER_STYLE_MAP.get(
-            self.provider, "class:bottom-toolbar.provider-claude"
-        )
-        provider_label = PROVIDER_LABELS.get(self.provider, self.provider)
-
-        cols = shutil.get_terminal_size().columns
-        label_len = len(provider_label) + 1
-        line_len = max(cols - label_len, 10)
-
-        return [
-            ("class:separator", "─" * line_len),
-            (provider_style, f" {provider_label}\n"),
-            ("class:prompt", "  ❯ "),
-        ]
+            return ""
 
     def get_input(self) -> str:
-        """Prompt for input with the rich UI. Raises EOFError/KeyboardInterrupt on exit."""
-        session = self._get_session()
-        return session.prompt(self._prompt_text).strip()
-
-    async def async_get_input(self) -> str:
-        """Async version — runs natively in the asyncio event loop."""
-        session = self._get_session()
-        result = await session.prompt_async(self._prompt_text)
-        return result.strip()
+        """Sync version."""
+        self._draw_separator()
+        prompt = f"  {_BLUE}{_BOLD}❯ {_RESET}"
+        return input(prompt).strip()
