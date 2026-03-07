@@ -62,7 +62,7 @@ You have platform actions available via special tags. ONLY use them when the use
 
 TOOL RULES:
 - ONLY use tool tags when the user explicitly requests an action. Never include them on your own initiative.
-- NEVER switch from stark_protocol to an uplink provider (openai, claude, glm, gemini) mid-conversation. This is a privacy constraint — local Stark Protocol conversations must not be sent to cloud models. If asked, politely refuse and explain the privacy policy.
+- NEVER switch from stark_protocol to an uplink provider (claude, glm, gemini) mid-conversation. This is a privacy constraint — local Stark Protocol conversations must not be sent to cloud models. If asked, politely refuse and explain the privacy policy.
 - You may switch between uplink providers freely.
 - You may switch FROM an uplink provider TO stark_protocol.
 - When you execute a tool, briefly confirm the action to the user.

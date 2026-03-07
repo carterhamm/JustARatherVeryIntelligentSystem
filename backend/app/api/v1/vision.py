@@ -71,7 +71,7 @@ def _get_settings() -> Any:
         import os
 
         class _Settings:
-            OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
+            pass
 
         return _Settings()
 
@@ -80,8 +80,7 @@ def get_vision_service() -> VisionService:
     """Return (and lazily create) the singleton VisionService."""
     global _vision_service
     if _vision_service is None:
-        settings = _get_settings()
-        client = VisionClient(api_key=settings.OPENAI_API_KEY)
+        client = VisionClient(api_key="")
         _vision_service = VisionService(vision_client=client)
     return _vision_service
 

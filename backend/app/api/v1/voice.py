@@ -67,7 +67,6 @@ def _get_settings() -> Any:
         import os
 
         class _Settings:
-            OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
             ELEVENLABS_API_KEY: str = os.getenv("ELEVENLABS_API_KEY", "")
 
         return _Settings()
@@ -103,7 +102,7 @@ def get_voice_service() -> VoiceService:
     global _voice_service
     if _voice_service is None:
         from app.config import settings as app_settings
-        whisper = WhisperClient(api_key=app_settings.OPENAI_API_KEY)
+        whisper = WhisperClient(api_key="")
         elevenlabs = ElevenLabsClient(api_key=app_settings.ELEVENLABS_API_KEY)
         fallback = CoquiTTSClient()
 

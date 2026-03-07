@@ -36,9 +36,9 @@ class VectorStore:
         self._oai: Optional[AsyncOpenAI] = embedding_client
 
     def _get_openai(self) -> AsyncOpenAI:
-        """Lazy-initialise the OpenAI client if not injected."""
+        """Lazy-initialise the embedding client if not injected."""
         if self._oai is None:
-            self._oai = AsyncOpenAI()  # reads OPENAI_API_KEY from env
+            self._oai = AsyncOpenAI(api_key="")  # TODO: swap to non-OpenAI embedding provider
         return self._oai
 
     # ── Embedding ───────────────────────────────────────────────────────

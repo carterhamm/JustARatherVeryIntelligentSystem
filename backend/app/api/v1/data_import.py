@@ -26,7 +26,6 @@ from typing import Any
 
 import structlog
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
-from openai import AsyncOpenAI
 
 from app.config import settings
 from app.core.dependencies import get_current_active_user
@@ -290,16 +289,18 @@ def _get_graph_store() -> GraphStore:
 
 
 def _get_vector_store() -> VectorStore:
-    """Build a VectorStore backed by Qdrant with OpenAI embeddings."""
+    """Build a VectorStore backed by Qdrant."""
     qdrant = get_qdrant_store()
-    oai = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
-    return VectorStore(qdrant_store=qdrant, embedding_client=oai)
+    from openai import AsyncOpenAI
+    client = AsyncOpenAI(api_key="")  # TODO: swap to non-OpenAI embedding provider
+    return VectorStore(qdrant_store=qdrant, embedding_client=client)
 
 
 def _get_entity_extractor() -> EntityExtractor:
-    """Build an EntityExtractor backed by OpenAI."""
-    oai = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
-    return EntityExtractor(llm_client=oai)
+    """Build an EntityExtractor."""
+    from openai import AsyncOpenAI
+    client = AsyncOpenAI(api_key="")  # TODO: swap to non-OpenAI embedding provider
+    return EntityExtractor(llm_client=client)
 
 
 @router.post(

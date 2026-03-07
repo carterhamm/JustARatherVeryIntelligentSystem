@@ -75,7 +75,7 @@ class SearchKnowledgeTool(BaseTool):
             return "No search query provided."
 
         # Generate embedding
-        client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+        client = AsyncOpenAI(api_key="")  # TODO: swap to non-OpenAI embedding provider
         embed_resp = await client.embeddings.create(
             input=query,
             model="text-embedding-3-small",

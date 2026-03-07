@@ -58,14 +58,14 @@ async def _build_knowledge_service(
     neo4j_client = get_neo4j_client()
     qdrant_store = get_qdrant_store()
 
-    # -- openai --
-    openai_client = AsyncOpenAI()
+    # -- embedding client (OpenAI-compatible SDK, key not configured) --
+    embedding_client = AsyncOpenAI(api_key="")  # TODO: swap to non-OpenAI embedding provider
 
     # -- graphrag components --
-    entity_extractor = EntityExtractor(llm_client=openai_client)
+    entity_extractor = EntityExtractor(llm_client=embedding_client)
     graph_store = GraphStore(neo4j_client=neo4j_client)
     vector_store = VectorStore(
-        qdrant_store=qdrant_store, embedding_client=openai_client
+        qdrant_store=qdrant_store, embedding_client=embedding_client
     )
     hybrid_retriever = HybridRetriever(
         graph_store=graph_store,

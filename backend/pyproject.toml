@@ -37,9 +37,8 @@ passlib = { version = "^1.7.4", extras = ["bcrypt"] }
 cryptography = "^42.0.7"
 
 # AI / LLM
-openai = "^1.30.0"
+openai = "^1.30.0"              # SDK used by Perplexity, GLM, Stark Protocol (OpenAI-compatible APIs)
 langchain = "^0.2.1"
-langchain-openai = "^0.1.8"
 langgraph = "^0.0.55"
 
 # HTTP client

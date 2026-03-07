@@ -12,7 +12,6 @@ class LLMProvider(str, enum.Enum):
 
     CLAUDE = "claude"
     GEMINI = "gemini"
-    OPENAI = "openai"
     STARK_PROTOCOL = "stark_protocol"
 
 

@@ -335,9 +335,7 @@ class DataImportService:
         """Generate embeddings for a list of text chunks."""
         from openai import AsyncOpenAI
 
-        client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
-
-        # OpenAI supports batch embedding
+        client = AsyncOpenAI(api_key="")  # TODO: swap to non-OpenAI embedding provider
         response = await client.embeddings.create(
             input=chunks,
             model="text-embedding-3-small",
@@ -408,9 +406,9 @@ class DataImportService:
 
         # Fallback: simple NER via LLM
         try:
-            from app.integrations.llm_client import LLMClient
+            from app.integrations.llm.factory import get_llm_client
 
-            llm = LLMClient(api_key=settings.OPENAI_API_KEY)
+            llm = get_llm_client()
             result = await llm.chat_completion(
                 messages=[
                     {

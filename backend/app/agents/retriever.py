@@ -107,10 +107,10 @@ async def retriever_node(state: AgentState) -> dict[str, Any]:
 # ── Helpers ──────────────────────────────────────────────────────────────
 
 async def _embed_query(text: str) -> list[float]:
-    """Generate an embedding vector for the given text using OpenAI."""
+    """Generate an embedding vector for the given text."""
     from openai import AsyncOpenAI
 
-    client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+    client = AsyncOpenAI(api_key="")  # TODO: swap to non-OpenAI embedding provider
     response = await client.embeddings.create(
         input=text,
         model="text-embedding-3-small",
