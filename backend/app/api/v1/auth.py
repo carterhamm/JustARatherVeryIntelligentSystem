@@ -17,6 +17,7 @@ from app.models.user import User
 from app.schemas.auth import (
     AuthResponse,
     CLIAuthRequest,
+    CLISetupRequest,
     SetSHTRequest,
     LookupRequest,
     LookupResponse,
@@ -156,6 +157,38 @@ async def set_sht(
     current_user.preferences = prefs
     await db.commit()
     return {"status": "ok", "message": "Secure Handshake Token set."}
+
+
+# -- One-time CLI setup (Setup Token + username → store SHT) ---------------
+
+@router.post("/cli-setup", status_code=200)
+async def cli_setup(
+    payload: CLISetupRequest,
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, str]:
+    """One-time CLI setup: verify Setup Token, verify username exists, store SHT.
+
+    Uses the server's SETUP_TOKEN to prove ownership. No JWT required.
+    """
+    if not settings.SETUP_TOKEN or payload.setup_token != settings.SETUP_TOKEN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid Setup Token.",
+        )
+
+    user = await AuthService.get_user_by_username(db, payload.username)
+    if not user or not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Username not found.",
+        )
+
+    prefs = user.preferences or {}
+    prefs["sht_hash"] = hash_password(payload.sht)
+    user.preferences = prefs
+    await db.commit()
+
+    return {"status": "ok", "username": user.username}
 
 
 # -- CLI authentication (SHT + username → tokens) -------------------------

@@ -116,3 +116,10 @@ class CLIAuthRequest(BaseModel):
 class SetSHTRequest(BaseModel):
     """Set the Secure Handshake Token (requires auth)."""
     sht: str = Field(min_length=4, max_length=256)
+
+
+class CLISetupRequest(BaseModel):
+    """One-time CLI setup: Setup Token + username + SHT."""
+    setup_token: str = Field(min_length=1, max_length=256)
+    username: str = Field(min_length=1, max_length=64)
+    sht: str = Field(min_length=4, max_length=256)

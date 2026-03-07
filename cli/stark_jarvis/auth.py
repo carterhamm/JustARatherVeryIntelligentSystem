@@ -2,9 +2,9 @@
 
 First-time setup (`jarvis login`):
   1. Set gate username + password (static, local)
-  2. Enter Setup Token (one-time, proves ownership, = server's SETUP_TOKEN)
-  3. Create JARVIS account OR link existing one
-  4. Set SHT (Secure Handshake Token — user-chosen, stored on server)
+  2. Enter Setup Token (one-time, proves ownership)
+  3. Enter JARVIS Username (verified against server)
+  4. Choose SHT (Secure Handshake Token — user-chosen, stored on server)
 
 Every subsequent access:
   Layer 1: Gate Username (local)
@@ -86,7 +86,7 @@ def _api_url(path: str) -> str:
 
 
 def login(server_url: str) -> None:
-    """First-time setup. Sets gate credentials, creates/links account, sets SHT."""
+    """First-time setup. Sets gate credentials, verifies username, sets SHT."""
     config.server_url = server_url
 
     print(f"\n  {_BLUE}{_BOLD}╔══════════════════════════════════════╗{_RESET}")
@@ -104,6 +104,11 @@ def login(server_url: str) -> None:
         sys.exit(1)
     except Exception:
         print(f"  {_RED}Server error.{_RESET}")
+        sys.exit(1)
+
+    if not setup_complete:
+        print(f"  {_RED}No owner account exists yet.{_RESET}")
+        print(f"  {_DIM}Create your account at {server_url} first, then run this again.{_RESET}")
         sys.exit(1)
 
     # ── Step 1: Set gate credentials ──
@@ -128,94 +133,26 @@ def login(server_url: str) -> None:
     config.set("gate_password_hash", _hash_value(gate_pass))
     print(f"  {_GREEN}Gate credentials set.{_RESET}\n")
 
-    # ── Step 2: Create or link JARVIS account ──
-    # This requires the Setup Token (one-time, to prove ownership)
-    access_token = None
+    # ── Step 2: Setup Token ──
+    print(f"  {_BLUE}{_BOLD}Step 2:{_RESET} Enter the Setup Token")
+    print(f"  {_DIM}One-time token to prove ownership.{_RESET}\n")
 
-    if not setup_complete:
-        print(f"  {_BLUE}{_BOLD}Step 2:{_RESET} Create your JARVIS account")
-        print(f"  {_DIM}No owner account exists yet.{_RESET}\n")
+    setup_token = getpass.getpass(f"  {_BLUE}Setup Token: {_RESET}")
+    if not setup_token:
+        print(f"  {_RED}Cannot be empty.{_RESET}")
+        sys.exit(1)
 
-        setup_token = getpass.getpass(f"  {_BLUE}Setup Token: {_RESET}")
-        if not setup_token:
-            print(f"  {_RED}Cannot be empty.{_RESET}")
-            sys.exit(1)
+    # ── Step 3: JARVIS Username ──
+    print(f"\n  {_BLUE}{_BOLD}Step 3:{_RESET} Enter your JARVIS username")
+    print(f"  {_DIM}The username you registered with on the site.{_RESET}\n")
 
-        username = input(f"  {_BLUE}Username: {_RESET}").strip()
-        if not username or len(username) < 3:
-            print(f"  {_RED}Username must be at least 3 characters.{_RESET}")
-            sys.exit(1)
+    username = input(f"  {_BLUE}JARVIS Username: {_RESET}").strip()
+    if not username:
+        print(f"  {_RED}Cannot be empty.{_RESET}")
+        sys.exit(1)
 
-        email = input(f"  {_BLUE}Email: {_RESET}").strip()
-        if not email or "@" not in email:
-            print(f"  {_RED}Invalid email.{_RESET}")
-            sys.exit(1)
-
-        password = getpass.getpass(f"  {_BLUE}Password: {_RESET}")
-        if len(password) < 8:
-            print(f"  {_RED}Password must be at least 8 characters.{_RESET}")
-            sys.exit(1)
-        password2 = getpass.getpass(f"  {_BLUE}Confirm Password: {_RESET}")
-        if password != password2:
-            print(f"  {_RED}Passwords do not match.{_RESET}")
-            sys.exit(1)
-
-        try:
-            resp = httpx.post(
-                f"{server_url}/api/v1/auth/register",
-                json={"email": email, "username": username, "password": password},
-                headers={"X-Setup-Token": setup_token},
-                timeout=15.0,
-            )
-            resp.raise_for_status()
-        except httpx.HTTPStatusError as exc:
-            detail = exc.response.json().get("detail", str(exc))
-            print(f"  {_RED}Registration failed: {detail}{_RESET}")
-            sys.exit(1)
-        except httpx.ConnectError:
-            print(f"  {_RED}Cannot reach server.{_RESET}")
-            sys.exit(1)
-
-        data = resp.json()
-        access_token = data["access_token"]
-        config.set("jarvis_username", username)
-        print(f"  {_GREEN}Account created: {username}{_RESET}\n")
-
-    else:
-        print(f"  {_BLUE}{_BOLD}Step 2:{_RESET} Log in to your JARVIS account")
-        print(f"  {_DIM}Owner account exists. Authenticate to link CLI.{_RESET}\n")
-
-        email = input(f"  {_BLUE}Email: {_RESET}").strip()
-        password = getpass.getpass(f"  {_BLUE}Password: {_RESET}")
-
-        try:
-            resp = httpx.post(
-                f"{server_url}/api/v1/auth/login",
-                json={"email": email, "password": password},
-                timeout=15.0,
-            )
-            resp.raise_for_status()
-        except httpx.HTTPStatusError as exc:
-            if exc.response.status_code == 401:
-                print(f"  {_RED}Invalid credentials.{_RESET}")
-            elif exc.response.status_code == 429:
-                print(f"  {_RED}Too many attempts. Try again in 15 minutes.{_RESET}")
-            else:
-                detail = exc.response.json().get("detail", str(exc))
-                print(f"  {_RED}Login failed: {detail}{_RESET}")
-            sys.exit(1)
-        except httpx.ConnectError:
-            print(f"  {_RED}Cannot reach server.{_RESET}")
-            sys.exit(1)
-
-        data = resp.json()
-        access_token = data["access_token"]
-        username = data.get("user", {}).get("username", "")
-        config.set("jarvis_username", username)
-        print(f"  {_GREEN}Authenticated: {username}{_RESET}\n")
-
-    # ── Step 3: Set the SHT ──
-    print(f"  {_BLUE}{_BOLD}Step 3:{_RESET} Set your Secure Handshake Token (SHT)")
+    # ── Step 4: Choose SHT ──
+    print(f"\n  {_BLUE}{_BOLD}Step 4:{_RESET} Set your Secure Handshake Token (SHT)")
     print(f"  {_DIM}This passphrase is required every time you access J.A.R.V.I.S.{_RESET}")
     print(f"  {_DIM}Same across CLI and website.{_RESET}\n")
 
@@ -228,29 +165,30 @@ def login(server_url: str) -> None:
         print(f"  {_RED}SHT does not match.{_RESET}")
         sys.exit(1)
 
-    # Store SHT on the server
+    # ── Send to server (one call) ──
     try:
         resp = httpx.post(
-            f"{server_url}/api/v1/auth/set-sht",
-            json={"sht": sht},
-            headers={"Authorization": f"Bearer {access_token}"},
+            f"{server_url}/api/v1/auth/cli-setup",
+            json={"setup_token": setup_token, "username": username, "sht": sht},
             timeout=15.0,
         )
         resp.raise_for_status()
     except httpx.HTTPStatusError as exc:
         detail = exc.response.json().get("detail", str(exc))
-        print(f"  {_RED}Failed to set SHT: {detail}{_RESET}")
+        print(f"  {_RED}{detail}{_RESET}")
+        sys.exit(1)
+    except httpx.ConnectError:
+        print(f"  {_RED}Cannot reach server.{_RESET}")
         sys.exit(1)
     except Exception as exc:
-        print(f"  {_RED}Failed to set SHT: {exc}{_RESET}")
+        print(f"  {_RED}Setup failed: {exc}{_RESET}")
         sys.exit(1)
 
-    # Also store SHT hash locally for fast local pre-check
+    config.set("jarvis_username", username)
     config.set("sht_hash", _hash_value(sht))
     _clear_failures()
 
-    print(f"  {_GREEN}SHT set successfully.{_RESET}\n")
-    print(f"  {_GREEN}{_BOLD}Stark Secure Server — connection established.{_RESET}")
+    print(f"\n  {_GREEN}{_BOLD}Stark Secure Server — connection established.{_RESET}")
     print(f"  {_GREEN}J.A.R.V.I.S. is ready, Sir.{_RESET}\n")
 
 
