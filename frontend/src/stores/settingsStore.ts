@@ -29,7 +29,7 @@ function getStoredPreference(): ModelProvider {
   } catch {
     // ignore
   }
-  return 'claude';
+  return 'gemini';
 }
 
 export const useSettingsStore = create<SettingsState>((set, get) => ({

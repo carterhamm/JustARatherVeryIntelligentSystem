@@ -22,7 +22,7 @@ import websockets.exceptions
 
 from stark_jarvis.config import config
 from stark_jarvis.display import (
-    JARVIS_BLUE, DIM, BOLD, RESET,
+    JARVIS_BLUE, JARVIS_ERROR_RED, DIM, BOLD, RESET,
     PROVIDER_COLORS, PROVIDER_LABELS,
     print_banner,
     banner_line_count,
@@ -94,6 +94,39 @@ async def chat_session(
             close_timeout=5,
             max_size=10 * 1024 * 1024,
         ) as ws:
+            # Check for immediate auth rejection — the server sends an
+            # error JSON + close(1008) if the token is invalid/expired.
+            try:
+                early = await asyncio.wait_for(ws.recv(), timeout=0.5)
+                early_msg = json.loads(early) if isinstance(early, str) else {}
+                if early_msg.get("type") == "error":
+                    # Token expired — re-authenticate and retry
+                    stop_anim.set()
+                    anim_thread.join(timeout=0.5)
+                    reset_terminal_bg()
+                    show_cursor()
+                    print_error("Session expired. Re-authenticating...")
+                    from stark_jarvis.auth import unlock
+                    new_access, new_refresh = unlock()
+                    config.save_session(new_access, new_refresh)
+                    # Retry with fresh token
+                    await chat_session(new_access, new_refresh, model_provider)
+                    return
+            except asyncio.TimeoutError:
+                pass  # No immediate error — connection is healthy
+            except websockets.exceptions.ConnectionClosed:
+                # Server closed before we could read — same as auth failure
+                stop_anim.set()
+                anim_thread.join(timeout=0.5)
+                reset_terminal_bg()
+                show_cursor()
+                print_error("Session expired. Re-authenticating...")
+                from stark_jarvis.auth import unlock
+                new_access, new_refresh = unlock()
+                config.save_session(new_access, new_refresh)
+                await chat_session(new_access, new_refresh, model_provider)
+                return
+
             # Stop connecting animation
             stop_anim.set()
             anim_thread.join(timeout=0.5)
@@ -125,13 +158,13 @@ async def chat_session(
                 # Sync provider from input UI (user may have cycled)
                 provider = jarvis_input.provider
 
-                # Move cursor to input area for prompt_toolkit
+                # Reset scroll region so prompt_toolkit can render freely,
+                # then move cursor to input area.
+                reset_scroll_region()
                 move_cursor(input_row)
 
                 try:
-                    user_input = await asyncio.get_event_loop().run_in_executor(
-                        None, jarvis_input.get_input
-                    )
+                    user_input = await jarvis_input.async_get_input()
                 except (EOFError, KeyboardInterrupt):
                     move_cursor(chat_row)
                     sys.stdout.write(
@@ -139,9 +172,13 @@ async def chat_session(
                     )
                     sys.stdout.flush()
                     break
-
-                # Redraw static input area (prompt_toolkit erased it on exit)
-                draw_static_input(input_row, provider)
+                except Exception:
+                    # prompt_toolkit can fail in edge cases — recover gracefully
+                    continue
+                finally:
+                    # Restore scroll region and redraw input area
+                    set_scroll_region(chat_top, scroll_bottom)
+                    draw_static_input(input_row, provider)
 
                 if not user_input:
                     continue
@@ -182,8 +219,8 @@ async def chat_session(
                         )
                     else:
                         sys.stdout.write(
-                            f"\n  {JARVIS_BLUE}Unknown provider. "
-                            f"Options: {', '.join(valid)}{RESET}\n\n"
+                            f"\n    {JARVIS_ERROR_RED}Unknown provider. "
+                            f"Options: {', '.join(valid)}{RESET}\n"
                         )
                     sys.stdout.flush()
                     chat_row = min(chat_row + 3, scroll_bottom)
@@ -243,7 +280,7 @@ async def chat_session(
                         clear_thinking()
                         show_cursor()
                         sys.stdout.write(
-                            f"\n  {JARVIS_BLUE}Response timed out.{RESET}\n\n"
+                            f"\n    {JARVIS_ERROR_RED}Response timed out.{RESET}\n"
                         )
                         sys.stdout.flush()
                         chat_row = min(chat_row + 3, scroll_bottom)
@@ -301,13 +338,13 @@ async def chat_session(
                             or "auth" in error_text.lower()
                         ):
                             sys.stdout.write(
-                                f"\n  {JARVIS_BLUE}Session expired. "
+                                f"\n    {JARVIS_ERROR_RED}Session expired. "
                                 f"Run: jarvis login{RESET}\n"
                             )
                             sys.stdout.flush()
                             return
                         sys.stdout.write(
-                            f"\n  {JARVIS_BLUE}{error_text}{RESET}\n\n"
+                            f"\n    {JARVIS_ERROR_RED}{error_text}{RESET}\n"
                         )
                         sys.stdout.flush()
                         chat_row = min(chat_row + 3, scroll_bottom)
@@ -331,7 +368,9 @@ async def chat_session(
     except (ConnectionRefusedError, OSError) as exc:
         print_error(f"Cannot reach server: {exc}")
     except websockets.exceptions.ConnectionClosed:
-        print_system_centered("Connection closed.")
+        print_error("Connection lost. Your session may have expired. Run: jarvis login")
+    except Exception as exc:
+        print_error(f"Unexpected: {exc}")
     finally:
         stop_anim.set()
         if anim_thread.is_alive():

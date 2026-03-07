@@ -138,3 +138,9 @@ class JarvisInput:
         """Prompt for input with the rich UI. Raises EOFError/KeyboardInterrupt on exit."""
         session = self._get_session()
         return session.prompt(self._prompt_text).strip()
+
+    async def async_get_input(self) -> str:
+        """Async version — runs natively in the asyncio event loop."""
+        session = self._get_session()
+        result = await session.prompt_async(self._prompt_text)
+        return result.strip()

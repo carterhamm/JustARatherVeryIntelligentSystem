@@ -78,7 +78,7 @@ class JarvisConfig:
 
     @property
     def model_provider(self) -> str:
-        return self._data.get("model_provider", "claude")
+        return self._data.get("model_provider", "gemini")
 
     @model_provider.setter
     def model_provider(self, provider: str) -> None:

@@ -74,7 +74,7 @@ class Settings(BaseSettings):
     JARVIS_VOICE_ENABLED: bool = False
 
     # -- Default LLM Provider -------------------------------------------------
-    DEFAULT_LLM_PROVIDER: str = "claude"
+    DEFAULT_LLM_PROVIDER: str = "gemini"
 
     # -- ElevenLabs -----------------------------------------------------------
     ELEVENLABS_API_KEY: str = ""

@@ -86,9 +86,18 @@ def _api_url(path: str) -> str:
 
 
 def login(server_url: str) -> None:
-    """First-time setup. Sets gate credentials, verifies username, sets SHT."""
+    """Login to JARVIS. First-time: full setup. Already configured: re-authenticate."""
     config.server_url = server_url
 
+    # If already set up, just re-authenticate to get fresh tokens
+    if config.is_setup():
+        print(f"\n  {_BLUE}{_BOLD}Stark Secure Server Login{_RESET}")
+        print(f"  {_DIM}Reconnecting to {server_url}{_RESET}\n")
+        access_token, refresh_token = unlock()
+        config.save_session(access_token, refresh_token)
+        return
+
+    # ── First-time setup ──
     print(f"\n  {_BLUE}{_BOLD}╔══════════════════════════════════════╗{_RESET}")
     print(f"  {_BLUE}{_BOLD}║   Stark Secure Server — CLI Setup    ║{_RESET}")
     print(f"  {_BLUE}{_BOLD}╚══════════════════════════════════════╝{_RESET}")

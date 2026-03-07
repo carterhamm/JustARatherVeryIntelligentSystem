@@ -9,7 +9,8 @@ import time
 
 # ── JARVIS colour palette (matching web UI) ──────────────────────────────
 JARVIS_BLUE = "\x1b[38;2;0;212;255m"       # #00d4ff — primary cyan
-JARVIS_RED = "\x1b[38;2;239;68;68m"        # #ef4444 — errors / stark protocol
+JARVIS_RED = "\x1b[38;2;239;68;68m"        # #ef4444 — stark protocol
+JARVIS_ERROR_RED = "\x1b[38;2;180;40;40m"  # #b42828 — darker toned red for errors
 JARVIS_GREEN = "\x1b[38;2;52;211;153m"     # #34d399 — success
 JARVIS_DIM = "\x1b[38;2;75;85;99m"         # #4b5563 — muted text
 CLAUDE_ORANGE = "\x1b[38;2;255;140;0m"     # #ff8c00 — claude provider
@@ -39,7 +40,17 @@ _spinner_active = False
 _spinner_thread: threading.Thread | None = None
 _spinner_provider = ""
 
-_SPINNER_FRAMES = ["◐", "◓", "◑", "◒"]
+# Provider-specific spinner frames (match their CLI tools' style)
+_SPINNER_FRAMES_CLAUDE = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+_SPINNER_FRAMES_GEMINI = ["⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"]
+_SPINNER_FRAMES_STARK = ["◐", "◓", "◑", "◒"]
+_SPINNER_FRAMES_DEFAULT = _SPINNER_FRAMES_STARK
+
+_PROVIDER_SPINNERS = {
+    "claude": _SPINNER_FRAMES_CLAUDE,
+    "gemini": _SPINNER_FRAMES_GEMINI,
+    "stark_protocol": _SPINNER_FRAMES_STARK,
+}
 
 # ── Geometry ─────────────────────────────────────────────────────────────
 _BOX_W = 43  # inner width of banner box
@@ -162,10 +173,11 @@ def run_connecting_animation(
     bv = _BOX_W + 2
     label = PROVIDER_LABELS.get(provider, provider)
     color = PROVIDER_COLORS.get(provider, JARVIS_BLUE)
+    frames = _PROVIDER_SPINNERS.get(provider, _SPINNER_FRAMES_DEFAULT)
 
     i = 0
     while not stop_event.is_set():
-        spinner = _SPINNER_FRAMES[i % len(_SPINNER_FRAMES)]
+        spinner = frames[i % len(frames)]
         status = f"{spinner} Connecting [{label}]..."
         box = _box_lines(status=status, status_color=color)
 
@@ -177,7 +189,7 @@ def run_connecting_animation(
         sys.stdout.write(buf)
         sys.stdout.flush()
         i += 1
-        stop_event.wait(0.12)
+        stop_event.wait(0.08)
 
 
 # ── Static input area (drawn when prompt_toolkit is not active) ──────────
@@ -213,7 +225,7 @@ def print_system_centered(text: str) -> None:
 
 
 def print_error(text: str) -> None:
-    print(f"\n  {JARVIS_RED}{BOLD}ERROR{RESET} {JARVIS_RED}{text}{RESET}")
+    print(f"\n  {JARVIS_ERROR_RED}{BOLD}ERROR{RESET} {JARVIS_ERROR_RED}{text}{RESET}")
 
 
 def print_success(text: str) -> None:
@@ -221,19 +233,40 @@ def print_success(text: str) -> None:
 
 
 def print_user_message(text: str) -> None:
-    """Print the user's message in the chat area, JARVIS blue."""
-    sys.stdout.write(f"\n  {JARVIS_BLUE}{text}{RESET}\n\n")
+    """Print the user's message right-aligned in JARVIS blue."""
+    cols, _ = _term_size()
+    pad_r = 4  # right padding
+    for line in text.split("\n"):
+        visible_len = len(line)
+        pad_l = max(cols - visible_len - pad_r, 4)
+        sys.stdout.write(f"\n{' ' * pad_l}{JARVIS_BLUE}{line}{RESET}")
+    sys.stdout.write(f"{RESET}\n")
     sys.stdout.flush()
 
 
+_assistant_line_start = True  # track start of line for padding
+
+
 def print_assistant(content: str) -> None:
-    sys.stdout.write(f"{RESET}{content}")
+    global _assistant_line_start
+    pad = "    "  # 4-char left padding
+    out = ""
+    for ch in content:
+        if _assistant_line_start:
+            out += pad
+            _assistant_line_start = False
+        out += ch
+        if ch == "\n":
+            _assistant_line_start = True
+    sys.stdout.write(f"{RESET}{out}")
     sys.stdout.flush()
 
 
 def print_assistant_end() -> None:
+    global _assistant_line_start
+    _assistant_line_start = True
     show_cursor()
-    sys.stdout.write(f"{RESET}\n\n")
+    sys.stdout.write(f"{RESET}\n")
     sys.stdout.flush()
 
 
@@ -263,15 +296,16 @@ def clear_thinking() -> None:
 
 
 def _spin() -> None:
+    frames = _PROVIDER_SPINNERS.get(_spinner_provider, _SPINNER_FRAMES_DEFAULT)
+    label = PROVIDER_LABELS.get(_spinner_provider, "")
+    color = PROVIDER_COLORS.get(_spinner_provider, JARVIS_BLUE)
+    suffix = f" [{label}]" if label else ""
     i = 0
     while _spinner_active:
-        frame = _SPINNER_FRAMES[i % len(_SPINNER_FRAMES)]
-        label = PROVIDER_LABELS.get(_spinner_provider, "")
-        color = PROVIDER_COLORS.get(_spinner_provider, JARVIS_BLUE)
-        suffix = f" [{label}]" if label else ""
+        frame = frames[i % len(frames)]
         sys.stdout.write(
-            f"{CLEAR_LINE}  {color}{frame}{RESET} {DIM}Processing{suffix}...{RESET}"
+            f"{CLEAR_LINE}    {color}{frame}{RESET} {DIM}{suffix}...{RESET}"
         )
         sys.stdout.flush()
         i += 1
-        time.sleep(0.1)
+        time.sleep(0.08)
