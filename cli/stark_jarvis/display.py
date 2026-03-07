@@ -240,31 +240,315 @@ def print_user_message(text: str) -> None:
         visible_len = len(line)
         pad_l = max(cols - visible_len - pad_r, 4)
         sys.stdout.write(f"\n{' ' * pad_l}{JARVIS_BLUE}{line}{RESET}")
-    sys.stdout.write(f"{RESET}\n")
+    sys.stdout.write(f"{RESET}\n\n")
     sys.stdout.flush()
 
 
-_assistant_line_start = True  # track start of line for padding
+_PAD_L = "    "  # 4-char left padding for responses
+_PAD_R = 4       # right margin
+_assistant_col = 0   # current column position in the line
+_assistant_word = ""        # word buffer (may contain ANSI codes)
+_assistant_word_vlen = 0    # visible length of buffered word
+
+# ── Markdown → ANSI streaming parser ─────────────────────────────────────
+# Converts **bold**, *italic*, `code`, ```code blocks```, # headings
+# into ANSI terminal formatting during streaming output.
+
+_ANSI_BOLD_ON = "\x1b[1m"
+_ANSI_ITALIC_ON = "\x1b[3m"
+_ANSI_CODE_COLOR = "\x1b[38;2;140;140;140m"
+
+# Token types for the word wrapper
+_TK_CHAR = 0    # visible character (width 1)
+_TK_SPACE = 1   # word boundary (width 1)
+_TK_NL = 2      # newline
+_TK_ANSI = 3    # zero-width ANSI escape
+
+_md_bold: bool = False
+_md_italic: bool = False
+_md_code: bool = False
+_md_code_block: bool = False
+_md_heading: bool = False
+_md_pending: str = ""
+_md_line_start: bool = True
+
+
+def _md_reset() -> None:
+    global _md_bold, _md_italic, _md_code, _md_code_block
+    global _md_heading, _md_pending, _md_line_start
+    _md_bold = _md_italic = _md_code = _md_code_block = _md_heading = False
+    _md_pending = ""
+    _md_line_start = True
+
+
+def _md_style() -> str:
+    """ANSI sequence reflecting all currently active markdown styles."""
+    s = RESET
+    if _md_bold:
+        s += _ANSI_BOLD_ON
+    if _md_italic:
+        s += _ANSI_ITALIC_ON
+    if _md_code or _md_code_block:
+        s += _ANSI_CODE_COLOR
+    if _md_heading:
+        s += JARVIS_BLUE + _ANSI_BOLD_ON
+    return s
+
+
+def _ch_tok(ch: str) -> tuple[int, str]:
+    if ch == "\n":
+        return (_TK_NL, "\n")
+    if ch == " ":
+        return (_TK_SPACE, " ")
+    return (_TK_CHAR, ch)
+
+
+def _text_toks(text: str) -> list[tuple[int, str]]:
+    return [_ch_tok(c) for c in text]
+
+
+def _md_feed(ch: str) -> list[tuple[int, str]]:
+    """Feed one raw character through the markdown parser."""
+    global _md_pending, _md_bold, _md_italic, _md_code
+    global _md_code_block, _md_heading, _md_line_start
+
+    # ── Code block mode: pass through until \n```\n ──
+    if _md_code_block:
+        _md_pending += ch
+        idx = _md_pending.find("\n```\n")
+        if idx != -1:
+            before = _md_pending[:idx]
+            after = _md_pending[idx + 5:]
+            _md_pending = ""
+            _md_code_block = False
+            _md_line_start = True
+            toks = _text_toks(before)
+            toks.append((_TK_ANSI, _md_style()))
+            toks.append((_TK_NL, "\n"))
+            for c in after:
+                toks.extend(_md_feed(c))
+            return toks
+        # Hold back chars that might be part of closing \n```\n
+        for sfx in ("\n```", "\n``", "\n`", "\n"):
+            if _md_pending.endswith(sfx):
+                safe = _md_pending[: -len(sfx)]
+                _md_pending = sfx
+                return _text_toks(safe)
+        safe = _md_pending
+        _md_pending = ""
+        return _text_toks(safe)
+
+    # ── Inline code mode: pass through until ` ──
+    if _md_code:
+        if ch == "`":
+            _md_code = False
+            return [(_TK_ANSI, _md_style())]
+        return [_ch_tok(ch)]
+
+    # ── Heading: end on newline ──
+    if _md_heading and ch == "\n":
+        _md_heading = False
+        _md_line_start = True
+        return [(_TK_ANSI, _md_style()), (_TK_NL, "\n")]
+
+    # ── Normal mode ──
+    _md_pending += ch
+    return _md_resolve()
+
+
+def _md_resolve() -> list[tuple[int, str]]:
+    """Resolve the pending buffer into tokens."""
+    global _md_pending, _md_bold, _md_italic, _md_code
+    global _md_code_block, _md_heading, _md_line_start
+
+    p = _md_pending
+    if not p:
+        return []
+
+    # ── Backticks ──
+    if p in ("`", "``"):
+        return []
+    if p == "```" and _md_line_start:
+        return []
+    if p.startswith("```") and _md_line_start:
+        if "\n" in p[3:]:
+            after_nl = p[p.index("\n", 3) + 1:]
+            _md_pending = ""
+            _md_code_block = True
+            _md_line_start = False
+            toks: list[tuple[int, str]] = [(_TK_ANSI, _ANSI_CODE_COLOR)]
+            for c in after_nl:
+                toks.extend(_md_feed(c))
+            return toks
+        return []
+    if p.startswith("```"):
+        _md_pending = ""
+        return _text_toks(p)
+    if p.startswith("``") and len(p) > 2:
+        _md_pending = ""
+        return _text_toks(p)
+    if p[0] == "`" and len(p) >= 2 and p[1] != "`":
+        _md_code = True
+        _md_pending = ""
+        toks = [(_TK_ANSI, _ANSI_CODE_COLOR)]
+        for c in p[1:]:
+            toks.append(_ch_tok(c))
+        return toks
+
+    # ── Stars ──
+    if p == "*":
+        return []
+    if p == "**":
+        _md_bold = not _md_bold
+        _md_pending = ""
+        return [(_TK_ANSI, _md_style())]
+    if p.startswith("**") and len(p) > 2:
+        _md_bold = not _md_bold
+        rest = p[2:]
+        _md_pending = ""
+        toks = [(_TK_ANSI, _md_style())]
+        for c in rest:
+            toks.extend(_md_feed(c))
+        return toks
+    if p[0] == "*" and len(p) >= 2 and p[1] != "*":
+        # Bullet: * followed by space at line start → literal
+        if _md_line_start and p[1] == " ":
+            _md_pending = ""
+            _md_line_start = False
+            return _text_toks(p)
+        _md_italic = not _md_italic
+        rest = p[1:]
+        _md_pending = ""
+        toks = [(_TK_ANSI, _md_style())]
+        for c in rest:
+            toks.extend(_md_feed(c))
+        return toks
+
+    # ── Headings ──
+    if _md_line_start and p[0] == "#":
+        if all(c == "#" for c in p):
+            return []
+        if p[-1] == " " and all(c == "#" for c in p[:-1]):
+            _md_heading = True
+            _md_pending = ""
+            _md_line_start = False
+            return [(_TK_ANSI, JARVIS_BLUE + _ANSI_BOLD_ON)]
+        if p[-1] not in ("#", " "):
+            _md_pending = ""
+            _md_line_start = False
+            return _text_toks(p)
+        return []
+
+    # ── Default: emit literally ──
+    _md_pending = ""
+    toks = []
+    for c in p:
+        if c == "\n":
+            _md_line_start = True
+            if _md_heading:
+                _md_heading = False
+                toks.append((_TK_ANSI, _md_style()))
+            toks.append((_TK_NL, "\n"))
+        else:
+            if _md_line_start and c not in ("#", "`"):
+                _md_line_start = False
+            toks.append(_ch_tok(c))
+    return toks
+
+
+def _md_flush() -> list[tuple[int, str]]:
+    """Flush pending buffer at end of response."""
+    global _md_pending
+    toks: list[tuple[int, str]] = []
+    if _md_code_block and _md_pending.rstrip("\n").endswith("```"):
+        idx = _md_pending.rstrip("\n").rfind("```")
+        toks.extend(_text_toks(_md_pending[:idx]))
+    elif _md_pending:
+        toks.extend(_text_toks(_md_pending))
+    _md_pending = ""
+    if _md_bold or _md_italic or _md_code or _md_code_block or _md_heading:
+        toks.append((_TK_ANSI, RESET))
+    return toks
 
 
 def print_assistant(content: str) -> None:
-    global _assistant_line_start
-    pad = "    "  # 4-char left padding
+    global _assistant_col, _assistant_word, _assistant_word_vlen
+    cols, _ = _term_size()
+    max_col = cols - _PAD_R
     out = ""
+
     for ch in content:
-        if _assistant_line_start:
-            out += pad
-            _assistant_line_start = False
-        out += ch
-        if ch == "\n":
-            _assistant_line_start = True
-    sys.stdout.write(f"{RESET}{out}")
+        for tk_type, tk_str in _md_feed(ch):
+            if tk_type == _TK_ANSI:
+                # Zero-width: attach to word buffer or output directly
+                if _assistant_word_vlen > 0:
+                    _assistant_word += tk_str
+                else:
+                    out += tk_str
+
+            elif tk_type == _TK_NL:
+                # Flush word then newline
+                if _assistant_word_vlen > 0:
+                    if _assistant_col == 0:
+                        out += _PAD_L
+                        _assistant_col = len(_PAD_L)
+                    out += _assistant_word
+                    _assistant_col += _assistant_word_vlen
+                    _assistant_word = ""
+                    _assistant_word_vlen = 0
+                out += "\n"
+                _assistant_col = 0
+
+            elif tk_type == _TK_SPACE:
+                # Flush word then space
+                if _assistant_word_vlen > 0:
+                    if _assistant_col == 0:
+                        out += _PAD_L
+                        _assistant_col = len(_PAD_L)
+                    if _assistant_col + _assistant_word_vlen > max_col:
+                        out += "\n" + _PAD_L
+                        _assistant_col = len(_PAD_L)
+                    out += _assistant_word
+                    _assistant_col += _assistant_word_vlen
+                    _assistant_word = ""
+                    _assistant_word_vlen = 0
+                if _assistant_col == 0:
+                    out += _PAD_L
+                    _assistant_col = len(_PAD_L)
+                if _assistant_col < max_col:
+                    out += " "
+                    _assistant_col += 1
+
+            else:  # _TK_CHAR
+                _assistant_word += tk_str
+                _assistant_word_vlen += 1
+
+    # Flush remaining word (more tokens may arrive in next call)
+    if _assistant_word_vlen > 0:
+        if _assistant_col == 0:
+            out += _PAD_L
+            _assistant_col = len(_PAD_L)
+        if _assistant_col + _assistant_word_vlen > max_col:
+            out += "\n" + _PAD_L
+            _assistant_col = len(_PAD_L)
+        out += _assistant_word
+        _assistant_col += _assistant_word_vlen
+        _assistant_word = ""
+        _assistant_word_vlen = 0
+
+    sys.stdout.write(out)
     sys.stdout.flush()
 
 
 def print_assistant_end() -> None:
-    global _assistant_line_start
-    _assistant_line_start = True
+    global _assistant_col, _assistant_word, _assistant_word_vlen
+    # Flush any pending markdown
+    for tk_type, tk_str in _md_flush():
+        sys.stdout.write(tk_str)
+    _assistant_col = 0
+    _assistant_word = ""
+    _assistant_word_vlen = 0
+    _md_reset()
     show_cursor()
     sys.stdout.write(f"{RESET}\n")
     sys.stdout.flush()
