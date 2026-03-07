@@ -103,34 +103,27 @@ class JarvisInput:
                 key_bindings=self._kb,
                 multiline=False,
                 mouse_support=False,
-                bottom_toolbar=self._toolbar,
+                reserve_space_for_menu=0,
                 placeholder=HTML(
                     '<style fg="#4b5563" bg="#000000">Message J.A.R.V.I.S.</style>'
                 ),
             )
         return self._session
 
-    def _toolbar(self) -> list:
-        """Bottom bar: separator line with model name right-aligned."""
+    def _prompt_text(self) -> list:
+        """Prompt: separator with provider name, then input caret."""
         provider_style = PROVIDER_STYLE_MAP.get(
             self.provider, "class:bottom-toolbar.provider-claude"
         )
         provider_label = PROVIDER_LABELS.get(self.provider, self.provider)
 
         cols = shutil.get_terminal_size().columns
-        label_len = len(provider_label) + 1  # space before label
+        label_len = len(provider_label) + 1
         line_len = max(cols - label_len, 10)
 
         return [
-            ("class:bottom-toolbar.separator", "─" * line_len),
-            (provider_style, f" {provider_label}"),
-        ]
-
-    def _prompt_text(self) -> list:
-        """Prompt prefix with separator line above."""
-        cols = shutil.get_terminal_size().columns
-        return [
-            ("class:separator", "─" * cols + "\n"),
+            ("class:separator", "─" * line_len),
+            (provider_style, f" {provider_label}\n"),
             ("class:prompt", "  ❯ "),
         ]
 
