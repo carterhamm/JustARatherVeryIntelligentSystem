@@ -148,7 +148,6 @@ def _run() -> None:
         return
 
     # ── Interactive mode ──
-    print_banner()
     from stark_jarvis.chat import chat_session
     asyncio.run(chat_session(
         access_token=access_token,

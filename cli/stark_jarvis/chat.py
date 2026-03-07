@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import sys
+import threading
 from typing import Optional
 
 import websockets
@@ -13,10 +14,17 @@ import websockets.exceptions
 from stark_jarvis.config import config
 from stark_jarvis.display import (
     JARVIS_BLUE, DIM, BOLD, RESET,
+    print_banner,
+    run_connecting_animation,
+    fill_to_bottom,
+    _banner_line_count,
+    set_terminal_bg_black,
+    reset_terminal_bg,
+    clear_screen,
     print_assistant,
     print_assistant_end,
     print_error,
-    print_system,
+    print_system_centered,
     print_thinking,
     clear_thinking,
     print_divider,
@@ -47,7 +55,18 @@ async def chat_session(
     # Set up rich input UI
     jarvis_input = JarvisInput(initial_provider=provider)
 
-    print_system(f"Connecting to J.A.R.V.I.S. [{provider_styled(provider)}]...")
+    # Full-screen: black background + clear
+    set_terminal_bg_black()
+    clear_screen()
+
+    # Start connecting animation in background thread
+    stop_anim = threading.Event()
+    anim_thread = threading.Thread(
+        target=run_connecting_animation,
+        args=(provider, stop_anim),
+        daemon=True,
+    )
+    anim_thread.start()
 
     try:
         async with websockets.connect(
@@ -57,7 +76,18 @@ async def chat_session(
             close_timeout=5,
             max_size=10 * 1024 * 1024,
         ) as ws:
-            print_system("Connected. Type your message, or /help for commands.\n")
+            # Stop connecting animation
+            stop_anim.set()
+            anim_thread.join(timeout=0.5)
+
+            # Redraw with connected banner
+            clear_screen()
+            print_banner()
+            print_system_centered(
+                "Connected. Type your message, or /help for commands."
+            )
+            print()
+            fill_to_bottom(_banner_line_count() + 2)
 
             while True:
                 # Sync provider from input UI (user may have cycled with Ctrl+T)
@@ -69,7 +99,7 @@ async def chat_session(
                     )
                 except (EOFError, KeyboardInterrupt):
                     print("\n")
-                    print_system("Goodbye, Sir.")
+                    print_system_centered("Goodbye, Sir.")
                     break
 
                 if not user_input:
@@ -78,10 +108,12 @@ async def chat_session(
                 # Handle local commands
                 cmd = user_input.strip().lower()
                 if cmd in ("exit", "quit", "/exit", "/quit"):
-                    print_system("Goodbye, Sir.")
+                    print_system_centered("Goodbye, Sir.")
                     break
                 if cmd in ("/model", "/provider"):
-                    print_system(f"Current provider: {provider_styled(provider)}")
+                    print_system_centered(
+                        f"Current provider: {provider_styled(provider)}"
+                    )
                     continue
                 if cmd.startswith("/model ") or cmd.startswith("/provider "):
                     new_provider = cmd.split(None, 1)[1].strip()
@@ -90,13 +122,17 @@ async def chat_session(
                         provider = new_provider
                         jarvis_input.provider = new_provider
                         config.model_provider = new_provider
-                        print_system(f"Switched to {provider_styled(new_provider)}")
+                        print_system_centered(
+                            f"Switched to {provider_styled(new_provider)}"
+                        )
                     else:
-                        print_error(f"Unknown provider. Options: {', '.join(valid)}")
+                        print_error(
+                            f"Unknown provider. Options: {', '.join(valid)}"
+                        )
                     continue
                 if cmd == "/new":
                     conversation_id = None
-                    print_system("New conversation started.")
+                    print_system_centered("New conversation started.")
                     print_divider()
                     continue
                 if cmd in ("/help", "/?"):
@@ -113,7 +149,7 @@ async def chat_session(
                     payload["conversation_id"] = conversation_id
 
                 await ws.send(json.dumps(payload))
-                print_thinking()
+                print_thinking(provider)
 
                 # Stream response
                 streaming = True
@@ -162,7 +198,10 @@ async def chat_session(
                                 provider = arg
                                 jarvis_input.provider = arg
                                 config.model_provider = arg
-                                print(f"\n  {DIM}Model switched to {provider_styled(arg)}{RESET}")
+                                print(
+                                    f"\n  {DIM}Model switched to "
+                                    f"{provider_styled(arg)}{RESET}"
+                                )
 
                     elif msg_type == "end":
                         print_assistant_end()
@@ -171,8 +210,10 @@ async def chat_session(
                     elif msg_type == "error":
                         clear_thinking()
                         error_text = msg.get("error", "Unknown error")
-                        # Handle auth expiry gracefully
-                        if "token" in error_text.lower() or "auth" in error_text.lower():
+                        if (
+                            "token" in error_text.lower()
+                            or "auth" in error_text.lower()
+                        ):
                             print_error("Session expired. Run: jarvis login")
                             return
                         print_error(error_text)
@@ -189,7 +230,13 @@ async def chat_session(
     except (ConnectionRefusedError, OSError) as exc:
         print_error(f"Cannot reach server: {exc}")
     except websockets.exceptions.ConnectionClosed:
-        print_system("\nConnection closed.")
+        print_system_centered("Connection closed.")
+    finally:
+        # Always stop animation and restore terminal
+        stop_anim.set()
+        if anim_thread.is_alive():
+            anim_thread.join(timeout=0.5)
+        reset_terminal_bg()
 
 
 def _print_help() -> None:
@@ -207,8 +254,7 @@ def _print_help() -> None:
   {DIM}{'─' * 44}{RESET}
   {JARVIS_BLUE}Ctrl+T{RESET}             Cycle model provider
   {JARVIS_BLUE}Enter{RESET}              Send message
-  {JARVIS_BLUE}Shift+Enter{RESET}        New line
-  {JARVIS_BLUE}Ctrl+C{RESET}             Exit
+  {JARVIS_BLUE}Ctrl+C (x2){RESET}        Exit
 
   {JARVIS_BLUE}{BOLD}Providers{RESET}
   {DIM}{'─' * 44}{RESET}
