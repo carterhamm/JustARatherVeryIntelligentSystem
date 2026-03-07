@@ -1,15 +1,15 @@
 """J.A.R.V.I.S. FastAPI application entry-point."""
 
-import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import AsyncIterator
 
 import structlog
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api.v1 import v1_router
 from app.config import settings
@@ -79,15 +79,21 @@ def create_app() -> FastAPI:
         if assets_dir.is_dir():
             application.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
 
-        # SPA fallback: any non-API route serves index.html
-        @application.get("/{full_path:path}")
-        async def serve_spa(full_path: str) -> FileResponse:
-            # Prevent path traversal: resolve and verify within STATIC_DIR
-            file_path = (STATIC_DIR / full_path).resolve()
-            static_root = STATIC_DIR.resolve()
-            if full_path and file_path.is_file() and str(file_path).startswith(str(static_root)):
-                return FileResponse(str(file_path))
-            return FileResponse(str(index_html))
+        # SPA fallback: serve index.html for 404s on non-API routes
+        @application.exception_handler(StarletteHTTPException)
+        async def spa_fallback(request: Request, exc: StarletteHTTPException) -> FileResponse | JSONResponse:
+            # Only serve SPA for 404s on non-API GET requests
+            if exc.status_code == 404 and not request.url.path.startswith("/api/") and request.method == "GET":
+                # Serve static file if it exists
+                rel_path = request.url.path.lstrip("/")
+                if rel_path:
+                    file_path = (STATIC_DIR / rel_path).resolve()
+                    static_root = STATIC_DIR.resolve()
+                    if file_path.is_file() and str(file_path).startswith(str(static_root)):
+                        return FileResponse(str(file_path))
+                return FileResponse(str(index_html))
+            # All other HTTP exceptions: return JSON
+            return JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
     else:
         logger.info("No frontend build found at %s — API-only mode", STATIC_DIR)
 
