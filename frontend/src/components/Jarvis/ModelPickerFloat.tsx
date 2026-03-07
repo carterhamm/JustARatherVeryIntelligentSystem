@@ -14,11 +14,9 @@ interface ProviderDef {
 }
 
 const providers: ProviderDef[] = [
-  { id: 'openai', label: 'GPT-4o', description: 'Versatile, fast, vision', tag: 'UPLINK', color: '#39ff14' },
   { id: 'claude', label: 'Claude', description: 'Nuanced reasoning', tag: 'UPLINK', color: '#ff8c00' },
-  { id: 'glm', label: 'GLM-4', description: 'ZhipuAI Coding Pro', tag: 'UPLINK', color: '#a855f7' },
   { id: 'gemini', label: 'Gemini', description: 'Multimodal Flash', tag: 'UPLINK', color: '#3b82f6' },
-  { id: 'stark_protocol', label: 'Stark Protocol', description: 'Self-hosted Gemma 3', tag: 'LOCAL', color: '#ef4444' },
+  { id: 'stark_protocol', label: 'Stark Protocol', description: 'Self-hosted LLM', tag: 'LOCAL', color: '#ef4444' },
 ];
 
 export default function ModelPickerFloat() {

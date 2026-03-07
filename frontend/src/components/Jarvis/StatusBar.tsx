@@ -6,17 +6,13 @@ import gsap from 'gsap';
 import clsx from 'clsx';
 
 const providerLabels: Record<ModelProvider, string> = {
-  openai: 'GPT-4o',
   claude: 'Claude',
-  glm: 'GLM-4',
   gemini: 'Gemini',
   stark_protocol: 'Stark',
 };
 
 const providerColors: Record<ModelProvider, string> = {
-  openai: '#39ff14',
   claude: '#ff8c00',
-  glm: '#a855f7',
   gemini: '#3b82f6',
   stark_protocol: '#ef4444',
 };

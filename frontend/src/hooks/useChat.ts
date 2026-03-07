@@ -119,7 +119,7 @@ export function useChat() {
           const arg = msg.tool_arg as string;
 
           if (tool === 'SWITCH_MODEL') {
-            const validProviders = ['openai', 'claude', 'glm', 'gemini', 'stark_protocol'];
+            const validProviders = ['claude', 'gemini', 'stark_protocol'];
             if (validProviders.includes(arg)) {
               useSettingsStore.getState().setModelPreference(arg as ModelProvider);
             }

@@ -1,9 +1,22 @@
 """Application configuration loaded from environment variables."""
 
+import base64
+import os
+import secrets
 from typing import List
 
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def _auto_jwt_secret() -> str:
+    """Generate a secure JWT secret if the env var is missing or still default."""
+    return secrets.token_hex(32)
+
+
+def _auto_fernet_key() -> str:
+    """Generate a valid Fernet key if the env var is missing or still default."""
+    return base64.urlsafe_b64encode(os.urandom(32)).decode()
 
 
 class Settings(BaseSettings):
@@ -64,7 +77,7 @@ class Settings(BaseSettings):
     JARVIS_VOICE_ENABLED: bool = False
 
     # -- Default LLM Provider -------------------------------------------------
-    DEFAULT_LLM_PROVIDER: str = "openai"
+    DEFAULT_LLM_PROVIDER: str = "claude"
 
     # -- ElevenLabs -----------------------------------------------------------
     ELEVENLABS_API_KEY: str = ""
@@ -125,12 +138,30 @@ class Settings(BaseSettings):
     SPOTIFY_REFRESH_TOKEN: str = ""
 
     # -- Auth / Security ------------------------------------------------------
-    JWT_SECRET_KEY: str = "change-me-to-a-random-64-char-hex-string"
+    JWT_SECRET_KEY: str = ""
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
 
-    AES_KEY: str = "change-me-to-a-valid-fernet-key"
+    AES_KEY: str = ""
+
+    @field_validator("JWT_SECRET_KEY", mode="before")
+    @classmethod
+    def _ensure_jwt_secret(cls, v: object) -> str:
+        """Auto-generate a secure JWT secret if not explicitly set."""
+        s = str(v) if v else ""
+        if not s or s == "change-me-to-a-random-64-char-hex-string":
+            return _auto_jwt_secret()
+        return s
+
+    @field_validator("AES_KEY", mode="before")
+    @classmethod
+    def _ensure_aes_key(cls, v: object) -> str:
+        """Auto-generate a valid Fernet key if not explicitly set."""
+        s = str(v) if v else ""
+        if not s or s == "change-me-to-a-valid-fernet-key":
+            return _auto_fernet_key()
+        return s
 
     # -- WebAuthn / Passkeys --------------------------------------------------
     WEBAUTHN_RP_ID: str = "localhost"

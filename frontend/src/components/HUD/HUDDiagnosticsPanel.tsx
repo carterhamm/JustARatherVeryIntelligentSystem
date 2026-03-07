@@ -4,18 +4,14 @@ import { useChatStore } from '@/stores/chatStore';
 import clsx from 'clsx';
 
 const modelNames: Record<string, string> = {
-  openai: 'GPT-4o',
   claude: 'Claude Sonnet',
   gemini: 'Gemini Flash',
-  glm: 'GLM-4',
-  stark_protocol: 'Gemma 3 4B',
+  stark_protocol: 'Stark Protocol',
 };
 
 const providerTags: Record<string, string> = {
-  openai: 'UPLINK',
   claude: 'UPLINK',
   gemini: 'UPLINK',
-  glm: 'UPLINK',
   stark_protocol: 'LOCAL',
 };
 

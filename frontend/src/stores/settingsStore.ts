@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { api } from '@/services/api';
 
-export type ModelProvider = 'openai' | 'claude' | 'gemini' | 'glm' | 'stark_protocol';
+export type ModelProvider = 'claude' | 'gemini' | 'stark_protocol';
 
 interface SettingsState {
   modelPreference: ModelProvider;
@@ -23,13 +23,13 @@ const TIME_FORMAT_KEY = 'jarvis-24h-time';
 function getStoredPreference(): ModelProvider {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored && ['openai', 'claude', 'gemini', 'glm', 'stark_protocol'].includes(stored)) {
+    if (stored && ['claude', 'gemini', 'stark_protocol'].includes(stored)) {
       return stored as ModelProvider;
     }
   } catch {
     // ignore
   }
-  return 'openai';
+  return 'claude';
 }
 
 export const useSettingsStore = create<SettingsState>((set, get) => ({

@@ -1,8 +1,13 @@
-"""Authentication endpoints — register, login, refresh, profile, preferences, passkeys."""
+"""Authentication endpoints — register, login, refresh, profile, preferences, passkeys.
+
+JARVIS is a single-owner system. Registration is locked after the first user
+is created. All subsequent access uses login + System Handshake Token.
+"""
 
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_current_active_user, get_db
@@ -26,11 +31,26 @@ from app.services.auth_service import AuthService
 router = APIRouter()
 
 
-# -- Legacy password auth (kept for backwards compatibility) ----------------
+# -- Setup status (no auth required) --------------------------------------
+
+@router.get("/setup-status")
+async def setup_status(db: AsyncSession = Depends(get_db)) -> dict[str, bool]:
+    """Check if JARVIS has been set up (i.e. owner account exists)."""
+    count = await db.scalar(select(func.count()).select_from(User))
+    return {"setup_complete": bool(count and count > 0)}
+
+
+# -- Single-owner registration (first user only) --------------------------
 
 @router.post("/register", response_model=AuthResponse, status_code=201)
 async def register(payload: UserCreate, db: AsyncSession = Depends(get_db)) -> AuthResponse:
-    """Create a new user account and return JWT tokens with user data."""
+    """Create the owner account. Locked after the first user exists."""
+    count = await db.scalar(select(func.count()).select_from(User))
+    if count and count > 0:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Registration is disabled. JARVIS is a single-owner system.",
+        )
     return await AuthService.register(db, payload)
 
 

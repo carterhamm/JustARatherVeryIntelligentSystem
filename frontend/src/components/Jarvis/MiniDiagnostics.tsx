@@ -3,9 +3,7 @@ import { useUIStore } from '@/stores/uiStore';
 import { useSettingsStore, type ModelProvider } from '@/stores/settingsStore';
 
 const providerLabels: Record<ModelProvider, string> = {
-  openai: 'GPT-4o',
   claude: 'Claude',
-  glm: 'GLM-4',
   gemini: 'Gemini',
   stark_protocol: 'Stark',
 };

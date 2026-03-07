@@ -10,10 +10,8 @@ from typing import Any, AsyncGenerator, Optional
 class LLMProvider(str, enum.Enum):
     """Supported LLM providers."""
 
-    OPENAI = "openai"
     CLAUDE = "claude"
     GEMINI = "gemini"
-    GLM = "glm"
     STARK_PROTOCOL = "stark_protocol"
 
 

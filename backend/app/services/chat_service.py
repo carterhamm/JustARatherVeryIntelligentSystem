@@ -19,6 +19,7 @@ from typing import AsyncGenerator, Optional
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.encryption import decrypt_message, encrypt_message
 from app.db.redis import RedisClient
 from app.integrations.llm.base import BaseLLMClient
 from app.integrations.llm.factory import get_llm_client
@@ -56,7 +57,7 @@ Keep responses concise unless asked for details. Match J.A.R.V.I.S.'s cadence fr
 
 SYSTEM TOOLS:
 You have platform actions available via special tags. ONLY use them when the user explicitly asks you to (e.g. "switch to Claude", "turn on voice"). NEVER use them proactively or unprompted.
-- {{SWITCH_MODEL:provider}} — Switch the active LLM provider. Valid providers: openai, claude, glm, gemini, stark_protocol.
+- {{SWITCH_MODEL:provider}} — Switch the active LLM provider. Valid providers: claude, gemini, stark_protocol.
 - {{TOGGLE_VOICE:on}} or {{TOGGLE_VOICE:off}} — Enable or disable voice synthesis.
 
 TOOL RULES:
@@ -74,7 +75,7 @@ CAPABILITIES CONTEXT:
 Remember: You are J.A.R.V.I.S. — sophisticated, witty, loyal, and indispensable. Speak like a refined British butler with access to advanced AI capabilities."""
 
 # Provider categories for privacy enforcement
-_UPLINK_PROVIDERS = {"openai", "claude", "glm", "gemini"}
+_UPLINK_PROVIDERS = {"claude", "gemini"}
 _LOCAL_PROVIDERS = {"stark_protocol"}
 
 # Regex to extract tool calls from LLM responses
@@ -225,12 +226,16 @@ class ChatService:
     ) -> Message:
         """
         Persist a new message and update the parent conversation's
-        aggregate counters.
+        aggregate counters.  Content is encrypted at rest (AES-256).
         """
+        # Encrypt content at rest if user_id is available
+        user_id = kwargs.pop("user_id", None)
+        stored_content = encrypt_message(content, user_id) if user_id else content
+
         message = Message(
             conversation_id=conversation_id,
             role=role,
-            content=content,
+            content=stored_content,
             token_count=kwargs.get("token_count"),
             model=kwargs.get("model"),
             latency_ms=kwargs.get("latency_ms"),
@@ -263,7 +268,10 @@ class ChatService:
         skip: int = 0,
         limit: int = 50,
     ) -> list[Message]:
-        """Return paginated messages for a conversation (with auth check)."""
+        """Return paginated messages for a conversation (with auth check).
+
+        Decrypts message content transparently.
+        """
         # Ensure ownership
         await self.get_conversation(conversation_id, user_id)
 
@@ -275,7 +283,13 @@ class ChatService:
             .limit(limit)
         )
         result = await self.db.execute(stmt)
-        return list(result.scalars().all())
+        messages = list(result.scalars().all())
+
+        # Decrypt content for the caller
+        for msg in messages:
+            msg.content = decrypt_message(msg.content, user_id)
+
+        return messages
 
     # =====================================================================
     # Chat (non-streaming)
@@ -297,19 +311,21 @@ class ChatService:
         conversation = await self._resolve_conversation(user_id, request)
         model = request.model or llm.get_default_model()
 
-        # Persist user message
+        # Persist user message (encrypted at rest)
         user_token_count = await llm.count_tokens(request.message, model)
         await self.add_message(
             conversation.id,
             role="user",
             content=request.message,
             token_count=user_token_count,
+            user_id=user_id,
         )
 
         # Build history and call LLM
         history = await self._build_message_history(
             conversation.id,
             system_prompt=request.system_prompt or conversation.system_prompt,
+            user_id=user_id,
         )
 
         start = time.perf_counter()
@@ -329,7 +345,7 @@ class ChatService:
             await self.db.commit()
             await self._invalidate_conversation_cache(conversation.id)
 
-        # Persist assistant message
+        # Persist assistant message (encrypted at rest)
         assistant_msg = await self.add_message(
             conversation.id,
             role="assistant",
@@ -338,6 +354,7 @@ class ChatService:
             model=response["model"],
             latency_ms=latency_ms,
             tool_calls=response.get("tool_calls"),
+            user_id=user_id,
         )
         return assistant_msg
 
@@ -366,7 +383,7 @@ class ChatService:
             # The conversation's stored model may belong to a different provider.
             model = request.model or llm.get_default_model()
 
-            # Persist user message
+            # Persist user message (encrypted at rest)
             user_token_count = await llm.count_tokens(
                 request.message, model
             )
@@ -375,12 +392,14 @@ class ChatService:
                 role="user",
                 content=request.message,
                 token_count=user_token_count,
+                user_id=user_id,
             )
 
-            # Build history
+            # Build history (decrypts stored messages)
             history = await self._build_message_history(
                 conversation.id,
                 system_prompt=request.system_prompt or conversation.system_prompt,
+                user_id=user_id,
             )
 
             # Pre-create assistant message ID so we can emit it in start chunk
@@ -418,12 +437,12 @@ class ChatService:
                 await self.db.commit()
                 await self._invalidate_conversation_cache(conversation.id)
 
-            # Persist assistant message with the pre-generated ID
+            # Persist assistant message with the pre-generated ID (encrypted at rest)
             assistant_msg = Message(
                 id=assistant_msg_id,
                 conversation_id=conversation.id,
                 role="assistant",
-                content=full_content,
+                content=encrypt_message(full_content, user_id),
                 token_count=completion_tokens,
                 model=model,
                 latency_ms=latency_ms,
@@ -524,10 +543,12 @@ class ChatService:
         conversation_id: uuid.UUID,
         limit: int = 50,
         system_prompt: Optional[str] = None,
+        user_id: Optional[uuid.UUID] = None,
     ) -> list[dict[str, str]]:
         """
         Build the message list to send to the LLM.  Includes an optional
         system prompt followed by the most recent *limit* messages.
+        Decrypts stored messages before including them in history.
         """
         stmt = (
             select(Message)
@@ -547,7 +568,8 @@ class ChatService:
         history.append({"role": "system", "content": combined_prompt})
 
         for msg in messages:
-            history.append({"role": msg.role, "content": msg.content})
+            content = decrypt_message(msg.content, user_id) if user_id else msg.content
+            history.append({"role": msg.role, "content": content})
 
         return history
 

@@ -14,7 +14,7 @@ from fastapi.responses import FileResponse
 from app.api.v1 import v1_router
 from app.config import settings
 from app.core.events import shutdown_handler, startup_handler
-from app.core.middleware import RequestLoggingMiddleware, RateLimitMiddleware
+from app.core.middleware import RequestLoggingMiddleware, RateLimitMiddleware, SecurityHeadersMiddleware
 from app.schemas.common import HealthResponse
 
 logger = structlog.stdlib.get_logger(__name__)
@@ -33,11 +33,17 @@ async def lifespan(application: FastAPI) -> AsyncIterator[None]:
 
 def create_app() -> FastAPI:
     """Application factory — builds and returns a fully configured FastAPI instance."""
+    # Disable Swagger/ReDoc in production to reduce attack surface
+    docs_kwargs = {}
+    if not settings.DEBUG:
+        docs_kwargs = {"docs_url": None, "redoc_url": None, "openapi_url": None}
+
     application = FastAPI(
         title=settings.APP_NAME,
         version="0.1.0",
         description="Just A Rather Very Intelligent System",
         lifespan=lifespan,
+        **docs_kwargs,
     )
 
     # -- CORS -----------------------------------------------------------------
@@ -45,11 +51,13 @@ def create_app() -> FastAPI:
         CORSMiddleware,
         allow_origins=settings.CORS_ORIGINS,
         allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"],
+        expose_headers=["X-Request-ID"],
     )
 
     # -- Custom middleware (outermost first) -----------------------------------
+    application.add_middleware(SecurityHeadersMiddleware)
     application.add_middleware(RateLimitMiddleware, max_requests=120, window_seconds=60)
     application.add_middleware(RequestLoggingMiddleware)
 
@@ -74,9 +82,10 @@ def create_app() -> FastAPI:
         # SPA fallback: any non-API route serves index.html
         @application.get("/{full_path:path}")
         async def serve_spa(full_path: str) -> FileResponse:
-            # Try to serve a static file first
-            file_path = STATIC_DIR / full_path
-            if full_path and file_path.is_file() and STATIC_DIR in file_path.resolve().parents:
+            # Prevent path traversal: resolve and verify within STATIC_DIR
+            file_path = (STATIC_DIR / full_path).resolve()
+            static_root = STATIC_DIR.resolve()
+            if full_path and file_path.is_file() and str(file_path).startswith(str(static_root)):
                 return FileResponse(str(file_path))
             return FileResponse(str(index_html))
     else:

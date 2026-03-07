@@ -10,22 +10,10 @@ interface ModelDef {
 
 const uplinkModels: ModelDef[] = [
   {
-    id: 'openai',
-    label: 'OpenAI',
-    description: 'GPT-4o — versatile, fast, vision',
-    activeColor: 'border-green-400/20 text-green-400',
-  },
-  {
     id: 'claude',
     label: 'Claude',
     description: 'Sonnet 4 — nuanced reasoning',
     activeColor: 'border-orange-400/20 text-orange-400',
-  },
-  {
-    id: 'glm',
-    label: 'GLM-4',
-    description: 'ZhipuAI Coding Pro — fast, capable',
-    activeColor: 'border-purple-400/20 text-purple-400',
   },
   {
     id: 'gemini',

@@ -1,4 +1,4 @@
-"""Custom ASGI middleware for request logging and rate-limiting."""
+"""Custom ASGI middleware for request logging, rate-limiting, and security headers."""
 
 import time
 from collections import defaultdict
@@ -80,3 +80,50 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         self._buckets[client_ip].append(now)
         return await call_next(request)
+
+
+# ---------------------------------------------------------------------------
+# Security headers
+# ---------------------------------------------------------------------------
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """Inject security headers into every HTTP response.
+
+    Covers OWASP recommendations: HSTS, content-type sniffing, clickjacking,
+    XSS reflection, referrer leakage, and permissions policy.
+    """
+
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+        response = await call_next(request)
+
+        # Strict Transport Security — force HTTPS for 1 year, include subdomains
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+
+        # Prevent MIME-type sniffing
+        response.headers["X-Content-Type-Options"] = "nosniff"
+
+        # Prevent clickjacking — only allow same-origin framing
+        response.headers["X-Frame-Options"] = "DENY"
+
+        # XSS reflection filter (legacy browsers)
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+
+        # Referrer policy — don't leak full URL to third parties
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+
+        # Permissions policy — disable unnecessary browser features
+        response.headers["Permissions-Policy"] = "camera=(), microphone=(self), geolocation=()"
+
+        # Content Security Policy — restrict resource loading
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline'; "
+            "style-src 'self' 'unsafe-inline'; "
+            "img-src 'self' data: blob:; "
+            "connect-src 'self' wss: ws:; "
+            "font-src 'self' data:; "
+            "frame-ancestors 'none'"
+        )
+
+        return response

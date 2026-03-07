@@ -14,11 +14,9 @@ interface ProviderOption {
 }
 
 const providers: ProviderOption[] = [
-  { id: 'openai', label: 'GPT-4o', tag: 'UPLINK', description: 'OpenAI flagship' },
   { id: 'claude', label: 'Claude', tag: 'UPLINK', description: 'Anthropic Sonnet' },
-  { id: 'glm', label: 'GLM-4', tag: 'UPLINK', description: 'ZhipuAI Coding Pro' },
   { id: 'gemini', label: 'Gemini', tag: 'UPLINK', description: 'Google DeepMind' },
-  { id: 'stark_protocol', label: 'Stark', tag: 'LOCAL', description: 'Gemma 3 (LM Studio)' },
+  { id: 'stark_protocol', label: 'Stark', tag: 'LOCAL', description: 'Self-hosted LLM' },
 ];
 
 export default function HUDStatusBar() {

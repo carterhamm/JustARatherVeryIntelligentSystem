@@ -22,6 +22,9 @@ async def startup_handler(app: FastAPI) -> None:
     """
     logger.info("startup", app=settings.APP_NAME, debug=settings.DEBUG)
 
+    # -- Security validation --------------------------------------------------
+    _validate_security_config()
+
     # -- PostgreSQL -----------------------------------------------------------
     try:
         async with engine.connect() as conn:
@@ -87,6 +90,40 @@ async def startup_handler(app: FastAPI) -> None:
             logger.warning("stark_protocol_check_failed", error=str(exc))
 
     logger.info("startup_complete", app=settings.APP_NAME)
+
+
+def _validate_security_config() -> None:
+    """Validate that critical security settings are properly configured."""
+    insecure_jwt_defaults = {"change-me-to-a-random-64-char-hex-string", ""}
+    insecure_aes_defaults = {"change-me-to-a-valid-fernet-key", ""}
+
+    if settings.JWT_SECRET_KEY in insecure_jwt_defaults:
+        logger.critical(
+            "INSECURE_JWT_SECRET",
+            hint="JWT_SECRET_KEY is using a default value. Set a strong random key in .env",
+        )
+        if not settings.DEBUG:
+            raise SystemExit("FATAL: JWT_SECRET_KEY is not configured. Refusing to start in production.")
+
+    if len(settings.JWT_SECRET_KEY) < 32:
+        logger.warning(
+            "WEAK_JWT_SECRET",
+            length=len(settings.JWT_SECRET_KEY),
+            hint="JWT_SECRET_KEY should be at least 32 characters (64 hex chars recommended)",
+        )
+
+    if settings.AES_KEY in insecure_aes_defaults:
+        logger.critical(
+            "INSECURE_AES_KEY",
+            hint="AES_KEY is using a default value. Set a valid Fernet key in .env",
+        )
+        if not settings.DEBUG:
+            raise SystemExit("FATAL: AES_KEY is not configured. Refusing to start in production.")
+
+    if settings.DEBUG:
+        logger.warning("DEBUG_MODE_ENABLED", hint="Debug mode exposes Swagger docs and detailed errors. Disable in production.")
+    else:
+        logger.info("security_config_ok")
 
 
 async def shutdown_handler(app: FastAPI) -> None:

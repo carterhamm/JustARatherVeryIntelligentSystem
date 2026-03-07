@@ -135,7 +135,7 @@ class ChatRequest(BaseModel):
     model_provider: Optional[str] = Field(
         None,
         max_length=32,
-        description="LLM provider to use: openai, claude, gemini, or stark_protocol.",
+        description="LLM provider to use: claude, gemini, or stark_protocol.",
     )
     voice_enabled: bool = Field(
         False,
