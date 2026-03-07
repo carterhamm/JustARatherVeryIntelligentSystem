@@ -98,13 +98,29 @@ def show_cursor() -> None:
     sys.stdout.flush()
 
 
+def move_cursor(row: int, col: int = 1) -> None:
+    sys.stdout.write(f"\x1b[{row};{col}H")
+    sys.stdout.flush()
+
+
+def set_scroll_region(top: int, bottom: int) -> None:
+    """Set terminal scroll region. Only rows top..bottom will scroll."""
+    sys.stdout.write(f"\x1b[{top};{bottom}r")
+    sys.stdout.flush()
+
+
+def reset_scroll_region() -> None:
+    """Reset scroll region to full terminal."""
+    sys.stdout.write("\x1b[r")
+    sys.stdout.flush()
+
+
 # ── Banner ───────────────────────────────────────────────────────────────
 
 def _box_lines(
     status: str = _STATUS_CONNECTED,
     status_color: str = "",
 ) -> list[str]:
-    """Build the banner box as a list of ANSI-colored strings."""
     w = _BOX_W
     B = f"{JARVIS_BLUE}{BOLD}"
 
@@ -127,7 +143,6 @@ def _box_lines(
 
 
 def print_banner() -> None:
-    """Print the connected banner, centered."""
     bv = _BOX_W + 2
     print()
     for line in _box_lines():
@@ -135,7 +150,7 @@ def print_banner() -> None:
     print()
 
 
-def _banner_line_count() -> int:
+def banner_line_count() -> int:
     """Lines the banner occupies: 8 box lines + 2 blank = 10."""
     return 10
 
@@ -144,7 +159,6 @@ def run_connecting_animation(
     provider: str,
     stop_event: threading.Event,
 ) -> None:
-    """Show animated connecting status inside the banner box."""
     bv = _BOX_W + 2
     label = PROVIDER_LABELS.get(provider, provider)
     color = PROVIDER_COLORS.get(provider, JARVIS_BLUE)
@@ -166,13 +180,26 @@ def run_connecting_animation(
         stop_event.wait(0.12)
 
 
-def fill_to_bottom(used_lines: int) -> None:
-    """Print empty lines to push the cursor near the bottom of the terminal."""
-    _, rows = _term_size()
-    fill = max(rows - used_lines - 3, 0)
-    if fill > 0:
-        sys.stdout.write("\n" * fill)
-        sys.stdout.flush()
+# ── Static input area (drawn when prompt_toolkit is not active) ──────────
+
+def draw_static_input(row: int, provider: str) -> None:
+    """Draw a non-interactive input area at row, row+1, row+2."""
+    cols, _ = _term_size()
+    label = PROVIDER_LABELS.get(provider, provider)
+    color = PROVIDER_COLORS.get(provider, JARVIS_BLUE)
+    label_len = len(label) + 1
+    line_len = max(cols - label_len, 10)
+
+    # Top separator (full width)
+    sys.stdout.write(f"\x1b[{row};1H\x1b[K{JARVIS_DIM}{'─' * cols}{RESET}")
+    # Prompt
+    sys.stdout.write(f"\x1b[{row + 1};1H\x1b[K  {JARVIS_BLUE}{BOLD}❯ {RESET}")
+    # Bottom separator + provider
+    sys.stdout.write(
+        f"\x1b[{row + 2};1H\x1b[K"
+        f"{JARVIS_DIM}{'─' * line_len}{RESET}{color} {label}{RESET}"
+    )
+    sys.stdout.flush()
 
 
 # ── Output functions ─────────────────────────────────────────────────────
@@ -193,6 +220,12 @@ def print_success(text: str) -> None:
     print(f"  {JARVIS_GREEN}{text}{RESET}")
 
 
+def print_user_message(text: str) -> None:
+    """Print the user's message in the chat area, JARVIS blue."""
+    sys.stdout.write(f"\n  {JARVIS_BLUE}{text}{RESET}\n\n")
+    sys.stdout.flush()
+
+
 def print_assistant(content: str) -> None:
     sys.stdout.write(f"{RESET}{content}")
     sys.stdout.flush()
@@ -200,7 +233,8 @@ def print_assistant(content: str) -> None:
 
 def print_assistant_end() -> None:
     show_cursor()
-    print(f"{RESET}\n")
+    sys.stdout.write(f"{RESET}\n\n")
+    sys.stdout.flush()
 
 
 def print_divider() -> None:
