@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, LogOut, Volume2, VolumeX, Clock, Shield, Loader2 } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import { useAuth } from '@/hooks/useAuth';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useUIStore } from '@/stores/uiStore';
@@ -287,8 +288,14 @@ export default function SettingsPanel() {
 
                     {totpStep === 'setup' && (
                       <div className="glass-subtle rounded-xl px-4 py-3 space-y-3">
-                        <p className="text-xs text-gray-300">Add this key to your authenticator app:</p>
-                        <div className="bg-black/40 rounded-lg px-3 py-2 font-mono text-[11px] text-jarvis-blue break-all select-all">
+                        <p className="text-xs text-gray-300 text-center">Scan with your authenticator app</p>
+                        <div className="flex justify-center">
+                          <div className="bg-white rounded-xl p-3">
+                            <QRCodeSVG value={totpUri} size={160} level="M" />
+                          </div>
+                        </div>
+                        <p className="text-[10px] text-gray-500 text-center">Or enter this key manually:</p>
+                        <div className="bg-black/40 rounded-lg px-3 py-2 font-mono text-[11px] text-jarvis-blue break-all select-all text-center">
                           {totpSecret}
                         </div>
                         <div>
