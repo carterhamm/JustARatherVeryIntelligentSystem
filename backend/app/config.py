@@ -70,6 +70,12 @@ class Settings(BaseSettings):
     # -- Cerebras (ultra-fast intent routing) -----------------------------------
     CEREBRAS_API_KEY: str = ""
 
+    # -- Twilio (JARVIS phone number) -----------------------------------------
+    TWILIO_ACCOUNT_SID: str = ""
+    TWILIO_AUTH_TOKEN: str = ""
+    TWILIO_PHONE_NUMBER: str = ""   # JARVIS's phone number (E.164 format)
+    TWILIO_USER_PHONE: str = ""     # Owner's phone number to call/receive
+
     # -- JARVIS Voice (Coqui TTS XTTS-v2) ------------------------------------
     JARVIS_VOICE_SERVER: str = ""  # path to jarvis_voice_training dir (local)
     JARVIS_VOICE_URL: str = ""  # remote endpoint URL (Modal deployment)

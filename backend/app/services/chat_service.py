@@ -498,10 +498,33 @@ class ChatService:
         collected_content: list[str],
     ) -> AsyncGenerator[ChatStreamChunk, None]:
         """Run agentic tool use loop for Claude and Gemini, yielding stream chunks."""
+        from app.agents.intent_router import get_tools_for_intent, route_intent
         from app.agents.tool_schemas import get_anthropic_tools
         from app.agents.tools import get_tool_registry
 
-        tools = get_anthropic_tools()
+        all_tools = get_anthropic_tools()
+
+        # Route intent via Cerebras for fast tool filtering
+        try:
+            # Get the user's latest message from history
+            user_message = ""
+            for msg in reversed(history):
+                if msg.get("role") == "user":
+                    user_message = msg.get("content", "")
+                    break
+
+            if user_message:
+                tool_names = await route_intent(user_message)
+                tools = get_tools_for_intent(tool_names, all_tools)
+                if tools:
+                    logger.info("Intent router selected %d/%d tools", len(tools), len(all_tools))
+                else:
+                    tools = all_tools  # fallback
+            else:
+                tools = all_tools
+        except Exception:
+            logger.warning("Intent routing failed — using all tools", exc_info=True)
+            tools = all_tools
         registry = get_tool_registry()
 
         async def execute_tool(name: str, params: dict) -> str:
