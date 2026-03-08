@@ -22,6 +22,8 @@ export default function AuthPage() {
   const [shtChecking, setShtChecking] = useState(false);
   const [totpToken, setTotpToken] = useState('');
   const [totpCode, setTotpCode] = useState('');
+  const [userHasTotp, setUserHasTotp] = useState(false);
+  const [pendingTotpCode, setPendingTotpCode] = useState('');
 
   const { lookup, passkeyRegister, passkeyLogin, verifyTOTPLogin } = useAuth();
   const navigate = useNavigate();
@@ -93,7 +95,13 @@ export default function AuthPage() {
       const result = await lookup(trimmed);
       if (result.exists) {
         setExistingUsername(result.username || trimmed);
-        setStep('authenticate');
+        setUserHasTotp(!!result.totp_enabled);
+        if (result.totp_enabled) {
+          setTotpCode('');
+          setStep('totp');
+        } else {
+          setStep('authenticate');
+        }
       } else {
         if (trimmed.includes('@')) setEmail(trimmed);
         else setUsername(trimmed);
@@ -133,14 +141,50 @@ export default function AuthPage() {
       setError('Enter the 6-digit code from your authenticator.');
       return;
     }
+
+    // If we already have a totp_token (post-passkey flow), verify directly
+    if (totpToken) {
+      setIsLoading(true);
+      try {
+        await verifyTOTPLogin(totpToken, totpCode);
+        navigate('/');
+      } catch (err: any) {
+        const detail = err?.response?.data?.detail || err?.message || 'Invalid code.';
+        setError(detail);
+        setTotpCode('');
+      } finally {
+        setIsLoading(false);
+      }
+      return;
+    }
+
+    // Pre-passkey flow: store code, proceed to passkey auth
+    setPendingTotpCode(totpCode);
+    setStep('authenticate');
+  };
+
+  const handleAuthenticateWithTotp = async () => {
+    setError('');
     setIsLoading(true);
     try {
-      await verifyTOTPLogin(totpToken, totpCode);
-      navigate('/');
+      const result = await passkeyLogin(identifier.trim());
+      if (result && 'needs_totp' in result && result.needs_totp) {
+        // Now verify the TOTP code we collected earlier
+        await verifyTOTPLogin(result.totp_token, pendingTotpCode);
+        navigate('/');
+      } else {
+        navigate('/');
+      }
     } catch (err: any) {
-      const detail = err?.response?.data?.detail || err?.message || 'Invalid code.';
+      const detail = err?.response?.data?.detail || err?.message || 'Authentication failed.';
       setError(detail);
-      setTotpCode('');
+      if (detail.toLowerCase().includes('totp') || detail.toLowerCase().includes('code')) {
+        // TOTP code was wrong, go back to TOTP step
+        setPendingTotpCode('');
+        setTotpCode('');
+        setTotpToken('');
+        setStep('totp');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -385,7 +429,7 @@ export default function AuthPage() {
             </form>
           )}
 
-          {/* Step: Authenticate */}
+          {/* Step: Authenticate (Passkey) */}
           {step === 'authenticate' && (
             <div className="space-y-4">
               <div className="text-center">
@@ -400,7 +444,7 @@ export default function AuthPage() {
               </div>
 
               <button
-                onClick={handleAuthenticate}
+                onClick={userHasTotp ? handleAuthenticateWithTotp : handleAuthenticate}
                 disabled={isLoading}
                 className="jarvis-button w-full py-3 text-sm font-display font-semibold tracking-wider uppercase flex items-center justify-center gap-2"
                 style={{ opacity: isLoading ? 0.5 : 1 }}
@@ -473,8 +517,10 @@ export default function AuthPage() {
               <button
                 type="button"
                 onClick={() => {
-                  setStep('authenticate');
+                  setStep('identify');
                   setTotpCode('');
+                  setTotpToken('');
+                  setPendingTotpCode('');
                   setError('');
                 }}
                 className="w-full text-center text-xs text-gray-500 hover:text-gray-300 transition-colors"

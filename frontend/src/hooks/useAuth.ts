@@ -18,6 +18,7 @@ interface LookupResponse {
   exists: boolean;
   user_id?: string;
   username?: string;
+  totp_enabled?: boolean;
 }
 
 export function useAuth() {

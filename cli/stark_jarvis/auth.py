@@ -234,10 +234,10 @@ def unlock() -> tuple[str, str]:
         _record_failure()
         sys.exit(1)
 
-    # Layer 4: JARVIS Username — server verifies SHT + username, returns tokens
-    jarvis_user = input(f"  {_BLUE}JARVIS Username: {_RESET}").strip()
+    # Layer 4: Use stored JARVIS username — server verifies SHT + username
+    jarvis_user = config.get("jarvis_username")
     if not jarvis_user:
-        _record_failure()
+        print(f"  {_RED}No JARVIS username stored. Run: jarvis login{_RESET}")
         sys.exit(1)
 
     try:

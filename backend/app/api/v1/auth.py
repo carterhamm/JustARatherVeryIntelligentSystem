@@ -345,12 +345,14 @@ async def totp_login_verify(
     from app.core.security import decode_token
     try:
         token_data = decode_token(payload.totp_token)
-        if token_data.get("type") != "totp_pending":
+        if token_data.type != "totp_pending":
             raise HTTPException(status_code=400, detail="Invalid TOTP token.")
+    except HTTPException:
+        raise
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid or expired TOTP token.")
 
-    user_id = token_data.get("sub")
+    user_id = token_data.sub
     user = await db.get(User, user_id)
     if not user or not user.is_active:
         raise HTTPException(status_code=403, detail="Access denied.")

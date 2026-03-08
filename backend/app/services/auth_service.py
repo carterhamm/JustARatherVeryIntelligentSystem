@@ -282,7 +282,13 @@ class AuthService:
         else:
             user = await AuthService.get_user_by_username(db, identifier)
         if user and user.is_active:
-            return {"exists": True, "user_id": user.id, "username": user.username}
+            prefs = user.preferences or {}
+            return {
+                "exists": True,
+                "user_id": user.id,
+                "username": user.username,
+                "totp_enabled": bool(prefs.get("totp_enabled")),
+            }
         return {"exists": False}
 
     # ------------------------------------------------------------------
