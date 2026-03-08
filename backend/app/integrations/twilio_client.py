@@ -1,4 +1,8 @@
-"""Twilio integration — JARVIS phone number for voice calls."""
+"""Twilio integration — JARVIS phone number for voice calls.
+
+Uses ElevenLabs TTS for the JARVIS voice instead of generic Polly/Google.
+Audio is generated, cached, and served via <Play> URLs in TwiML.
+"""
 
 from __future__ import annotations
 
@@ -26,10 +30,9 @@ def get_twilio_client() -> Optional[TwilioClient]:
     return _client
 
 
-async def call_user(message: str, voice: str = "Polly.Brian-Neural") -> Optional[str]:
-    """Make an outbound call to the user and speak a message.
+async def call_user_with_audio(audio_url: str) -> Optional[str]:
+    """Make an outbound call that plays ElevenLabs audio.
 
-    Uses Amazon Polly Brian (British male) for the JARVIS voice on phone.
     Returns the call SID or None on failure.
     """
     client = get_twilio_client()
@@ -38,7 +41,7 @@ async def call_user(message: str, voice: str = "Polly.Brian-Neural") -> Optional
         return None
 
     twiml = VoiceResponse()
-    twiml.say(message, voice=voice, language="en-GB")
+    twiml.play(audio_url)
 
     try:
         call = client.calls.create(
@@ -54,10 +57,7 @@ async def call_user(message: str, voice: str = "Polly.Brian-Neural") -> Optional
 
 
 async def call_user_with_url(webhook_url: str) -> Optional[str]:
-    """Make an outbound call that uses a webhook URL for dynamic TwiML.
-
-    The webhook handles the full conversation flow (STT -> JARVIS -> TTS).
-    """
+    """Make an outbound call that uses a webhook URL for dynamic TwiML."""
     client = get_twilio_client()
     if not client or not settings.TWILIO_PHONE_NUMBER or not settings.TWILIO_USER_PHONE:
         return None
@@ -74,10 +74,10 @@ async def call_user_with_url(webhook_url: str) -> Optional[str]:
         return None
 
 
-def build_greeting_twiml() -> str:
-    """Build TwiML for when the user calls JARVIS.
+def build_play_greeting_twiml(audio_url: str, fallback_audio_url: Optional[str] = None) -> str:
+    """Build TwiML that plays JARVIS greeting and gathers speech.
 
-    Greets the user and gathers speech input.
+    Uses <Play> with ElevenLabs audio instead of <Say> with Polly.
     """
     response = VoiceResponse()
     gather = Gather(
@@ -87,24 +87,17 @@ def build_greeting_twiml() -> str:
         speech_timeout="auto",
         language="en-US",
     )
-    gather.say(
-        "Good day, Sir. J.A.R.V.I.S. at your service. How may I assist you?",
-        voice="Polly.Brian-Neural",
-        language="en-GB",
-    )
+    gather.play(audio_url)
     response.append(gather)
-    # If no speech detected, prompt again
-    response.say(
-        "I didn't catch that, Sir. Please try again.",
-        voice="Polly.Brian-Neural",
-        language="en-GB",
-    )
+    # If no speech detected, redirect to try again
+    if fallback_audio_url:
+        response.play(fallback_audio_url)
     response.redirect("/api/v1/twilio/incoming")
     return str(response)
 
 
-def build_response_twiml(text: str, listen_again: bool = True) -> str:
-    """Build TwiML that speaks JARVIS's response and optionally listens again."""
+def build_play_response_twiml(audio_url: str, listen_again: bool = True) -> str:
+    """Build TwiML that plays JARVIS's response and optionally listens again."""
     response = VoiceResponse()
     if listen_again:
         gather = Gather(
@@ -114,8 +107,8 @@ def build_response_twiml(text: str, listen_again: bool = True) -> str:
             speech_timeout="auto",
             language="en-US",
         )
-        gather.say(text, voice="Polly.Brian-Neural", language="en-GB")
+        gather.play(audio_url)
         response.append(gather)
     else:
-        response.say(text, voice="Polly.Brian-Neural", language="en-GB")
+        response.play(audio_url)
     return str(response)
