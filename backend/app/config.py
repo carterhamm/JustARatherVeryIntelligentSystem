@@ -67,6 +67,9 @@ class Settings(BaseSettings):
     STARK_PROTOCOL_API_KEY: str = "lm-studio"
     STARK_PROTOCOL_ENABLED: bool = False
 
+    # -- Cerebras (ultra-fast intent routing) -----------------------------------
+    CEREBRAS_API_KEY: str = ""
+
     # -- JARVIS Voice (Coqui TTS XTTS-v2) ------------------------------------
     JARVIS_VOICE_SERVER: str = ""  # path to jarvis_voice_training dir (local)
     JARVIS_VOICE_URL: str = ""  # remote endpoint URL (Modal deployment)

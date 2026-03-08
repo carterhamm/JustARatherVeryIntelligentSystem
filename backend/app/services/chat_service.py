@@ -376,8 +376,8 @@ class ChatService:
         Stream a chat response as a series of :class:`ChatStreamChunk`
         objects.
 
-        When Claude is the provider, uses the agentic tool use path which
-        allows Claude to call JARVIS tools (email, calendar, search, etc.)
+        When Claude or Gemini is the provider, uses the agentic tool use path
+        which allows the LLM to call JARVIS tools (email, calendar, search, etc.)
         and automatically loop until a final text response is produced.
 
         Yields:
@@ -423,14 +423,14 @@ class ChatService:
             collected_content: list[str] = []
             start = time.perf_counter()
 
-            # Route to agentic path for Claude
-            if llm.provider == LLMProvider.CLAUDE:
+            # Route to agentic path for Claude and Gemini
+            if llm.provider in (LLMProvider.CLAUDE, LLMProvider.GEMINI):
                 async for chunk in self._agentic_stream(
                     llm, history, model, user_id, collected_content
                 ):
                     yield chunk
             else:
-                # Standard streaming for other providers
+                # Standard streaming (Stark Protocol — local only, no tools)
                 async for token in llm.chat_completion_stream(
                     messages=history,
                     model=model,
@@ -497,13 +497,9 @@ class ChatService:
         user_id: uuid.UUID,
         collected_content: list[str],
     ) -> AsyncGenerator[ChatStreamChunk, None]:
-        """Run Claude's agentic tool use loop, yielding stream chunks."""
+        """Run agentic tool use loop for Claude and Gemini, yielding stream chunks."""
         from app.agents.tool_schemas import get_anthropic_tools
         from app.agents.tools import get_tool_registry
-        from app.integrations.llm.claude_client import ClaudeClient
-
-        if not isinstance(llm, ClaudeClient):
-            return
 
         tools = get_anthropic_tools()
         registry = get_tool_registry()
@@ -514,6 +510,10 @@ class ChatService:
                 return f"Unknown tool: {name}"
             state = {"user_id": str(user_id)}
             return await tool.execute(params, state=state)
+
+        # Both Claude and Gemini implement agentic_stream with the same interface
+        if not hasattr(llm, 'agentic_stream'):
+            return
 
         async for event in llm.agentic_stream(
             messages=history,

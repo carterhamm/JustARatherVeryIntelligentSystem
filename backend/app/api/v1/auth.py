@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
 from app.config import settings
-from app.core.dependencies import get_current_active_user, get_db
+from app.core.dependencies import get_current_active_user, get_current_active_user_or_service, get_db
 from app.core.security import create_access_token, create_refresh_token, create_totp_pending_token, hash_password, verify_password
 from app.models.user import User
 from app.schemas.auth import (
@@ -408,6 +408,30 @@ async def totp_login_verify(
         refresh_token=create_refresh_token(user.id),
         user=UserResponse.model_validate(user),
     )
+
+
+# -- Location (iOS Shortcuts / service key) ---------------------------------
+
+@router.post("/me/location")
+async def update_location(
+    payload: dict[str, Any],
+    current_user: User = Depends(get_current_active_user_or_service),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, str]:
+    """Update the user's current location. Called by iOS Shortcuts automations."""
+    prefs = dict(current_user.preferences or {})
+    prefs["current_location"] = {
+        "latitude": payload.get("latitude"),
+        "longitude": payload.get("longitude"),
+        "city": payload.get("city"),
+        "state": payload.get("state"),
+        "country": payload.get("country"),
+        "updated_at": payload.get("timestamp") or __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
+    }
+    current_user.preferences = prefs
+    flag_modified(current_user, "preferences")
+    await db.commit()
+    return {"status": "ok"}
 
 
 # -- Profile & Preferences -------------------------------------------------
