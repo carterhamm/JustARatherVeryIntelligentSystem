@@ -133,6 +133,9 @@ async def chat_session(
 
             # ── Draw the full-screen layout ──
             clear_screen()
+            # Clear scrollback so JARVIS banner is the top of scroll history
+            sys.stdout.write("\x1b[3J")
+            sys.stdout.flush()
             print_banner()
             print_system_centered(
                 "Connected. Type your message, or /help for commands."
@@ -148,8 +151,9 @@ async def chat_session(
             # Draw static input area (below scroll region)
             draw_static_input(input_row, provider)
 
-            # Set scroll region to chat area only
-            set_scroll_region(chat_top, scroll_bottom)
+            # Scroll region from row 1 so scrolled-off content goes to
+            # terminal scrollback (banner scrolls away as chat fills).
+            set_scroll_region(1, scroll_bottom)
 
             # Track position in chat area
             chat_row = chat_top
@@ -177,7 +181,7 @@ async def chat_session(
                     continue
                 finally:
                     # Restore scroll region and redraw input area
-                    set_scroll_region(chat_top, scroll_bottom)
+                    set_scroll_region(1, scroll_bottom)
                     draw_static_input(input_row, provider)
 
                 if not user_input:
