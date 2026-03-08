@@ -75,6 +75,7 @@ class Settings(BaseSettings):
     TWILIO_AUTH_TOKEN: str = ""
     TWILIO_PHONE_NUMBER: str = ""   # JARVIS's phone number (E.164 format)
     TWILIO_USER_PHONE: str = ""     # Owner's phone number to call/receive
+    TWILIO_FAX_ENABLED: bool = False  # Fax capability (doesn't affect voice/SMS)
 
     # -- JARVIS Voice (Coqui TTS XTTS-v2) ------------------------------------
     JARVIS_VOICE_SERVER: str = ""  # path to jarvis_voice_training dir (local)
@@ -141,6 +142,10 @@ class Settings(BaseSettings):
 
     # -- News (NewsAPI) -------------------------------------------------------
     NEWS_API_KEY: str = ""
+
+    # -- Resend (outbound email from jarvis@malibupoint.dev) ------------------
+    RESEND_API_KEY: str = ""
+    RESEND_FROM_EMAIL: str = "JARVIS <jarvis@malibupoint.dev>"
 
     # -- Spotify --------------------------------------------------------------
     SPOTIFY_CLIENT_ID: str = ""

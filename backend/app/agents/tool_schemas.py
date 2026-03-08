@@ -85,6 +85,24 @@ _TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "required": [],
         },
     },
+    {
+        "name": "send_jarvis_email",
+        "description": (
+            "Send an email FROM jarvis@malibupoint.dev (JARVIS's own email address). "
+            "Use for JARVIS-initiated emails: daily briefings, alerts, reports sent TO the owner. "
+            "NEVER impersonate the owner."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "to": {"type": "string", "description": "Recipient email address."},
+                "subject": {"type": "string", "description": "Email subject line."},
+                "body": {"type": "string", "description": "Plain text email body."},
+                "html": {"type": "string", "description": "Optional HTML email body."},
+            },
+            "required": ["to", "subject", "body"],
+        },
+    },
     # -- Calendar ---------------------------------------------------------
     {
         "name": "create_calendar_event",

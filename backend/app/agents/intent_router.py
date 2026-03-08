@@ -28,7 +28,7 @@ TOOL_CATEGORIES = {
     },
     "email": {
         "description": "Reading, sending, or managing email",
-        "tools": ["send_email", "read_email"],
+        "tools": ["send_email", "read_email", "send_jarvis_email"],
     },
     "calendar": {
         "description": "Calendar events, scheduling, availability",

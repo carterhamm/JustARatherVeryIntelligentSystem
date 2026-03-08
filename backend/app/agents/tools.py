@@ -187,6 +187,47 @@ class ReadEmailTool(BaseTool):
         return "\n".join(lines)
 
 
+class SendJarvisEmailTool(BaseTool):
+    """Send an email from JARVIS's own address (jarvis@malibupoint.dev) via Resend."""
+
+    name = "send_jarvis_email"
+    description = (
+        "Send an email FROM jarvis@malibupoint.dev (JARVIS's own email address). "
+        "Use this for JARVIS-initiated emails like daily briefings, alerts, and reports "
+        "sent TO the owner. NEVER use this to impersonate the owner. "
+        "Params: to (str), subject (str), body (str), html? (str)."
+    )
+
+    async def execute(
+        self,
+        params: dict[str, Any],
+        *,
+        state: Optional[AgentState] = None,
+    ) -> str:
+        from app.integrations.resend_email import send_email
+
+        to = params.get("to", "")
+        subject = params.get("subject", "")
+        body = params.get("body", "")
+        html = params.get("html")
+
+        if not to or not subject:
+            return "Missing required fields (to, subject)."
+
+        result = await send_email(to=to, subject=subject, body=body, html=html)
+
+        if result.get("error"):
+            return f"Failed to send email: {result['error']}"
+
+        return (
+            f"JARVIS email sent successfully.\n"
+            f"  From: jarvis@malibupoint.dev\n"
+            f"  To: {result.get('to', to)}\n"
+            f"  Subject: {result.get('subject', subject)}\n"
+            f"  Email ID: {result.get('email_id', 'N/A')}"
+        )
+
+
 # ═════════════════════════════════════════════════════════════════════════
 # Calendar tools
 # ═════════════════════════════════════════════════════════════════════════
@@ -1789,6 +1830,7 @@ def get_tool_registry() -> dict[str, BaseTool]:
             SearchKnowledgeTool(),
             SendEmailTool(),
             ReadEmailTool(),
+            SendJarvisEmailTool(),
             CreateCalendarEventTool(),
             ListCalendarEventsTool(),
             SetReminderTool(),
