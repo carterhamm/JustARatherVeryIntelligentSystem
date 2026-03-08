@@ -1090,7 +1090,7 @@ class DateTimeTool(BaseTool):
         import zoneinfo
 
         operation = params.get("operation", "now")
-        tz_name = params.get("timezone", "UTC")
+        tz_name = params.get("timezone", "America/Denver")
 
         try:
             tz = zoneinfo.ZoneInfo(tz_name)
