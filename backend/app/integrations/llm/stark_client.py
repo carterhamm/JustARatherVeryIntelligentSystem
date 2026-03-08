@@ -20,7 +20,7 @@ logger = logging.getLogger("jarvis.llm.stark_protocol")
 
 # Default model name — LM Studio serves whatever is loaded,
 # but we pass the identifier for logging / routing purposes.
-_DEFAULT_MODEL = "gemma-3-4b-it-abliterated-text"
+_DEFAULT_MODEL = "gemma-3-12b-it-abliterated"
 
 # Retry config for transient errors (e.g. LM Studio not running yet)
 _MAX_RETRIES = 3
@@ -153,10 +153,10 @@ class StarkProtocolClient(BaseLLMClient):
         }
 
         url = f"{self._endpoint_url}/chat/completions"
-        # Use a shorter connect timeout (5s) — LM Studio is local, so
-        # connection should be near-instant. Read timeout stays generous
-        # for slow inference.
-        stream_timeout = httpx.Timeout(90.0, connect=5.0)
+        # Remote (tunnel): generous connect timeout for Cloudflare hops.
+        # Local: near-instant connection expected.
+        connect = 30.0 if self._is_remote else 5.0
+        stream_timeout = httpx.Timeout(90.0, connect=connect)
 
         last_exc: BaseException | None = None
         for attempt in range(self._max_retries):
