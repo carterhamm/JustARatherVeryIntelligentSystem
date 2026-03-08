@@ -202,9 +202,18 @@ class StarkProtocolClient(BaseLLMClient):
                 await asyncio.sleep(delay)
 
             except httpx.HTTPStatusError as exc:
-                raise RuntimeError(
-                    f"LM Studio returned HTTP {exc.response.status_code}"
-                ) from exc
+                if exc.response.status_code in (502, 503, 504) and attempt < self._max_retries - 1:
+                    last_exc = exc
+                    delay = _RETRY_BASE_DELAY * (2 ** attempt)
+                    logger.warning(
+                        "LM Studio returned HTTP %d, attempt %d/%d — retry in %.1fs",
+                        exc.response.status_code, attempt + 1, self._max_retries, delay,
+                    )
+                    await asyncio.sleep(delay)
+                else:
+                    raise RuntimeError(
+                        f"LM Studio returned HTTP {exc.response.status_code}"
+                    ) from exc
 
         raise RuntimeError(
             f"LM Studio not responding after {self._max_retries} attempts. "
@@ -298,9 +307,18 @@ class StarkProtocolClient(BaseLLMClient):
                 )
                 await asyncio.sleep(delay)
             except httpx.HTTPStatusError as exc:
-                raise RuntimeError(
-                    f"Stark Protocol error {exc.response.status_code}: {exc.response.text}"
-                ) from exc
+                if exc.response.status_code in (502, 503, 504) and attempt < self._max_retries - 1:
+                    last_exc = exc
+                    delay = _RETRY_BASE_DELAY * (2 ** attempt)
+                    logger.warning(
+                        "Stark Protocol HTTP %d, attempt %d/%d — retry in %.1fs",
+                        exc.response.status_code, attempt + 1, self._max_retries, delay,
+                    )
+                    await asyncio.sleep(delay)
+                else:
+                    raise RuntimeError(
+                        f"Stark Protocol error {exc.response.status_code}: {exc.response.text}"
+                    ) from exc
 
         raise RuntimeError(
             "Stark Protocol not responding after retries. "
