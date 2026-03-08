@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, LogOut, Volume2, VolumeX, Clock, Shield, Loader2 } from 'lucide-react';
+import { X, LogOut, Volume2, VolumeX, Clock, Shield, Loader2, Cpu, Settings, Info } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { useAuth } from '@/hooks/useAuth';
 import { useSettingsStore, type ModelProvider } from '@/stores/settingsStore';
@@ -13,6 +13,15 @@ const MODEL_OPTIONS: { id: ModelProvider; label: string; desc: string; tag: stri
   { id: 'gemini', label: 'Gemini', desc: 'Multimodal Flash', tag: 'UPLINK', color: '#4285F4' },
   { id: 'stark_protocol', label: 'Stark Protocol', desc: 'Self-hosted LLM', tag: 'LOCAL', color: '#00d4ff' },
 ];
+
+const TABS = [
+  { id: 'general', label: 'General', icon: Settings },
+  { id: 'model', label: 'Model', icon: Cpu },
+  { id: 'security', label: 'Security', icon: Shield },
+  { id: 'system', label: 'System', icon: Info },
+] as const;
+
+type TabId = typeof TABS[number]['id'];
 
 function ToggleRow({
   icon: Icon,
@@ -67,6 +76,7 @@ type TOTPStep = 'idle' | 'loading' | 'setup' | 'confirm' | 'disabling';
 
 export default function SettingsPanel() {
   const [isOpen, setIsOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<TabId>('general');
   const { user, logout, getTOTPStatus, setupTOTP, enableTOTP, disableTOTP } = useAuth();
   const { voiceEnabled, setVoiceEnabled, use24HourTime, setUse24HourTime, modelPreference, setModelPreference } = useSettingsStore();
   const [availableModels, setAvailableModels] = useState<Set<string>>(new Set(MODEL_OPTIONS.map((m) => m.id)));
@@ -96,11 +106,28 @@ export default function SettingsPanel() {
 
   const handleClose = useCallback(() => setIsOpen(false), []);
 
+  // Keyboard: Escape to close, Tab to cycle tabs
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setIsOpen(false); };
+    if (!isOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsOpen(false);
+        return;
+      }
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        setActiveTab((prev) => {
+          const idx = TABS.findIndex((t) => t.id === prev);
+          const next = e.shiftKey
+            ? (idx - 1 + TABS.length) % TABS.length
+            : (idx + 1) % TABS.length;
+          return TABS[next].id;
+        });
+      }
+    };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  }, [isOpen]);
 
   // Fetch TOTP status + provider availability when panel opens
   useEffect(() => {
@@ -177,7 +204,7 @@ export default function SettingsPanel() {
             onClick={handleClose}
           />
 
-          {/* Centered panel */}
+          {/* Centered panel — wider, shorter */}
           <motion.div
             initial={{ opacity: 0, scale: 0.95, y: 10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -185,9 +212,9 @@ export default function SettingsPanel() {
             transition={{ type: 'spring', damping: 28, stiffness: 350 }}
             className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none"
           >
-            <div className="glass-heavy rounded-3xl w-full max-w-sm mx-4 pointer-events-auto overflow-hidden">
-              {/* Header */}
-              <div className="flex items-center justify-between px-6 py-4">
+            <div className="glass-heavy rounded-3xl w-full max-w-lg mx-4 pointer-events-auto overflow-hidden">
+              {/* Header + Tabs */}
+              <div className="flex items-center justify-between px-6 pt-4 pb-0">
                 <span className="hud-label text-[10px]">SETTINGS</span>
                 <button
                   onClick={handleClose}
@@ -197,64 +224,89 @@ export default function SettingsPanel() {
                 </button>
               </div>
 
-              <div className="px-6 pb-6 space-y-5">
-                {/* Profile */}
-                {user && (
-                  <div className="glass-subtle rounded-2xl p-4">
-                    <div className="flex items-center gap-3">
-                      <div
-                        className="w-10 h-10 flex items-center justify-center rounded-full flex-shrink-0"
-                        style={{
-                          background:
-                            'linear-gradient(135deg, rgba(0,212,255,0.15), rgba(0,128,255,0.1))',
-                          border: '1px solid rgba(0,212,255,0.2)',
-                        }}
-                      >
-                        <span className="text-sm font-display font-bold text-jarvis-blue">
-                          {(user.full_name || user.username)?.charAt(0).toUpperCase() || 'U'}
-                        </span>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-200 truncate">
-                          {user.full_name || user.username}
-                        </p>
-                        <p className="text-[10px] text-gray-500 font-mono truncate">{user.email}</p>
-                      </div>
-                    </div>
+              {/* Tab bar */}
+              <div className="flex gap-1 px-5 pt-3 pb-1">
+                {TABS.map((tab) => {
+                  const Icon = tab.icon;
+                  const isActive = activeTab === tab.id;
+                  return (
                     <button
-                      onClick={logout}
-                      className="mt-3 w-full flex items-center justify-center gap-2 px-4 py-2 text-[10px] font-mono font-medium text-hud-red uppercase tracking-wider rounded-xl border border-hud-red/20 bg-hud-red/5 hover:bg-hud-red/10 transition-all"
+                      key={tab.id}
+                      onClick={() => setActiveTab(tab.id)}
+                      className={clsx(
+                        'flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-[10px] font-mono uppercase tracking-wider transition-all',
+                        isActive
+                          ? 'bg-jarvis-blue/10 border border-jarvis-blue/20 text-jarvis-blue'
+                          : 'border border-transparent text-gray-600 hover:text-gray-400 hover:bg-white/[0.02]',
+                      )}
                     >
-                      <LogOut size={12} />
-                      Sign Out
+                      <Icon size={12} />
+                      {tab.label}
                     </button>
+                  );
+                })}
+              </div>
+
+              {/* Tab content */}
+              <div className="px-6 pb-5 pt-3 min-h-[220px]">
+
+                {/* ── General Tab ── */}
+                {activeTab === 'general' && (
+                  <div className="space-y-4">
+                    {/* Profile */}
+                    {user && (
+                      <div className="glass-subtle rounded-2xl p-4">
+                        <div className="flex items-center gap-3">
+                          <div
+                            className="w-10 h-10 flex items-center justify-center rounded-full flex-shrink-0"
+                            style={{
+                              background: 'linear-gradient(135deg, rgba(0,212,255,0.15), rgba(0,128,255,0.1))',
+                              border: '1px solid rgba(0,212,255,0.2)',
+                            }}
+                          >
+                            <span className="text-sm font-display font-bold text-jarvis-blue">
+                              {(user.full_name || user.username)?.charAt(0).toUpperCase() || 'U'}
+                            </span>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-gray-200 truncate">
+                              {user.full_name || user.username}
+                            </p>
+                            <p className="text-[10px] text-gray-500 font-mono truncate">{user.email}</p>
+                          </div>
+                          <button
+                            onClick={logout}
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-[9px] font-mono font-medium text-hud-red uppercase tracking-wider rounded-lg border border-hud-red/20 bg-hud-red/5 hover:bg-hud-red/10 transition-all flex-shrink-0"
+                          >
+                            <LogOut size={10} />
+                            Sign Out
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Preferences */}
+                    <div className="space-y-2">
+                      <ToggleRow
+                        icon={voiceEnabled ? Volume2 : VolumeX}
+                        label="Voice Responses"
+                        sublabel={modelPreference === 'stark_protocol' ? 'JARVIS Voice (Local)' : 'ElevenLabs TTS'}
+                        enabled={voiceEnabled}
+                        onToggle={() => setVoiceEnabled(!voiceEnabled)}
+                      />
+                      <ToggleRow
+                        icon={Clock}
+                        label="24-Hour Clock"
+                        enabled={use24HourTime}
+                        onToggle={() => setUse24HourTime(!use24HourTime)}
+                      />
+                    </div>
                   </div>
                 )}
 
-                {/* Preferences */}
-                <div>
-                  <span className="hud-label text-[8px] block mb-3">PREFERENCES</span>
-                  <div className="space-y-2">
-                    <ToggleRow
-                      icon={voiceEnabled ? Volume2 : VolumeX}
-                      label="Voice Responses"
-                      sublabel={modelPreference === 'stark_protocol' ? 'JARVIS Voice (Local)' : 'ElevenLabs TTS'}
-                      enabled={voiceEnabled}
-                      onToggle={() => setVoiceEnabled(!voiceEnabled)}
-                    />
-                    <ToggleRow
-                      icon={Clock}
-                      label="24-Hour Clock"
-                      enabled={use24HourTime}
-                      onToggle={() => setUse24HourTime(!use24HourTime)}
-                    />
-                  </div>
-                </div>
-
-                {/* Default Model */}
-                <div>
-                  <span className="hud-label text-[8px] block mb-3">DEFAULT MODEL</span>
-                  <div className="space-y-1">
+                {/* ── Model Tab ── */}
+                {activeTab === 'model' && (
+                  <div className="space-y-1.5">
                     {MODEL_OPTIONS.map((m) => {
                       const isAvail = availableModels.has(m.id);
                       const isSelected = modelPreference === m.id;
@@ -264,7 +316,7 @@ export default function SettingsPanel() {
                           disabled={!isAvail}
                           onClick={() => isAvail && setModelPreference(m.id)}
                           className={clsx(
-                            'w-full text-left px-3.5 py-2.5 rounded-xl transition-all flex items-center justify-between',
+                            'w-full text-left px-4 py-3 rounded-xl transition-all flex items-center justify-between',
                             isSelected
                               ? 'glass-subtle border border-white/[0.08]'
                               : 'border border-transparent hover:bg-white/[0.03]',
@@ -282,7 +334,7 @@ export default function SettingsPanel() {
                           </div>
                           {isSelected && isAvail && (
                             <div
-                              className="w-2 h-2 rounded-full flex-shrink-0"
+                              className="w-2.5 h-2.5 rounded-full flex-shrink-0"
                               style={{ backgroundColor: m.color, boxShadow: `0 0 8px ${m.color}66` }}
                             />
                           )}
@@ -290,12 +342,11 @@ export default function SettingsPanel() {
                       );
                     })}
                   </div>
-                </div>
+                )}
 
-                {/* Security — TOTP 2FA */}
-                <div>
-                  <span className="hud-label text-[8px] block mb-3">SECURITY</span>
-                  <div className="space-y-2">
+                {/* ── Security Tab ── */}
+                {activeTab === 'security' && (
+                  <div className="space-y-3">
                     {totpStep === 'idle' && !totpEnabled && (
                       <button
                         onClick={handleTOTPSetup}
@@ -304,8 +355,8 @@ export default function SettingsPanel() {
                         <div className="flex items-center gap-2.5">
                           <Shield size={14} className="text-gray-600" />
                           <div className="text-left">
-                            <span className="text-xs text-gray-300">Two-Factor Auth</span>
-                            <p className="text-[9px] text-gray-600 font-mono">Disabled</p>
+                            <span className="text-xs text-gray-300">Two-Factor Authentication</span>
+                            <p className="text-[9px] text-gray-600 font-mono">Disabled — tap to enable</p>
                           </div>
                         </div>
                         <span className="text-[10px] text-jarvis-blue font-mono">ENABLE</span>
@@ -313,45 +364,79 @@ export default function SettingsPanel() {
                     )}
 
                     {totpStep === 'idle' && totpEnabled && (
-                      <div className="glass-subtle rounded-xl px-4 py-3">
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center gap-2.5">
-                            <Shield size={14} className="text-hud-green" />
-                            <div>
-                              <span className="text-xs text-gray-300">Two-Factor Auth</span>
-                              <p className="text-[9px] text-hud-green font-mono">Enabled</p>
-                            </div>
+                      <div className="glass-subtle rounded-xl px-4 py-3 flex items-center justify-between">
+                        <div className="flex items-center gap-2.5">
+                          <Shield size={14} className="text-hud-green" />
+                          <div>
+                            <span className="text-xs text-gray-300">Two-Factor Authentication</span>
+                            <p className="text-[9px] text-hud-green font-mono">Enabled</p>
                           </div>
-                          <button
-                            onClick={() => { setTotpStep('disabling'); setTotpCode(''); setTotpError(''); }}
-                            className="text-[10px] text-hud-red font-mono"
-                          >
-                            DISABLE
-                          </button>
                         </div>
+                        <button
+                          onClick={() => { setTotpStep('disabling'); setTotpCode(''); setTotpError(''); }}
+                          className="text-[10px] text-hud-red font-mono"
+                        >
+                          DISABLE
+                        </button>
                       </div>
                     )}
 
                     {totpStep === 'loading' && (
-                      <div className="glass-subtle rounded-xl px-4 py-6 flex items-center justify-center">
+                      <div className="glass-subtle rounded-xl px-4 py-8 flex items-center justify-center">
                         <Loader2 size={16} className="animate-spin text-jarvis-blue" />
                       </div>
                     )}
 
                     {totpStep === 'setup' && (
-                      <div className="glass-subtle rounded-xl px-4 py-3 space-y-3">
+                      <div className="glass-subtle rounded-xl px-4 py-4 space-y-3">
                         <p className="text-xs text-gray-300 text-center">Scan with your authenticator app</p>
                         <div className="flex justify-center">
                           <div className="bg-white rounded-xl p-3">
-                            <QRCodeSVG value={totpUri} size={160} level="M" />
+                            <QRCodeSVG value={totpUri} size={140} level="M" />
                           </div>
                         </div>
-                        <p className="text-[10px] text-gray-500 text-center">Or enter this key manually:</p>
-                        <div className="bg-black/40 rounded-lg px-3 py-2 font-mono text-[11px] text-jarvis-blue break-all select-all text-center">
+                        <p className="text-[10px] text-gray-500 text-center">Or enter manually:</p>
+                        <div className="bg-black/40 rounded-lg px-3 py-2 font-mono text-[10px] text-jarvis-blue break-all select-all text-center">
                           {totpSecret}
                         </div>
-                        <div>
-                          <label className="hud-label text-[7px] block mb-1.5">ENTER CODE TO CONFIRM</label>
+                        <div className="flex items-end gap-2">
+                          <div className="flex-1">
+                            <label className="hud-label text-[7px] block mb-1.5">VERIFICATION CODE</label>
+                            <input
+                              type="text"
+                              inputMode="numeric"
+                              maxLength={6}
+                              value={totpCode}
+                              onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                              placeholder="000000"
+                              className="w-full jarvis-input px-3 py-2 text-center text-sm font-mono tracking-[0.4em]"
+                              autoFocus
+                            />
+                          </div>
+                          <button
+                            onClick={handleTOTPConfirm}
+                            disabled={totpCode.length !== 6 || totpLoading}
+                            className="px-4 py-2 text-[10px] font-mono text-jarvis-blue rounded-xl border border-jarvis-blue/20 bg-jarvis-blue/5 hover:bg-jarvis-blue/10 transition-all disabled:opacity-40"
+                          >
+                            {totpLoading ? '...' : 'CONFIRM'}
+                          </button>
+                        </div>
+                        {totpError && (
+                          <p className="text-[10px] text-hud-red text-center">{totpError}</p>
+                        )}
+                        <button
+                          onClick={() => { setTotpStep('idle'); setTotpError(''); }}
+                          className="w-full text-[10px] text-gray-500 hover:text-gray-300 transition-colors"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    )}
+
+                    {totpStep === 'disabling' && (
+                      <div className="glass-subtle rounded-xl px-4 py-4 space-y-3">
+                        <p className="text-xs text-gray-300">Enter a code to disable 2FA:</p>
+                        <div className="flex items-end gap-2">
                           <input
                             type="text"
                             inputMode="numeric"
@@ -359,84 +444,54 @@ export default function SettingsPanel() {
                             value={totpCode}
                             onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                             placeholder="000000"
-                            className="w-full jarvis-input px-3 py-2 text-center text-sm font-mono tracking-[0.4em]"
+                            className="flex-1 jarvis-input px-3 py-2 text-center text-sm font-mono tracking-[0.4em]"
                             autoFocus
                           />
-                        </div>
-                        {totpError && (
-                          <p className="text-[10px] text-hud-red text-center">{totpError}</p>
-                        )}
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => { setTotpStep('idle'); setTotpError(''); }}
-                            className="flex-1 text-[10px] text-gray-500 py-1.5 hover:text-gray-300 transition-colors"
-                          >
-                            Cancel
-                          </button>
-                          <button
-                            onClick={handleTOTPConfirm}
-                            disabled={totpCode.length !== 6 || totpLoading}
-                            className="flex-1 text-[10px] font-mono text-jarvis-blue py-1.5 rounded-lg border border-jarvis-blue/20 bg-jarvis-blue/5 hover:bg-jarvis-blue/10 transition-all disabled:opacity-40"
-                          >
-                            {totpLoading ? 'Verifying...' : 'CONFIRM'}
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
-                    {totpStep === 'disabling' && (
-                      <div className="glass-subtle rounded-xl px-4 py-3 space-y-3">
-                        <p className="text-xs text-gray-300">Enter a code to disable 2FA:</p>
-                        <input
-                          type="text"
-                          inputMode="numeric"
-                          maxLength={6}
-                          value={totpCode}
-                          onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                          placeholder="000000"
-                          className="w-full jarvis-input px-3 py-2 text-center text-sm font-mono tracking-[0.4em]"
-                          autoFocus
-                        />
-                        {totpError && (
-                          <p className="text-[10px] text-hud-red text-center">{totpError}</p>
-                        )}
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => { setTotpStep('idle'); setTotpError(''); setTotpCode(''); }}
-                            className="flex-1 text-[10px] text-gray-500 py-1.5 hover:text-gray-300 transition-colors"
-                          >
-                            Cancel
-                          </button>
                           <button
                             onClick={handleTOTPDisable}
                             disabled={totpCode.length !== 6 || totpLoading}
-                            className="flex-1 text-[10px] font-mono text-hud-red py-1.5 rounded-lg border border-hud-red/20 bg-hud-red/5 hover:bg-hud-red/10 transition-all disabled:opacity-40"
+                            className="px-4 py-2 text-[10px] font-mono text-hud-red rounded-xl border border-hud-red/20 bg-hud-red/5 hover:bg-hud-red/10 transition-all disabled:opacity-40"
                           >
-                            {totpLoading ? 'Disabling...' : 'DISABLE'}
+                            {totpLoading ? '...' : 'DISABLE'}
                           </button>
                         </div>
+                        {totpError && (
+                          <p className="text-[10px] text-hud-red text-center">{totpError}</p>
+                        )}
+                        <button
+                          onClick={() => { setTotpStep('idle'); setTotpError(''); setTotpCode(''); }}
+                          className="w-full text-[10px] text-gray-500 hover:text-gray-300 transition-colors"
+                        >
+                          Cancel
+                        </button>
                       </div>
                     )}
                   </div>
-                </div>
+                )}
 
-                {/* System */}
-                <div>
-                  <span className="hud-label text-[8px] block mb-3">SYSTEM</span>
-                  <div className="grid grid-cols-2 gap-2">
-                    <InfoCard label="VERSION" value="1.0.0" />
-                    <InfoCard label="CONNECTION" value={wsConnected ? 'Online' : 'Offline'} />
-                    <InfoCard label="FRONTEND" value="React + TypeScript" />
-                    <InfoCard label="BACKEND" value="FastAPI + WebSocket" />
+                {/* ── System Tab ── */}
+                {activeTab === 'system' && (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 gap-2">
+                      <InfoCard label="VERSION" value="1.0.0" />
+                      <InfoCard label="CONNECTION" value={wsConnected ? 'Online' : 'Offline'} />
+                      <InfoCard label="FRONTEND" value="React + TypeScript" />
+                      <InfoCard label="BACKEND" value="FastAPI + WebSocket" />
+                    </div>
+                    <div className="text-center pt-1">
+                      <p className="text-[9px] text-gray-700 font-mono tracking-wider">
+                        STARK INDUSTRIES
+                      </p>
+                    </div>
                   </div>
-                </div>
+                )}
+              </div>
 
-                {/* Footer */}
-                <div className="text-center pt-1">
-                  <p className="text-[9px] text-gray-700 font-mono tracking-wider">
-                    STARK INDUSTRIES
-                  </p>
-                </div>
+              {/* Tab hint */}
+              <div className="px-6 pb-3">
+                <p className="text-[8px] text-gray-700 font-mono text-center tracking-wider">
+                  Press TAB to cycle sections
+                </p>
               </div>
             </div>
           </motion.div>
