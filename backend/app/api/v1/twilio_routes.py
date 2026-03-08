@@ -218,7 +218,8 @@ async def process_speech(
         audio = await _generate_jarvis_tts(response_text)
         audio_id = await _cache_audio(audio)
 
-        listen_again = "?" in response_text
+        # Always keep listening — JARVIS stays on the line until user hangs up
+        listen_again = True
         twiml = build_play_response_twiml(_audio_url(audio_id), listen_again=listen_again)
         return Response(content=twiml, media_type="application/xml")
 
