@@ -152,13 +152,17 @@ export default function HoloMessage({ message }: HoloMessageProps) {
 
         {/* Message bubble */}
         <div
-          className={clsx('rounded-2xl px-5 py-3.5 text-sm leading-relaxed', {
-            'glass-gold text-white/90': isUser,
+          className={clsx('rounded-2xl text-sm leading-relaxed', {
+            'glass-gold text-white/90 px-5 py-3.5': isUser,
             'glass-cyan text-gray-200': !isUser,
+            'px-4 py-3 w-16': !isUser && message.isStreaming && !message.content,
+            'px-5 py-3.5': !isUser && !(message.isStreaming && !message.content),
           })}
         >
           {message.isStreaming && !message.content ? (
-            <TypingIndicator />
+            <div className="flex justify-center">
+              <TypingIndicator />
+            </div>
           ) : (
             <div className="prose prose-invert prose-sm max-w-none">
               <ReactMarkdown

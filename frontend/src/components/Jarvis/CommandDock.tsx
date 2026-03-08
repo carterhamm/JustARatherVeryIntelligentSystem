@@ -2,8 +2,8 @@ import { useState, useRef, useEffect } from 'react';
 import {
   MessageSquare,
   Cpu,
-  Mic,
-  MicOff,
+  Volume2,
+  VolumeX,
   Brain,
   Download,
   Settings,
@@ -152,7 +152,7 @@ export default function CommandDock() {
           onClick={() => dispatch('jarvis-model-toggle')}
         />
         <DockIcon
-          icon={voiceEnabled ? Mic : MicOff}
+          icon={voiceEnabled ? Volume2 : VolumeX}
           label="Voice"
           active={voiceEnabled}
           accent="#f0a500"

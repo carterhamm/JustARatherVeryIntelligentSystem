@@ -89,7 +89,9 @@ export function useChat() {
 
         case 'audio_binary': {
           setIsSpeaking(true);
-          const blob = msg.blob as Blob;
+          const rawBlob = msg.blob as Blob;
+          // Ensure blob has audio MIME type for browser playback
+          const blob = rawBlob.type ? rawBlob : new Blob([rawBlob], { type: 'audio/wav' });
           const audioUrl = URL.createObjectURL(blob);
           const binaryAudio = new Audio(audioUrl);
           binaryAudio.onended = () => {

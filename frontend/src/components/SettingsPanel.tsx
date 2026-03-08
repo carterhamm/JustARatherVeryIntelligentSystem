@@ -58,7 +58,7 @@ function InfoCard({ label, value }: { label: string; value: string }) {
 export default function SettingsPanel() {
   const [isOpen, setIsOpen] = useState(false);
   const { user, logout } = useAuth();
-  const { voiceEnabled, setVoiceEnabled, use24HourTime, setUse24HourTime } = useSettingsStore();
+  const { voiceEnabled, setVoiceEnabled, use24HourTime, setUse24HourTime, modelPreference } = useSettingsStore();
   const wsConnected = useUIStore((s) => s.wsConnected);
 
   useEffect(() => {
@@ -157,7 +157,7 @@ export default function SettingsPanel() {
                     <ToggleRow
                       icon={voiceEnabled ? Volume2 : VolumeX}
                       label="Voice Responses"
-                      sublabel="ElevenLabs TTS"
+                      sublabel={modelPreference === 'stark_protocol' ? 'JARVIS Voice (Local)' : 'ElevenLabs TTS'}
                       enabled={voiceEnabled}
                       onToggle={() => setVoiceEnabled(!voiceEnabled)}
                     />
