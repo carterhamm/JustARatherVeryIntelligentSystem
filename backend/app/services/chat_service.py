@@ -359,6 +359,8 @@ class ChatService:
             tool_calls=response.get("tool_calls"),
             user_id=user_id,
         )
+        # Return plaintext content (add_message stores encrypted)
+        assistant_msg.content = assistant_content
         return assistant_msg
 
     # =====================================================================
