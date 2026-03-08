@@ -18,7 +18,7 @@ export default {
       },
       fontFamily: {
         'sans': ['Rajdhani', 'sans-serif'],
-        'display': ['Orbitron', 'sans-serif'],
+        'display': ['Arame', 'Orbitron', 'sans-serif'],
         'mono': ['JetBrains Mono', 'Fira Code', 'monospace'],
       },
       borderRadius: {

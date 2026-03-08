@@ -291,7 +291,7 @@ export default function AuthPage() {
               J.A.R.V.I.S.
             </h1>
             <p className="text-[11px] text-gray-500 mt-1 tracking-wider font-mono">
-              AUTHENTICATION PROTOCOL v2.0
+              AUTHENTICATION PROTOCOL v3.0
             </p>
           </div>
 
