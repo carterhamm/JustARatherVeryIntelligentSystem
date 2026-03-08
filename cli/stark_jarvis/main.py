@@ -19,7 +19,7 @@ from stark_jarvis.display import (
     print_banner, print_system, print_error, print_success,
 )
 
-COMMANDS = {"login", "logout", "purge", "status", "help"}
+COMMANDS = {"login", "logout", "purge", "status", "help", "totp"}
 
 
 def main() -> None:
@@ -105,6 +105,11 @@ def _run() -> None:
         _show_status()
         return
 
+    # ── totp ──
+    if command == "totp":
+        _show_totp()
+        return
+
     # ── help ──
     if command == "help":
         _print_help()
@@ -188,6 +193,59 @@ def _show_status() -> None:
     print()
 
 
+def _show_totp() -> None:
+    """Display the current TOTP code (requires auth)."""
+    from stark_jarvis.config import config
+
+    if not config.is_setup():
+        print_error("CLI not configured. Run: jarvis login")
+        sys.exit(1)
+
+    session = config.get_session()
+    if not session:
+        print_error("Not authenticated. Run: jarvis login")
+        sys.exit(1)
+
+    access_token, _ = session
+
+    import httpx
+    from stark_jarvis.config import DEFAULT_SERVER
+    base = config.server_url or DEFAULT_SERVER
+    try:
+        resp = httpx.get(
+            f"{base}/api/v1/auth/totp/code",
+            headers={"Authorization": f"Bearer {access_token}"},
+            timeout=10.0,
+        )
+        if resp.status_code == 401:
+            print_error("Session expired. Run: jarvis login")
+            sys.exit(1)
+        if resp.status_code == 400:
+            print_error("TOTP not enabled. Enable 2FA from the website first.")
+            sys.exit(1)
+        resp.raise_for_status()
+        data = resp.json()
+    except httpx.ConnectError:
+        print_error("Cannot reach server.")
+        sys.exit(1)
+    except httpx.HTTPStatusError:
+        print_error("Failed to fetch TOTP code.")
+        sys.exit(1)
+
+    code = data["code"]
+    remaining = data["remaining"]
+
+    # Display with JARVIS styling
+    spaced = "  ".join(code)
+    bar_len = 15
+    filled = int((remaining / 30) * bar_len)
+    bar = "█" * filled + "░" * (bar_len - filled)
+
+    print(f"\n  {JARVIS_BLUE}{BOLD}TOTP Authenticator{RESET}\n")
+    print(f"  {BOLD}{JARVIS_BLUE}{spaced}{RESET}")
+    print(f"\n  {DIM}{bar}  {remaining}s{RESET}\n")
+
+
 def _print_help() -> None:
     from stark_jarvis.config import DEFAULT_SERVER
     print(f"""
@@ -201,6 +259,7 @@ def _print_help() -> None:
   jarvis logout                       Clear stored credentials
   jarvis purge                        Remove all data from this machine
   jarvis status                       Show connection info
+  jarvis totp                         Show current TOTP code (requires auth + 2FA)
 
 {BOLD}Authentication (4 layers){RESET}
   1. Gate Username                    Static CLI access credential

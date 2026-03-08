@@ -332,6 +332,27 @@ async def totp_status(
     return {"totp_enabled": bool(prefs.get("totp_enabled"))}
 
 
+@router.get("/totp/code")
+async def totp_code(
+    current_user: User = Depends(get_current_active_user),
+) -> dict[str, Any]:
+    """Return the current TOTP code for the authenticated user.
+
+    Requires a valid JWT — only accessible after full authentication.
+    Used by the CLI to display codes like a phone authenticator app.
+    """
+    import pyotp
+    import time as _time
+    prefs = current_user.preferences or {}
+    if not prefs.get("totp_enabled") or not prefs.get("totp_secret"):
+        raise HTTPException(status_code=400, detail="TOTP not enabled.")
+    totp = pyotp.TOTP(prefs["totp_secret"])
+    now = _time.time()
+    code = totp.now()
+    remaining = 30 - int(now % 30)
+    return {"code": code, "remaining": remaining, "period": 30}
+
+
 @router.post("/login/totp-verify", response_model=AuthResponse)
 async def totp_login_verify(
     payload: TOTPLoginRequest,
