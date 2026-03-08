@@ -10,6 +10,8 @@ from fastapi import APIRouter, Depends, Header, HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from sqlalchemy.orm.attributes import flag_modified
+
 from app.config import settings
 from app.core.dependencies import get_current_active_user, get_db
 from app.core.security import create_access_token, create_refresh_token, create_totp_pending_token, hash_password, verify_password
@@ -178,9 +180,10 @@ async def set_sht(
     The SHT is stored as a bcrypt hash in the user's preferences.
     It is required for all future CLI and site access.
     """
-    prefs = current_user.preferences or {}
+    prefs = dict(current_user.preferences or {})
     prefs["sht_hash"] = hash_password(payload.sht)
     current_user.preferences = prefs
+    flag_modified(current_user, "preferences")
     await db.commit()
     return {"status": "ok", "message": "Secure Handshake Token set."}
 
@@ -209,9 +212,10 @@ async def cli_setup(
             detail="Username not found.",
         )
 
-    prefs = user.preferences or {}
+    prefs = dict(user.preferences or {})
     prefs["sht_hash"] = hash_password(payload.sht)
     user.preferences = prefs
+    flag_modified(user, "preferences")
     await db.commit()
 
     return {"status": "ok", "username": user.username}
@@ -286,10 +290,11 @@ async def totp_enable(
     totp = pyotp.TOTP(secret)
     if not totp.verify(payload.code, valid_window=1):
         raise HTTPException(status_code=400, detail="Invalid TOTP code.")
-    prefs = current_user.preferences or {}
+    prefs = dict(current_user.preferences or {})
     prefs["totp_secret"] = secret
     prefs["totp_enabled"] = True
     current_user.preferences = prefs
+    flag_modified(current_user, "preferences")
     await db.commit()
     return {"status": "ok", "message": "TOTP 2FA enabled."}
 
@@ -309,9 +314,11 @@ async def totp_disable(
     totp = pyotp.TOTP(secret)
     if not totp.verify(payload.code, valid_window=1):
         raise HTTPException(status_code=400, detail="Invalid TOTP code.")
+    prefs = dict(prefs)
     prefs.pop("totp_secret", None)
     prefs.pop("totp_enabled", None)
     current_user.preferences = prefs
+    flag_modified(current_user, "preferences")
     await db.commit()
     return {"status": "ok", "message": "TOTP 2FA disabled."}
 
@@ -399,9 +406,10 @@ async def update_preferences(
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """Merge new preferences into the user's existing preferences."""
-    existing = current_user.preferences or {}
+    existing = dict(current_user.preferences or {})
     existing.update(payload)
     current_user.preferences = existing
+    flag_modified(current_user, "preferences")
     await db.commit()
     await db.refresh(current_user)
     return current_user.preferences or {}
