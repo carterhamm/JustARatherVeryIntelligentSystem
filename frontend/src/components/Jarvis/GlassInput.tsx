@@ -36,12 +36,30 @@ export default function GlassInput({
     adjustHeight();
   }, [content, adjustHeight]);
 
-  // CMD+K / Ctrl+K to focus input
+  // Global keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName;
+      const inInput = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+
+      // CMD+K / Ctrl+K to focus input
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault();
         textareaRef.current?.focus();
+      }
+      // CMD+N / Ctrl+N to create new session
+      if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent('jarvis-new-session'));
+      }
+      // S key (when not in input) to toggle settings
+      if (e.key === 's' && !inInput && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent('jarvis-settings-toggle'));
+      }
+      // Escape to blur input
+      if (e.key === 'Escape' && inInput) {
+        (e.target as HTMLElement).blur();
       }
     };
     window.addEventListener('keydown', handleKeyDown);

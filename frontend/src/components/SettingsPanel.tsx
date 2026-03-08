@@ -36,7 +36,7 @@ function ToggleRow({
         })}
       >
         <div
-          className={clsx('absolute top-1 w-4 h-4 rounded-full transition-all', {
+          className={clsx('absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full transition-all', {
             'bg-jarvis-blue left-5': enabled,
             'bg-gray-600 left-1': !enabled,
           })}

@@ -227,12 +227,19 @@ export function useChat() {
   const loadConversation = useCallback(
     async (id: string) => {
       try {
-        const [conversation, messagesData] = await Promise.all([
+        const [conversation, rawMessages] = await Promise.all([
           api.get<Conversation>(`/conversations/${id}`),
-          api.get<Message[]>(`/conversations/${id}/messages`),
+          api.get<any[]>(`/conversations/${id}/messages`),
         ]);
         setCurrentConversation(conversation);
-        setMessages(messagesData);
+        // Map backend MessageResponse (created_at) to frontend Message (timestamp)
+        const mapped: Message[] = rawMessages.map((m) => ({
+          id: String(m.id),
+          role: m.role,
+          content: m.content,
+          timestamp: m.created_at || m.timestamp || new Date().toISOString(),
+        }));
+        setMessages(mapped);
       } catch {
         /* silently fail */
       }

@@ -86,6 +86,7 @@ class PasskeyRegisterBeginRequest(BaseModel):
     email: EmailStr
     username: str = Field(min_length=3, max_length=64)
     full_name: Optional[str] = Field(default=None, max_length=256)
+    setup_token: Optional[str] = None
 
 
 class PasskeyRegisterCompleteRequest(BaseModel):
@@ -94,6 +95,7 @@ class PasskeyRegisterCompleteRequest(BaseModel):
     username: str = Field(min_length=3, max_length=64)
     full_name: Optional[str] = None
     credential: dict[str, Any]
+    setup_token: Optional[str] = None
 
 
 class PasskeyLoginBeginRequest(BaseModel):

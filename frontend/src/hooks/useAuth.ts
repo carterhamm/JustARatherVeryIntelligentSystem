@@ -65,12 +65,13 @@ export function useAuth() {
     return api.post<LookupResponse>('/auth/lookup', { identifier });
   }, []);
 
-  const passkeyRegister = useCallback(async (email: string, username: string, fullName?: string) => {
+  const passkeyRegister = useCallback(async (email: string, username: string, fullName?: string, setupToken?: string) => {
     // Step 1: Get registration options from server
     const options = await api.post<any>('/auth/register/begin', {
       email,
       username,
       full_name: fullName,
+      setup_token: setupToken,
     });
 
     // Step 2: Create passkey in browser
@@ -82,6 +83,7 @@ export function useAuth() {
       username,
       full_name: fullName,
       credential,
+      setup_token: setupToken,
     });
 
     storeLogin(response.user, response.access_token, response.refresh_token);

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Wifi, WifiOff, Shield, Zap } from 'lucide-react';
+import { Wifi, WifiOff, Shield } from 'lucide-react';
 import { useUIStore } from '@/stores/uiStore';
 import { useSettingsStore, type ModelProvider } from '@/stores/settingsStore';
 import gsap from 'gsap';
@@ -13,8 +13,8 @@ const providerLabels: Record<ModelProvider, string> = {
 
 const providerColors: Record<ModelProvider, string> = {
   claude: '#ff8c00',
-  gemini: '#3b82f6',
-  stark_protocol: '#ef4444',
+  gemini: '#4285F4',
+  stark_protocol: '#00d4ff',
 };
 
 function MiniSpectrum({ active }: { active: boolean }) {
@@ -116,14 +116,7 @@ export default function StatusBar() {
     <div className="fixed top-4 left-4 right-4 z-30 flex justify-between items-start pointer-events-none">
       {/* Left capsule — Logo + Status + Activity */}
       <div ref={leftRef} className="glass-capsule pointer-events-auto h-10 px-4 flex items-center gap-2.5 opacity-0">
-        {/* Hex logo */}
-        <div
-          className="w-5 h-5 flex items-center justify-center flex-shrink-0"
-          style={{
-            clipPath: 'polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)',
-            background: 'linear-gradient(135deg, rgba(0, 212, 255, 0.25), rgba(0, 128, 255, 0.15))',
-          }}
-        >
+        <div className="w-5 h-5 flex items-center justify-center flex-shrink-0 rounded-md bg-gradient-to-br from-jarvis-blue/25 to-blue-500/15">
           <span className="text-[8px] font-display font-bold text-jarvis-blue">J</span>
         </div>
 
@@ -157,11 +150,11 @@ export default function StatusBar() {
 
       {/* Center label — subtle floating text */}
       <div className="hidden lg:flex items-center gap-2 mt-3 opacity-0 boot-1" style={{ animation: 'floatIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.4s both' }}>
-        <Zap size={8} className="text-jarvis-blue/20" />
+        <Shield size={8} className="text-jarvis-blue/20" />
         <span className="text-[7px] font-mono tracking-[0.3em] text-jarvis-blue/15 uppercase">
-          STARK INDUSTRIES DEFENSE SYSTEM
+          STARK INDUSTRIES SECURE SERVER
         </span>
-        <Zap size={8} className="text-jarvis-blue/20" />
+        <Shield size={8} className="text-jarvis-blue/20" />
       </div>
 
       {/* Right capsule — Model + Time + Connection */}
@@ -213,7 +206,7 @@ export default function StatusBar() {
         <div className="w-px h-4 bg-white/[0.06]" />
 
         {/* Connection */}
-        <div className="flex items-center gap-1.5">
+        <div className="relative group flex items-center gap-1.5">
           {wsConnected ? (
             <Wifi size={12} className="text-hud-green" />
           ) : (
@@ -225,6 +218,12 @@ export default function StatusBar() {
           >
             {wsConnected ? 'ONLINE' : 'OFFLINE'}
           </span>
+          {/* Hover tooltip */}
+          <div className="absolute top-full right-0 mt-2 px-3 py-1.5 glass rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+            <span className="text-[9px] font-mono text-gray-300">
+              {wsConnected ? 'Connected to Stark Industries Secure Server' : 'Disconnected from Stark Industries Secure Server'}
+            </span>
+          </div>
         </div>
       </div>
     </div>

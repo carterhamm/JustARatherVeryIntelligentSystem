@@ -61,7 +61,7 @@ function EmptyState() {
 }
 
 export default function FloatingChat() {
-  const { messages, currentConversation, sendMessage, isStreaming } = useChat();
+  const { messages, currentConversation, sendMessage, isStreaming, createConversation } = useChat();
   const isThinking = useUIStore((s) => s.isThinking);
   const { isRecording, isTranscribing, startRecording, stopRecording, transcribeAudio } =
     useVoice();
@@ -73,6 +73,13 @@ export default function FloatingChat() {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages]);
+
+  // CMD+N new session handler
+  useEffect(() => {
+    const handler = () => { createConversation(); };
+    window.addEventListener('jarvis-new-session', handler);
+    return () => window.removeEventListener('jarvis-new-session', handler);
+  }, [createConversation]);
 
   const handleVoiceToggle = useCallback(async () => {
     if (isRecording) {
@@ -117,7 +124,7 @@ export default function FloatingChat() {
     <div className="fixed inset-x-0 top-[72px] bottom-[24px] z-20 flex flex-col items-center pointer-events-none">
       {/* Messages area */}
       {hasMessages || currentConversation || showThinking ? (
-        <div className="w-full max-w-3xl flex-1 overflow-y-auto px-5 sm:px-8 py-6 pointer-events-auto chat-scroll-mask">
+        <div className="w-full max-w-4xl flex-1 overflow-y-auto px-5 sm:px-8 py-6 pointer-events-auto chat-scroll-mask">
           {!hasMessages && !showThinking && currentConversation && <EmptyState />}
           {displayMessages.map((item) => {
             if ('type' in item && item.type === 'error_stack') {
@@ -157,7 +164,7 @@ export default function FloatingChat() {
       )}
 
       {/* Input bar */}
-      <div className="w-full max-w-3xl px-5 sm:px-8 pt-2 pb-2 pointer-events-auto boot-3">
+      <div className="w-full max-w-4xl px-5 sm:px-8 pt-2 pb-2 pointer-events-auto boot-3">
         <GlassInput
           onSend={sendMessage}
           onVoiceToggle={handleVoiceToggle}

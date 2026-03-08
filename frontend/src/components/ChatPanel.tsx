@@ -12,7 +12,7 @@ import clsx from 'clsx';
 const providerLabels: Record<string, { label: string; color: string }> = {
   claude: { label: 'Claude', color: 'text-orange-400 bg-orange-400/10 border-orange-400/20' },
   gemini: { label: 'Gemini', color: 'text-blue-400 bg-blue-400/10 border-blue-400/20' },
-  stark_protocol: { label: 'Stark', color: 'text-red-400 bg-red-400/10 border-red-400/20' },
+  stark_protocol: { label: 'Stark', color: 'text-cyan-400 bg-cyan-400/10 border-cyan-400/20' },
 };
 
 function ThinkingIndicator() {

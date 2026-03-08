@@ -15,8 +15,8 @@ interface ProviderDef {
 
 const providers: ProviderDef[] = [
   { id: 'claude', label: 'Claude', description: 'Nuanced reasoning', tag: 'UPLINK', color: '#ff8c00' },
-  { id: 'gemini', label: 'Gemini', description: 'Multimodal Flash', tag: 'UPLINK', color: '#3b82f6' },
-  { id: 'stark_protocol', label: 'Stark Protocol', description: 'Self-hosted LLM', tag: 'LOCAL', color: '#ef4444' },
+  { id: 'gemini', label: 'Gemini', description: 'Multimodal Flash', tag: 'UPLINK', color: '#4285F4' },
+  { id: 'stark_protocol', label: 'Stark Protocol', description: 'Self-hosted LLM', tag: 'LOCAL', color: '#00d4ff' },
 ];
 
 export default function ModelPickerFloat() {

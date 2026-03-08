@@ -19,7 +19,7 @@ const uplinkModels: ModelDef[] = [
     id: 'gemini',
     label: 'Gemini',
     description: 'Gemini 2.5 Flash — multimodal',
-    activeColor: 'border-blue-400/20 text-blue-400',
+    activeColor: 'border-blue-500/20 text-blue-500',
   },
 ];
 
@@ -28,7 +28,7 @@ const localModels: ModelDef[] = [
     id: 'stark_protocol',
     label: 'Stark Protocol',
     description: 'Self-hosted Gemma 3 — private',
-    activeColor: 'border-red-400/20 text-red-400',
+    activeColor: 'border-cyan-400/20 text-cyan-400',
   },
 ];
 

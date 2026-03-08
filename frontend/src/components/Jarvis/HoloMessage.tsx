@@ -128,13 +128,7 @@ export default function HoloMessage({ message }: HoloMessageProps) {
         {/* Label */}
         {!isUser && (
           <div className="flex items-center gap-2 mb-1.5">
-            <div
-              className="w-5 h-5 flex items-center justify-center flex-shrink-0"
-              style={{
-                clipPath: 'polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)',
-                background: 'linear-gradient(135deg, rgba(0, 212, 255, 0.25), rgba(0, 128, 255, 0.15))',
-              }}
-            >
+            <div className="w-5 h-5 flex items-center justify-center flex-shrink-0 rounded-md bg-gradient-to-br from-jarvis-blue/25 to-blue-500/15">
               <span className="text-[7px] font-bold text-jarvis-blue">J</span>
             </div>
             <span className="hud-label text-[8px]">J.A.R.V.I.S.</span>
@@ -164,7 +158,7 @@ export default function HoloMessage({ message }: HoloMessageProps) {
               <TypingIndicator />
             </div>
           ) : (
-            <div className="prose prose-invert prose-sm max-w-none">
+            <div className="prose prose-invert prose-sm max-w-none font-sans">
               <ReactMarkdown
                 components={{
                   code({ className, children, ...props }) {

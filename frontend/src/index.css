@@ -7,6 +7,13 @@
    Holographic · Immersive · Modular · Floating
    ═══════════════════════════════════════════════════════════════════ */
 
+.prose {
+  font-family: 'Rajdhani', sans-serif !important;
+}
+.prose code, .prose pre {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace !important;
+}
+
 @layer base {
   * {
     margin: 0;

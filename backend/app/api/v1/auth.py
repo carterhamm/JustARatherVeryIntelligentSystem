@@ -45,6 +45,17 @@ async def setup_status(db: AsyncSession = Depends(get_db)) -> dict[str, bool]:
     return {"setup_complete": bool(count and count > 0)}
 
 
+# -- Verify Setup Token (no auth required) ---------------------------------
+
+@router.post("/verify-setup-token")
+async def verify_setup_token(body: dict):
+    """Verify a setup token without performing registration."""
+    token = body.get("setup_token", "")
+    if not token or token != settings.SETUP_TOKEN:
+        raise HTTPException(status_code=403, detail="Invalid setup token")
+    return {"valid": True}
+
+
 # -- Single-owner registration (requires Secure Handshake Token) ----------
 
 @router.post("/register", response_model=AuthResponse, status_code=201)

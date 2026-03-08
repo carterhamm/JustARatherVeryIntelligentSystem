@@ -2,7 +2,7 @@ import { useState, FormEvent, useMemo, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { isWebAuthnAvailable } from '@/utils/webauthn';
-import { Loader2, Shield, Fingerprint, User, Mail, ArrowRight, AlertTriangle } from 'lucide-react';
+import { Loader2, Shield, Fingerprint, User, Mail, ArrowRight, AlertTriangle, Check, Key } from 'lucide-react';
 import gsap from 'gsap';
 import clsx from 'clsx';
 
@@ -17,6 +17,9 @@ export default function AuthPage() {
   const [existingUsername, setExistingUsername] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [setupToken, setSetupToken] = useState('');
+  const [shtVerified, setShtVerified] = useState(false);
+  const [shtChecking, setShtChecking] = useState(false);
 
   const { lookup, passkeyRegister, passkeyLogin } = useAuth();
   const navigate = useNavigate();
@@ -136,13 +139,40 @@ export default function AuthPage() {
 
     setIsLoading(true);
     try {
-      await passkeyRegister(emailVal, usernameVal, fullName || undefined);
+      await passkeyRegister(emailVal, usernameVal, fullName || undefined, setupToken.trim());
       navigate('/');
     } catch (err: any) {
       const detail = err?.response?.data?.detail || err?.message || 'Registration failed.';
       setError(detail);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleVerifySht = async () => {
+    setShtChecking(true);
+    setError('');
+    try {
+      // Use the register endpoint's x-setup-token header pattern to verify
+      const resp = await fetch(
+        `${import.meta.env.VITE_API_URL || ''}/api/v1/auth/verify-setup-token`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ setup_token: setupToken.trim() }),
+        }
+      );
+      if (resp.ok) {
+        setShtVerified(true);
+      } else {
+        setError('Invalid System Handshake Token.');
+        setShtVerified(false);
+      }
+    } catch {
+      setError('Could not verify token. Please try again.');
+      setShtVerified(false);
+    } finally {
+      setShtChecking(false);
     }
   };
 
@@ -226,13 +256,7 @@ export default function AuthPage() {
         <div ref={cardRef} className="glass-heavy rounded-3xl p-8 opacity-0">
           {/* Branding */}
           <div className="text-center mb-6">
-            <div
-              className="inline-flex items-center justify-center w-14 h-14 mb-3"
-              style={{
-                clipPath: 'polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)',
-                background: 'linear-gradient(135deg, rgba(0, 212, 255, 0.15), rgba(0, 128, 255, 0.1))',
-              }}
-            >
+            <div className="inline-flex items-center justify-center w-14 h-14 mb-3 rounded-2xl bg-gradient-to-br from-jarvis-blue/15 to-blue-500/10 border border-jarvis-blue/10">
               <Shield size={24} className="text-jarvis-blue" />
             </div>
             <h1 className="text-xl font-display font-bold tracking-[0.2em] text-jarvis-blue glow-text">
@@ -434,12 +458,54 @@ export default function AuthPage() {
                 />
               </div>
 
+              <div>
+                <label className="hud-label block mb-1.5">
+                  SYSTEM HANDSHAKE TOKEN
+                </label>
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Key
+                      size={14}
+                      className="absolute left-4 top-1/2 -translate-y-1/2 text-jarvis-blue/40"
+                    />
+                    <input
+                      type="password"
+                      value={setupToken}
+                      onChange={(e) => { setSetupToken(e.target.value); setShtVerified(false); }}
+                      placeholder="Enter SHT"
+                      className="w-full jarvis-input pl-10 pr-4 py-2.5 text-sm font-mono"
+                      disabled={isLoading || shtVerified}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleVerifySht}
+                    disabled={!setupToken.trim() || shtChecking || shtVerified}
+                    className={clsx(
+                      'w-11 h-11 flex items-center justify-center rounded-xl border transition-all flex-shrink-0',
+                      shtVerified
+                        ? 'bg-hud-green/15 border-hud-green/30'
+                        : 'glass-subtle border-white/[0.06] hover:border-jarvis-blue/20',
+                      (!setupToken.trim() || shtChecking) && !shtVerified && 'opacity-40'
+                    )}
+                  >
+                    {shtChecking ? (
+                      <Loader2 size={14} className="animate-spin text-jarvis-blue" />
+                    ) : shtVerified ? (
+                      <Check size={14} className="text-hud-green" />
+                    ) : (
+                      <ArrowRight size={14} className="text-jarvis-blue" />
+                    )}
+                  </button>
+                </div>
+              </div>
+
               <button
                 type="submit"
-                disabled={isLoading || !email.trim() || !username.trim()}
+                disabled={isLoading || !email.trim() || !username.trim() || !shtVerified}
                 className="jarvis-button-gold w-full py-3 text-sm font-display font-semibold tracking-wider uppercase flex items-center justify-center gap-2 mt-2"
                 style={{
-                  opacity: isLoading || !email.trim() || !username.trim() ? 0.4 : 1,
+                  opacity: isLoading || !email.trim() || !username.trim() || !shtVerified ? 0.4 : 1,
                 }}
               >
                 {isLoading ? (
