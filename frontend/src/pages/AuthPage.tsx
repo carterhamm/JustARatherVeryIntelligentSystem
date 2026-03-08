@@ -2,11 +2,11 @@ import { useState, FormEvent, useMemo, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { isWebAuthnAvailable } from '@/utils/webauthn';
-import { Loader2, Shield, Fingerprint, User, Mail, ArrowRight, AlertTriangle, Check, Key } from 'lucide-react';
+import { Loader2, Shield, Fingerprint, User, Mail, ArrowRight, AlertTriangle, Check, Key, Lock } from 'lucide-react';
 import gsap from 'gsap';
 import clsx from 'clsx';
 
-type AuthStep = 'identify' | 'authenticate' | 'register';
+type AuthStep = 'identify' | 'authenticate' | 'register' | 'totp';
 
 export default function AuthPage() {
   const [step, setStep] = useState<AuthStep>('identify');
@@ -20,8 +20,10 @@ export default function AuthPage() {
   const [setupToken, setSetupToken] = useState('');
   const [shtVerified, setShtVerified] = useState(false);
   const [shtChecking, setShtChecking] = useState(false);
+  const [totpToken, setTotpToken] = useState('');
+  const [totpCode, setTotpCode] = useState('');
 
-  const { lookup, passkeyRegister, passkeyLogin } = useAuth();
+  const { lookup, passkeyRegister, passkeyLogin, verifyTOTPLogin } = useAuth();
   const navigate = useNavigate();
 
   const webauthnSupported = useMemo(() => isWebAuthnAvailable(), []);
@@ -76,7 +78,7 @@ export default function AuthPage() {
     [],
   );
 
-  const stepIndex = step === 'identify' ? 0 : 1;
+  const stepIndex = step === 'identify' ? 0 : 1; // totp counts as step 1 too
 
   const handleIdentify = async (e: FormEvent) => {
     e.preventDefault();
@@ -108,11 +110,37 @@ export default function AuthPage() {
     setError('');
     setIsLoading(true);
     try {
-      await passkeyLogin(identifier.trim());
-      navigate('/');
+      const result = await passkeyLogin(identifier.trim());
+      if (result && 'needs_totp' in result && result.needs_totp) {
+        setTotpToken(result.totp_token);
+        setTotpCode('');
+        setStep('totp');
+      } else {
+        navigate('/');
+      }
     } catch (err: any) {
       const detail = err?.response?.data?.detail || err?.message || 'Authentication failed.';
       setError(detail);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleTOTPVerify = async (e: FormEvent) => {
+    e.preventDefault();
+    setError('');
+    if (totpCode.length !== 6) {
+      setError('Enter the 6-digit code from your authenticator.');
+      return;
+    }
+    setIsLoading(true);
+    try {
+      await verifyTOTPLogin(totpToken, totpCode);
+      navigate('/');
+    } catch (err: any) {
+      const detail = err?.response?.data?.detail || err?.message || 'Invalid code.';
+      setError(detail);
+      setTotpCode('');
     } finally {
       setIsLoading(false);
     }
@@ -397,6 +425,63 @@ export default function AuthPage() {
                 Use a different account
               </button>
             </div>
+          )}
+
+          {/* Step: TOTP Verification */}
+          {step === 'totp' && (
+            <form onSubmit={handleTOTPVerify} className="space-y-4">
+              <div className="text-center">
+                <div className="inline-flex items-center justify-center w-12 h-12 rounded-full glass-cyan mb-3">
+                  <Lock size={24} className="text-jarvis-blue" />
+                </div>
+                <p className="text-sm text-gray-300">Two-Factor Authentication</p>
+                <p className="text-xs text-gray-500 mt-1">Enter the code from your authenticator app</p>
+              </div>
+
+              <div>
+                <label className="hud-label block mb-2">VERIFICATION CODE</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={6}
+                  value={totpCode}
+                  onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  placeholder="000000"
+                  className="w-full jarvis-input px-4 py-3 text-center text-lg font-mono tracking-[0.5em]"
+                  autoFocus
+                  autoComplete="one-time-code"
+                  disabled={isLoading}
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={isLoading || totpCode.length !== 6}
+                className="jarvis-button w-full py-3 text-sm font-display font-semibold tracking-wider uppercase flex items-center justify-center gap-2"
+                style={{ opacity: isLoading || totpCode.length !== 6 ? 0.4 : 1 }}
+              >
+                {isLoading ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : (
+                  <>
+                    <Lock size={16} />
+                    Verify
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setStep('authenticate');
+                  setTotpCode('');
+                  setError('');
+                }}
+                className="w-full text-center text-xs text-gray-500 hover:text-gray-300 transition-colors"
+              >
+                Back
+              </button>
+            </form>
           )}
 
           {/* Step: Register */}

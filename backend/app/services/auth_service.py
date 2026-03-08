@@ -113,6 +113,13 @@ class AuthService:
         result = await db.execute(select(User).where(User.username == username))
         return result.scalar_one_or_none()
 
+    @staticmethod
+    async def get_user_by_identifier(db: AsyncSession, identifier: str) -> Optional[User]:
+        """Fetch a user by email or username."""
+        if "@" in identifier:
+            return await AuthService.get_user_by_email(db, identifier)
+        return await AuthService.get_user_by_username(db, identifier)
+
     # ------------------------------------------------------------------
     # Registration
     # ------------------------------------------------------------------

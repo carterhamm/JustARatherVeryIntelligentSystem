@@ -125,3 +125,20 @@ class CLISetupRequest(BaseModel):
     setup_token: str = Field(min_length=1, max_length=256)
     username: str = Field(min_length=1, max_length=64)
     sht: str = Field(min_length=4, max_length=256)
+
+
+# -- TOTP 2FA schemas ---------------------------------------------------------
+
+class TOTPSetupResponse(BaseModel):
+    """Returned when starting TOTP setup — contains the secret and QR URI."""
+    secret: str
+    otpauth_uri: str
+
+class TOTPVerifyRequest(BaseModel):
+    """Verify a TOTP code (used for setup confirmation and login)."""
+    code: str = Field(min_length=6, max_length=6)
+
+class TOTPLoginRequest(BaseModel):
+    """Complete login with TOTP code after initial auth returned needs_totp."""
+    totp_token: str = Field(min_length=1, description="Temporary token from initial auth.")
+    code: str = Field(min_length=6, max_length=6)

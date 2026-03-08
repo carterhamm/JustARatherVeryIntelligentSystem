@@ -9,6 +9,11 @@ interface AuthResponse {
   refresh_token: string;
 }
 
+interface TOTPRequiredResponse {
+  needs_totp: true;
+  totp_token: string;
+}
+
 interface LookupResponse {
   exists: boolean;
   user_id?: string;
@@ -90,7 +95,7 @@ export function useAuth() {
     return response.user;
   }, [storeLogin]);
 
-  const passkeyLogin = useCallback(async (identifier: string) => {
+  const passkeyLogin = useCallback(async (identifier: string): Promise<User | TOTPRequiredResponse> => {
     // Step 1: Get authentication options from server
     const options = await api.post<any>('/auth/login/begin', { identifier });
 
@@ -98,14 +103,59 @@ export function useAuth() {
     const credential = await authenticatePasskey(options);
 
     // Step 3: Complete authentication on server
-    const response = await api.post<AuthResponse>('/auth/login/complete', {
+    const response = await api.post<AuthResponse | TOTPRequiredResponse>('/auth/login/complete', {
       identifier,
       credential,
     });
 
+    // Check if TOTP is required
+    if ('needs_totp' in response && response.needs_totp) {
+      return response as TOTPRequiredResponse;
+    }
+
+    const authResp = response as AuthResponse;
+    storeLogin(authResp.user, authResp.access_token, authResp.refresh_token);
+    return authResp.user;
+  }, [storeLogin]);
+
+  const verifyTOTPLogin = useCallback(async (totpToken: string, code: string) => {
+    const response = await api.post<AuthResponse>('/auth/login/totp-verify', {
+      totp_token: totpToken,
+      code,
+    });
     storeLogin(response.user, response.access_token, response.refresh_token);
     return response.user;
   }, [storeLogin]);
+
+  const getTOTPStatus = useCallback(async (): Promise<{ totp_enabled: boolean }> => {
+    return api.get<{ totp_enabled: boolean }>('/auth/totp/status');
+  }, []);
+
+  const setupTOTP = useCallback(async (): Promise<{ secret: string; otpauth_uri: string }> => {
+    return api.post<{ secret: string; otpauth_uri: string }>('/auth/totp/setup');
+  }, []);
+
+  const enableTOTP = useCallback(async (code: string, secret: string): Promise<void> => {
+    const baseUrl = import.meta.env.VITE_API_URL || '/api/v1';
+    const token = useAuthStore.getState().token;
+    const resp = await fetch(`${baseUrl}/auth/totp/enable`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+        'x-totp-secret': secret,
+      },
+      body: JSON.stringify({ code }),
+    });
+    if (!resp.ok) {
+      const data = await resp.json().catch(() => ({}));
+      throw new Error(data.detail || 'Failed to enable TOTP');
+    }
+  }, []);
+
+  const disableTOTP = useCallback(async (code: string): Promise<void> => {
+    await api.post('/auth/totp/disable', { code });
+  }, []);
 
   return {
     user,
@@ -118,5 +168,10 @@ export function useAuth() {
     lookup,
     passkeyRegister,
     passkeyLogin,
+    verifyTOTPLogin,
+    getTOTPStatus,
+    setupTOTP,
+    enableTOTP,
+    disableTOTP,
   };
 }

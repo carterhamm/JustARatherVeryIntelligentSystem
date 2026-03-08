@@ -65,6 +65,17 @@ def create_refresh_token(subject: str | UUID) -> str:
     return jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
 
 
+def create_totp_pending_token(subject: str | UUID) -> str:
+    """Create a short-lived token for TOTP verification (5 minutes)."""
+    expire = datetime.now(timezone.utc) + timedelta(minutes=5)
+    payload: dict[str, Any] = {
+        "sub": str(subject),
+        "exp": expire,
+        "type": "totp_pending",
+    }
+    return jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
+
+
 def decode_token(token: str) -> TokenPayload:
     """Decode and validate a JWT, returning the payload."""
     try:

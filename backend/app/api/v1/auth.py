@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.core.dependencies import get_current_active_user, get_db
-from app.core.security import create_access_token, create_refresh_token, hash_password, verify_password
+from app.core.security import create_access_token, create_refresh_token, create_totp_pending_token, hash_password, verify_password
 from app.models.user import User
 from app.schemas.auth import (
     AuthResponse,
@@ -25,6 +25,9 @@ from app.schemas.auth import (
     PasskeyLoginCompleteRequest,
     PasskeyRegisterBeginRequest,
     PasskeyRegisterCompleteRequest,
+    TOTPLoginRequest,
+    TOTPSetupResponse,
+    TOTPVerifyRequest,
     Token,
     UserCreate,
     UserLogin,
@@ -140,14 +143,26 @@ async def passkey_login_begin(
     return await AuthService.begin_authentication(db, payload.identifier)
 
 
-@router.post("/login/complete", response_model=AuthResponse)
+@router.post("/login/complete")
 async def passkey_login_complete(
     payload: PasskeyLoginCompleteRequest, db: AsyncSession = Depends(get_db),
-) -> AuthResponse:
-    """Complete WebAuthn authentication, return tokens with user data."""
-    return await AuthService.complete_authentication(
+) -> AuthResponse | dict:
+    """Complete WebAuthn authentication, return tokens with user data.
+
+    If TOTP 2FA is enabled, returns ``{"needs_totp": true, "totp_token": "..."}``
+    instead of tokens. The client must then call ``/login/totp-verify``.
+    """
+    auth_response = await AuthService.complete_authentication(
         db, identifier=payload.identifier, credential=payload.credential,
     )
+    # Check if the user has TOTP enabled
+    user = await AuthService.get_user_by_identifier(db, payload.identifier)
+    if user:
+        prefs = user.preferences or {}
+        if prefs.get("totp_enabled"):
+            totp_token = create_totp_pending_token(user.id)
+            return {"needs_totp": True, "totp_token": totp_token}
+    return auth_response
 
 
 # -- SHT management --------------------------------------------------------
@@ -235,6 +250,113 @@ async def cli_login(
         )
 
     await AuthService._clear_login_attempts(cli_key)
+
+    return AuthResponse(
+        access_token=create_access_token(user.id),
+        refresh_token=create_refresh_token(user.id),
+        user=UserResponse.model_validate(user),
+    )
+
+
+# -- TOTP 2FA ---------------------------------------------------------------
+
+@router.post("/totp/setup", response_model=TOTPSetupResponse)
+async def totp_setup(
+    current_user: User = Depends(get_current_active_user),
+) -> TOTPSetupResponse:
+    """Generate a TOTP secret. User must verify a code before it's enabled."""
+    import pyotp
+    secret = pyotp.random_base32()
+    uri = pyotp.totp.TOTP(secret).provisioning_uri(
+        name=current_user.email,
+        issuer_name="J.A.R.V.I.S.",
+    )
+    return TOTPSetupResponse(secret=secret, otpauth_uri=uri)
+
+
+@router.post("/totp/enable", status_code=200)
+async def totp_enable(
+    payload: TOTPVerifyRequest,
+    secret: str = Header(..., alias="x-totp-secret"),
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, str]:
+    """Verify a TOTP code and permanently enable 2FA for this account."""
+    import pyotp
+    totp = pyotp.TOTP(secret)
+    if not totp.verify(payload.code, valid_window=1):
+        raise HTTPException(status_code=400, detail="Invalid TOTP code.")
+    prefs = current_user.preferences or {}
+    prefs["totp_secret"] = secret
+    prefs["totp_enabled"] = True
+    current_user.preferences = prefs
+    await db.commit()
+    return {"status": "ok", "message": "TOTP 2FA enabled."}
+
+
+@router.post("/totp/disable", status_code=200)
+async def totp_disable(
+    payload: TOTPVerifyRequest,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, str]:
+    """Disable TOTP 2FA. Requires a valid code to confirm."""
+    import pyotp
+    prefs = current_user.preferences or {}
+    secret = prefs.get("totp_secret", "")
+    if not secret:
+        raise HTTPException(status_code=400, detail="TOTP not enabled.")
+    totp = pyotp.TOTP(secret)
+    if not totp.verify(payload.code, valid_window=1):
+        raise HTTPException(status_code=400, detail="Invalid TOTP code.")
+    prefs.pop("totp_secret", None)
+    prefs.pop("totp_enabled", None)
+    current_user.preferences = prefs
+    await db.commit()
+    return {"status": "ok", "message": "TOTP 2FA disabled."}
+
+
+@router.get("/totp/status")
+async def totp_status(
+    current_user: User = Depends(get_current_active_user),
+) -> dict[str, bool]:
+    """Check if TOTP 2FA is enabled for the current user."""
+    prefs = current_user.preferences or {}
+    return {"totp_enabled": bool(prefs.get("totp_enabled"))}
+
+
+@router.post("/login/totp-verify", response_model=AuthResponse)
+async def totp_login_verify(
+    payload: TOTPLoginRequest,
+    db: AsyncSession = Depends(get_db),
+) -> AuthResponse:
+    """Complete login with TOTP code after initial auth returned needs_totp.
+
+    The totp_token is a short-lived JWT containing the user_id, issued
+    when the initial login detected TOTP was enabled.
+    """
+    from app.core.security import decode_token
+    try:
+        token_data = decode_token(payload.totp_token)
+        if token_data.get("type") != "totp_pending":
+            raise HTTPException(status_code=400, detail="Invalid TOTP token.")
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid or expired TOTP token.")
+
+    user_id = token_data.get("sub")
+    user = await db.get(User, user_id)
+    if not user or not user.is_active:
+        raise HTTPException(status_code=403, detail="Access denied.")
+
+    import pyotp
+    prefs = user.preferences or {}
+    secret = prefs.get("totp_secret", "")
+    if not secret:
+        raise HTTPException(status_code=400, detail="TOTP not configured.")
+
+    totp = pyotp.TOTP(secret)
+    if not totp.verify(payload.code, valid_window=1):
+        raise HTTPException(status_code=403, detail="Invalid TOTP code.")
 
     return AuthResponse(
         access_token=create_access_token(user.id),

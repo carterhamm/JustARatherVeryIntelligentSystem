@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, LogOut, Volume2, VolumeX, Clock } from 'lucide-react';
+import { X, LogOut, Volume2, VolumeX, Clock, Shield, Loader2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useUIStore } from '@/stores/uiStore';
@@ -55,10 +55,21 @@ function InfoCard({ label, value }: { label: string; value: string }) {
   );
 }
 
+type TOTPStep = 'idle' | 'loading' | 'setup' | 'confirm' | 'disabling';
+
 export default function SettingsPanel() {
   const [isOpen, setIsOpen] = useState(false);
-  const { user, logout } = useAuth();
+  const { user, logout, getTOTPStatus, setupTOTP, enableTOTP, disableTOTP } = useAuth();
   const { voiceEnabled, setVoiceEnabled, use24HourTime, setUse24HourTime, modelPreference } = useSettingsStore();
+
+  // TOTP state
+  const [totpEnabled, setTotpEnabled] = useState(false);
+  const [totpStep, setTotpStep] = useState<TOTPStep>('idle');
+  const [totpSecret, setTotpSecret] = useState('');
+  const [totpUri, setTotpUri] = useState('');
+  const [totpCode, setTotpCode] = useState('');
+  const [totpError, setTotpError] = useState('');
+  const [totpLoading, setTotpLoading] = useState(false);
   const wsConnected = useUIStore((s) => s.wsConnected);
 
   useEffect(() => {
@@ -81,6 +92,64 @@ export default function SettingsPanel() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
+
+  // Fetch TOTP status when panel opens
+  useEffect(() => {
+    if (isOpen && user) {
+      getTOTPStatus().then((s) => setTotpEnabled(s.totp_enabled)).catch(() => {});
+    }
+  }, [isOpen, user, getTOTPStatus]);
+
+  const handleTOTPSetup = async () => {
+    setTotpStep('loading');
+    setTotpError('');
+    try {
+      const { secret, otpauth_uri } = await setupTOTP();
+      setTotpSecret(secret);
+      setTotpUri(otpauth_uri);
+      setTotpCode('');
+      setTotpStep('setup');
+    } catch {
+      setTotpError('Failed to start TOTP setup.');
+      setTotpStep('idle');
+    }
+  };
+
+  const handleTOTPConfirm = async () => {
+    if (totpCode.length !== 6) return;
+    setTotpLoading(true);
+    setTotpError('');
+    try {
+      await enableTOTP(totpCode, totpSecret);
+      setTotpEnabled(true);
+      setTotpStep('idle');
+      setTotpSecret('');
+      setTotpUri('');
+      setTotpCode('');
+    } catch (err: any) {
+      setTotpError(err?.message || 'Invalid code.');
+      setTotpCode('');
+    } finally {
+      setTotpLoading(false);
+    }
+  };
+
+  const handleTOTPDisable = async () => {
+    if (totpCode.length !== 6) return;
+    setTotpLoading(true);
+    setTotpError('');
+    try {
+      await disableTOTP(totpCode);
+      setTotpEnabled(false);
+      setTotpStep('idle');
+      setTotpCode('');
+    } catch (err: any) {
+      setTotpError(err?.message || 'Invalid code.');
+      setTotpCode('');
+    } finally {
+      setTotpLoading(false);
+    }
+  };
 
   return (
     <AnimatePresence>
@@ -130,12 +199,12 @@ export default function SettingsPanel() {
                         }}
                       >
                         <span className="text-sm font-display font-bold text-jarvis-blue">
-                          {user.username?.charAt(0).toUpperCase() || 'U'}
+                          {(user.full_name || user.username)?.charAt(0).toUpperCase() || 'U'}
                         </span>
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-gray-200 truncate">
-                          {user.username}
+                          {user.full_name || user.username}
                         </p>
                         <p className="text-[10px] text-gray-500 font-mono truncate">{user.email}</p>
                       </div>
@@ -167,6 +236,128 @@ export default function SettingsPanel() {
                       enabled={use24HourTime}
                       onToggle={() => setUse24HourTime(!use24HourTime)}
                     />
+                  </div>
+                </div>
+
+                {/* Security — TOTP 2FA */}
+                <div>
+                  <span className="hud-label text-[8px] block mb-3">SECURITY</span>
+                  <div className="space-y-2">
+                    {totpStep === 'idle' && !totpEnabled && (
+                      <button
+                        onClick={handleTOTPSetup}
+                        className="w-full glass-subtle rounded-xl px-4 py-3 flex items-center justify-between hover:border-jarvis-blue/20 transition-all border border-transparent"
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <Shield size={14} className="text-gray-600" />
+                          <div className="text-left">
+                            <span className="text-xs text-gray-300">Two-Factor Auth</span>
+                            <p className="text-[9px] text-gray-600 font-mono">Disabled</p>
+                          </div>
+                        </div>
+                        <span className="text-[10px] text-jarvis-blue font-mono">ENABLE</span>
+                      </button>
+                    )}
+
+                    {totpStep === 'idle' && totpEnabled && (
+                      <div className="glass-subtle rounded-xl px-4 py-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2.5">
+                            <Shield size={14} className="text-hud-green" />
+                            <div>
+                              <span className="text-xs text-gray-300">Two-Factor Auth</span>
+                              <p className="text-[9px] text-hud-green font-mono">Enabled</p>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => { setTotpStep('disabling'); setTotpCode(''); setTotpError(''); }}
+                            className="text-[10px] text-hud-red font-mono"
+                          >
+                            DISABLE
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {totpStep === 'loading' && (
+                      <div className="glass-subtle rounded-xl px-4 py-6 flex items-center justify-center">
+                        <Loader2 size={16} className="animate-spin text-jarvis-blue" />
+                      </div>
+                    )}
+
+                    {totpStep === 'setup' && (
+                      <div className="glass-subtle rounded-xl px-4 py-3 space-y-3">
+                        <p className="text-xs text-gray-300">Add this key to your authenticator app:</p>
+                        <div className="bg-black/40 rounded-lg px-3 py-2 font-mono text-[11px] text-jarvis-blue break-all select-all">
+                          {totpSecret}
+                        </div>
+                        <div>
+                          <label className="hud-label text-[7px] block mb-1.5">ENTER CODE TO CONFIRM</label>
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            maxLength={6}
+                            value={totpCode}
+                            onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                            placeholder="000000"
+                            className="w-full jarvis-input px-3 py-2 text-center text-sm font-mono tracking-[0.4em]"
+                            autoFocus
+                          />
+                        </div>
+                        {totpError && (
+                          <p className="text-[10px] text-hud-red text-center">{totpError}</p>
+                        )}
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => { setTotpStep('idle'); setTotpError(''); }}
+                            className="flex-1 text-[10px] text-gray-500 py-1.5 hover:text-gray-300 transition-colors"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            onClick={handleTOTPConfirm}
+                            disabled={totpCode.length !== 6 || totpLoading}
+                            className="flex-1 text-[10px] font-mono text-jarvis-blue py-1.5 rounded-lg border border-jarvis-blue/20 bg-jarvis-blue/5 hover:bg-jarvis-blue/10 transition-all disabled:opacity-40"
+                          >
+                            {totpLoading ? 'Verifying...' : 'CONFIRM'}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {totpStep === 'disabling' && (
+                      <div className="glass-subtle rounded-xl px-4 py-3 space-y-3">
+                        <p className="text-xs text-gray-300">Enter a code to disable 2FA:</p>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          maxLength={6}
+                          value={totpCode}
+                          onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                          placeholder="000000"
+                          className="w-full jarvis-input px-3 py-2 text-center text-sm font-mono tracking-[0.4em]"
+                          autoFocus
+                        />
+                        {totpError && (
+                          <p className="text-[10px] text-hud-red text-center">{totpError}</p>
+                        )}
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => { setTotpStep('idle'); setTotpError(''); setTotpCode(''); }}
+                            className="flex-1 text-[10px] text-gray-500 py-1.5 hover:text-gray-300 transition-colors"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            onClick={handleTOTPDisable}
+                            disabled={totpCode.length !== 6 || totpLoading}
+                            className="flex-1 text-[10px] font-mono text-hud-red py-1.5 rounded-lg border border-hud-red/20 bg-hud-red/5 hover:bg-hud-red/10 transition-all disabled:opacity-40"
+                          >
+                            {totpLoading ? 'Disabling...' : 'DISABLE'}
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
 

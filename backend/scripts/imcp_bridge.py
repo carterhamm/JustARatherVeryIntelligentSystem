@@ -46,10 +46,12 @@ class IMCPProcess:
         self._request_id = 0
         self._pending: dict[int, asyncio.Future] = {}
         self._reader_task: Optional[asyncio.Task] = None
+        self._stderr_task: Optional[asyncio.Task] = None
         self._lock = asyncio.Lock()
+        self._initialized = False
 
     async def start(self):
-        if self._process is not None:
+        if self._initialized:
             return
 
         self._process = await asyncio.create_subprocess_exec(
@@ -61,6 +63,7 @@ class IMCPProcess:
         logger.info("iMCP process started: pid=%s", self._process.pid)
 
         self._reader_task = asyncio.create_task(self._read_loop())
+        self._stderr_task = asyncio.create_task(self._stderr_loop())
 
         # MCP handshake
         result = await self._request("initialize", {
@@ -70,6 +73,7 @@ class IMCPProcess:
         })
         logger.info("iMCP initialized: %s", str(result)[:200])
         await self._notify("notifications/initialized", {})
+        self._initialized = True
 
     async def stop(self):
         if self._process is None:
@@ -141,6 +145,18 @@ class IMCPProcess:
         self._process.stdin.write((json.dumps(msg) + "\n").encode())
         await self._process.stdin.drain()
 
+    async def _stderr_loop(self):
+        """Log iMCP stderr output for debugging."""
+        assert self._process and self._process.stderr
+        try:
+            while True:
+                line = await self._process.stderr.readline()
+                if not line:
+                    break
+                logger.info("iMCP stderr: %s", line.decode().strip())
+        except asyncio.CancelledError:
+            return
+
     async def _read_loop(self):
         assert self._process and self._process.stdout
         try:
@@ -151,9 +167,11 @@ class IMCPProcess:
                 text = line.decode().strip()
                 if not text:
                     continue
+                logger.debug("iMCP stdout: %s", text[:200])
                 try:
                     msg = json.loads(text)
                 except json.JSONDecodeError:
+                    logger.warning("iMCP non-JSON: %s", text[:200])
                     continue
                 mid = msg.get("id")
                 if mid is not None and mid in self._pending:
@@ -175,24 +193,31 @@ imcp = IMCPProcess()
 
 
 def create_app():
+    from contextlib import asynccontextmanager
     from fastapi import FastAPI, HTTPException, Header
     from fastapi.responses import JSONResponse
 
-    app = FastAPI(title="iMCP Bridge", docs_url=None, redoc_url=None)
+    @asynccontextmanager
+    async def lifespan(app):
+        # Startup: initialize iMCP with timeout
+        try:
+            await asyncio.wait_for(imcp.start(), timeout=15.0)
+            logger.info("iMCP bridge ready")
+        except asyncio.TimeoutError:
+            logger.error("iMCP handshake timed out — server may need restart")
+        except Exception as exc:
+            logger.error("iMCP startup failed: %s", exc)
+        yield
+        # Shutdown
+        await imcp.stop()
+
+    app = FastAPI(title="iMCP Bridge", docs_url=None, redoc_url=None, lifespan=lifespan)
 
     def _check_auth(authorization: str | None = Header(None)):
         if BRIDGE_KEY:
             expected = f"Bearer {BRIDGE_KEY}"
             if not authorization or authorization != expected:
                 raise HTTPException(status_code=403, detail="Unauthorized")
-
-    @app.on_event("startup")
-    async def startup():
-        await imcp.start()
-
-    @app.on_event("shutdown")
-    async def shutdown():
-        await imcp.stop()
 
     @app.get("/health")
     async def health():
@@ -201,6 +226,8 @@ def create_app():
     @app.get("/tools")
     async def list_tools(authorization: str | None = Header(None)):
         _check_auth(authorization)
+        if not imcp._initialized:
+            await imcp.start()
         tools = await imcp.list_tools()
         return {"tools": tools}
 
@@ -211,6 +238,8 @@ def create_app():
         authorization: str | None = Header(None),
     ):
         _check_auth(authorization)
+        if not imcp._initialized:
+            await imcp.start()
         try:
             result = await imcp.call_tool(tool_name, body.get("arguments", {}))
             return {"result": result}

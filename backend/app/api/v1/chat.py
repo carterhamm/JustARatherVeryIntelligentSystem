@@ -505,28 +505,23 @@ async def chat_websocket(
             # Synthesize voice if requested
             if request.voice_enabled and clean_text.strip():
                 try:
-                    audio_bytes: bytes | None = None
-
-                    # Try JARVIS voice first for Stark Protocol
                     if request.model_provider == "stark_protocol":
+                        # JARVIS voice only — no fallback for Stark Protocol
                         from app.api.v1.voice import _get_jarvis_tts
                         jarvis_tts = _get_jarvis_tts()
                         if jarvis_tts:
-                            try:
-                                audio_bytes = await jarvis_tts.synthesize(clean_text)
-                            except Exception as jarvis_exc:
-                                logger.warning("JARVIS TTS failed, falling back: %s", jarvis_exc)
-
-                    # Fallback to ElevenLabs / edge-tts for any provider
-                    if audio_bytes is None:
+                            audio_bytes = await jarvis_tts.synthesize(clean_text)
+                            await websocket.send_bytes(audio_bytes)
+                        else:
+                            logger.warning("JARVIS TTS not available for Stark Protocol")
+                    else:
+                        # ElevenLabs / edge-tts for uplink providers
                         from app.api.v1.voice import get_voice_service
                         voice_svc = get_voice_service()
                         audio_bytes = await voice_svc.synthesize(
                             text=clean_text,
                             voice_id=settings.ELEVENLABS_VOICE_ID,
                         )
-
-                    if audio_bytes:
                         await websocket.send_bytes(audio_bytes)
                 except Exception as tts_exc:
                     logger.warning("TTS synthesis failed: %s", tts_exc)
