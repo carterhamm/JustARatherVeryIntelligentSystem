@@ -88,7 +88,7 @@ class Settings(BaseSettings):
 
     # -- ElevenLabs -----------------------------------------------------------
     ELEVENLABS_API_KEY: str = ""
-    ELEVENLABS_VOICE_ID: str = "hfL46UZ81fwyurp9f2X4"
+    ELEVENLABS_VOICE_ID: str = "HsBg0b6zEPERDcKSn4Zl"
 
     # -- Google (Gmail + Calendar) --------------------------------------------
     GOOGLE_CLIENT_ID: str = ""

@@ -18,7 +18,7 @@ _BASE_URL = "https://api.elevenlabs.io/v1"
 
 # A deep, clear, authoritative male voice suitable for a JARVIS-style assistant.
 # This maps to "Daniel" on ElevenLabs -- swap the ID for any voice you prefer.
-_DEFAULT_VOICE_ID = "onwK4e9ZLuTAKqWW03F9"
+_DEFAULT_VOICE_ID = "HsBg0b6zEPERDcKSn4Zl"
 
 _DEFAULT_MODEL = "eleven_multilingual_v2"
 

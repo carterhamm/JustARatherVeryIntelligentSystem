@@ -117,7 +117,7 @@ async def incoming_call(request: Request) -> Response:
     Generates ElevenLabs greeting audio and returns TwiML with <Play>.
     """
     try:
-        greeting = "Good day, Sir. J.A.R.V.I.S. at your service. How may I assist you?"
+        greeting = "Good day, Sir. JARVIS at your service. How may I assist you?"
         audio = await _generate_jarvis_tts(greeting)
         audio_id = await _cache_audio(audio)
 
@@ -142,7 +142,7 @@ async def incoming_call(request: Request) -> Response:
             language="en-US",
         )
         gather.say(
-            "Good day, Sir. J.A.R.V.I.S. at your service. How may I assist you?",
+            "Good day, Sir. JARVIS at your service. How may I assist you?",
             voice="Polly.Matthew-Neural",
             language="en-US",
         )
