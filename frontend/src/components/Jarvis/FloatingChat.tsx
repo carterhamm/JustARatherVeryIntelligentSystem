@@ -123,9 +123,8 @@ export default function FloatingChat() {
   return (
     <div className="fixed inset-x-0 top-[72px] bottom-[24px] z-20 flex flex-col items-center pointer-events-none">
       {/* Messages area */}
-      {hasMessages || currentConversation || showThinking ? (
+      {hasMessages || showThinking ? (
         <div className="w-full max-w-4xl flex-1 overflow-y-auto px-5 sm:px-8 py-6 pointer-events-auto chat-scroll-mask">
-          {!hasMessages && !showThinking && currentConversation && <EmptyState />}
           {displayMessages.map((item) => {
             if ('type' in item && item.type === 'error_stack') {
               const count = item.errors.length;
