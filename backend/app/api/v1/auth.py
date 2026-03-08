@@ -353,6 +353,21 @@ async def totp_code(
     return {"code": code, "remaining": remaining, "period": 30}
 
 
+@router.get("/totp/secret")
+async def totp_secret(
+    current_user: User = Depends(get_current_active_user),
+) -> dict[str, Any]:
+    """Return the TOTP secret for local code generation.
+
+    Requires valid JWT. The CLI fetches this once to generate codes
+    locally without repeated server calls.
+    """
+    prefs = current_user.preferences or {}
+    if not prefs.get("totp_enabled") or not prefs.get("totp_secret"):
+        raise HTTPException(status_code=400, detail="TOTP not enabled.")
+    return {"secret": prefs["totp_secret"], "enabled": True}
+
+
 @router.post("/login/totp-verify", response_model=AuthResponse)
 async def totp_login_verify(
     payload: TOTPLoginRequest,

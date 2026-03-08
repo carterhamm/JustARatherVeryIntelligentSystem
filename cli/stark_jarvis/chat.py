@@ -27,6 +27,8 @@ from stark_jarvis.display import (
     print_banner,
     banner_line_count,
     run_connecting_animation,
+    start_totp_banner,
+    stop_totp_banner,
     set_terminal_bg_black,
     reset_terminal_bg,
     clear_screen,
@@ -141,6 +143,9 @@ async def chat_session(
                 "Connected. Type your message, or /help for commands."
             )
             print()
+
+            # Start live TOTP overlay in banner if 2FA is enabled
+            _start_totp_if_enabled(access_token)
 
             # Calculate layout rows
             cols, rows = _term_size()
@@ -382,9 +387,30 @@ async def chat_session(
         stop_anim.set()
         if anim_thread.is_alive():
             anim_thread.join(timeout=0.5)
+        stop_totp_banner()
         reset_scroll_region()
         show_cursor()
         reset_terminal_bg()
+
+
+def _start_totp_if_enabled(access_token: str) -> None:
+    """Fetch TOTP secret from server and start the banner overlay if enabled."""
+    import httpx
+    base = config.server_url
+    if not base:
+        return
+    try:
+        resp = httpx.get(
+            f"{base}/api/v1/auth/totp/secret",
+            headers={"Authorization": f"Bearer {access_token}"},
+            timeout=5.0,
+        )
+        if resp.status_code == 200:
+            secret = resp.json().get("secret")
+            if secret:
+                start_totp_banner(secret)
+    except Exception:
+        pass  # TOTP display is optional — don't break chat on failure
 
 
 def _print_help_to_chat() -> None:

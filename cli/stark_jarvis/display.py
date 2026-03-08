@@ -166,6 +166,80 @@ def banner_line_count() -> int:
     return 10
 
 
+# ── TOTP banner overlay ─────────────────────────────────────────────────
+_totp_thread: threading.Thread | None = None
+_totp_stop = threading.Event()
+
+
+def start_totp_banner(secret: str) -> None:
+    """Start a background thread that live-updates the banner with TOTP code.
+
+    Overwrites line 4 (subtitle) with the spaced TOTP code and
+    line 6 (status) with a countdown bar. Runs every 0.5s.
+    """
+    global _totp_thread
+    _totp_stop.clear()
+    _totp_thread = threading.Thread(
+        target=_totp_banner_loop, args=(secret,), daemon=True,
+    )
+    _totp_thread.start()
+
+
+def stop_totp_banner() -> None:
+    """Stop the TOTP banner thread."""
+    global _totp_thread
+    _totp_stop.set()
+    if _totp_thread:
+        _totp_thread.join(timeout=1.0)
+        _totp_thread = None
+
+
+def _totp_banner_loop(secret: str) -> None:
+    import pyotp
+    totp = pyotp.TOTP(secret)
+    w = _BOX_W
+    B = f"{JARVIS_BLUE}{BOLD}"
+    bv = w + 2
+
+    while not _totp_stop.is_set():
+        now = time.time()
+        code = totp.now()
+        remaining = 30 - int(now % 30)
+        spaced = "  ".join(code)  # "1  2  3  4  5  6" = 16 chars
+
+        # Color: blue normally, red when <=5s
+        code_color = JARVIS_BLUE if remaining > 5 else "\x1b[38;2;239;68;68m"
+
+        # Build countdown bar
+        bar_total = 20
+        filled = int((remaining / 30) * bar_total)
+        bar = f"{'▓' * filled}{'░' * (bar_total - filled)} {remaining:2d}s"
+        bar_vis_len = bar_total + 4  # bar chars + space + "XXs"
+
+        # Pad to center within box
+        cl, cr = _pad(len(spaced), w)
+        bl, br = _pad(bar_vis_len, w)
+
+        # Line 4 (subtitle → TOTP code): banner row 4 = terminal row 5
+        # (row 1 = blank, row 2 = top border, row 3 = blank, row 4 = title,
+        #  row 5 = subtitle, row 6 = blank, row 7 = status, row 8 = blank,
+        #  row 9 = bottom border, row 10 = blank)
+        code_line = f"{B}║{' ' * cl}{code_color}{BOLD}{spaced}{RESET}{B}{' ' * cr}║"
+        bar_line = f"{B}║{' ' * bl}{DIM}{JARVIS_BLUE}{bar}{RESET}{B}{' ' * br}║"
+
+        # Save cursor, draw lines 5 and 7, restore cursor
+        buf = "\x1b7"  # save cursor
+        # Row 5 = subtitle line (1-indexed from top)
+        buf += f"\x1b[5;1H\x1b[2K{_center(code_line, bv)}"
+        # Row 7 = status line
+        buf += f"\x1b[7;1H\x1b[2K{_center(bar_line, bv)}"
+        buf += "\x1b8"  # restore cursor
+
+        sys.stdout.write(buf)
+        sys.stdout.flush()
+        _totp_stop.wait(0.5)
+
+
 def run_connecting_animation(
     provider: str,
     stop_event: threading.Event,

@@ -105,11 +105,6 @@ def _run() -> None:
         _show_status()
         return
 
-    # ── totp ──
-    if command == "totp":
-        _show_totp()
-        return
-
     # ── help ──
     if command == "help":
         _print_help()
@@ -140,6 +135,11 @@ def _run() -> None:
         # 4-layer unlock
         from stark_jarvis.auth import unlock
         access_token, refresh_token = unlock()
+
+    # ── totp (requires auth) ──
+    if command == "totp":
+        _show_totp()
+        return
 
     # ── One-shot mode ──
     if args and command not in COMMANDS:
@@ -194,8 +194,10 @@ def _show_status() -> None:
 
 
 def _show_totp() -> None:
-    """Display the current TOTP code (requires auth)."""
+    """Live-updating TOTP authenticator display (Ctrl+C to exit)."""
+    import time
     from stark_jarvis.config import config
+    from stark_jarvis.display import hide_cursor, show_cursor
 
     if not config.is_setup():
         print_error("CLI not configured. Run: jarvis login")
@@ -208,12 +210,53 @@ def _show_totp() -> None:
 
     access_token, _ = session
 
+    # Fetch TOTP secret once from server
+    secret = _fetch_totp_secret(access_token)
+    if not secret:
+        return
+
+    import pyotp
+    totp = pyotp.TOTP(secret)
+
+    hide_cursor()
+    print(f"\n  {JARVIS_BLUE}{BOLD}TOTP Authenticator{RESET}")
+    print(f"  {DIM}Ctrl+C to exit{RESET}\n")
+    print()  # code line
+    print()  # countdown line
+
+    try:
+        last_code = ""
+        while True:
+            now = time.time()
+            code = totp.now()
+            remaining = 30 - int(now % 30)
+            spaced = "  ".join(code)
+            bar_len = 20
+            filled = int((remaining / 30) * bar_len)
+            bar = "█" * filled + "░" * (bar_len - filled)
+
+            # Move up 2 lines, redraw code + bar
+            color = JARVIS_BLUE if remaining > 5 else "\x1b[38;2;239;68;68m"
+            sys.stdout.write(f"\x1b[2A\x1b[2K  {BOLD}{color}{spaced}{RESET}\n")
+            sys.stdout.write(f"\x1b[2K  {DIM}{bar}  {remaining}s{RESET}\n")
+            sys.stdout.flush()
+            time.sleep(0.5)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        show_cursor()
+        print()
+
+
+def _fetch_totp_secret(access_token: str) -> str | None:
+    """Fetch TOTP secret from server. Returns secret or None on failure."""
     import httpx
-    from stark_jarvis.config import DEFAULT_SERVER
+    from stark_jarvis.config import config, DEFAULT_SERVER
+
     base = config.server_url or DEFAULT_SERVER
     try:
         resp = httpx.get(
-            f"{base}/api/v1/auth/totp/code",
+            f"{base}/api/v1/auth/totp/secret",
             headers={"Authorization": f"Bearer {access_token}"},
             timeout=10.0,
         )
@@ -224,26 +267,14 @@ def _show_totp() -> None:
             print_error("TOTP not enabled. Enable 2FA from the website first.")
             sys.exit(1)
         resp.raise_for_status()
-        data = resp.json()
+        return resp.json()["secret"]
     except httpx.ConnectError:
         print_error("Cannot reach server.")
         sys.exit(1)
     except httpx.HTTPStatusError:
-        print_error("Failed to fetch TOTP code.")
+        print_error("Failed to fetch TOTP data.")
         sys.exit(1)
-
-    code = data["code"]
-    remaining = data["remaining"]
-
-    # Display with JARVIS styling
-    spaced = "  ".join(code)
-    bar_len = 15
-    filled = int((remaining / 30) * bar_len)
-    bar = "█" * filled + "░" * (bar_len - filled)
-
-    print(f"\n  {JARVIS_BLUE}{BOLD}TOTP Authenticator{RESET}\n")
-    print(f"  {BOLD}{JARVIS_BLUE}{spaced}{RESET}")
-    print(f"\n  {DIM}{bar}  {remaining}s{RESET}\n")
+    return None
 
 
 def _print_help() -> None:
