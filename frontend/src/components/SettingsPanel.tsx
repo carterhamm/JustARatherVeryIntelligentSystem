@@ -3,9 +3,16 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, LogOut, Volume2, VolumeX, Clock, Shield, Loader2 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { useAuth } from '@/hooks/useAuth';
-import { useSettingsStore } from '@/stores/settingsStore';
+import { useSettingsStore, type ModelProvider } from '@/stores/settingsStore';
 import { useUIStore } from '@/stores/uiStore';
+import { api } from '@/services/api';
 import clsx from 'clsx';
+
+const MODEL_OPTIONS: { id: ModelProvider; label: string; desc: string; tag: string; color: string }[] = [
+  { id: 'claude', label: 'Claude', desc: 'Nuanced reasoning', tag: 'UPLINK', color: '#ff8c00' },
+  { id: 'gemini', label: 'Gemini', desc: 'Multimodal Flash', tag: 'UPLINK', color: '#4285F4' },
+  { id: 'stark_protocol', label: 'Stark Protocol', desc: 'Self-hosted LLM', tag: 'LOCAL', color: '#00d4ff' },
+];
 
 function ToggleRow({
   icon: Icon,
@@ -61,7 +68,8 @@ type TOTPStep = 'idle' | 'loading' | 'setup' | 'confirm' | 'disabling';
 export default function SettingsPanel() {
   const [isOpen, setIsOpen] = useState(false);
   const { user, logout, getTOTPStatus, setupTOTP, enableTOTP, disableTOTP } = useAuth();
-  const { voiceEnabled, setVoiceEnabled, use24HourTime, setUse24HourTime, modelPreference } = useSettingsStore();
+  const { voiceEnabled, setVoiceEnabled, use24HourTime, setUse24HourTime, modelPreference, setModelPreference } = useSettingsStore();
+  const [availableModels, setAvailableModels] = useState<Set<string>>(new Set(MODEL_OPTIONS.map((m) => m.id)));
 
   // TOTP state
   const [totpEnabled, setTotpEnabled] = useState(false);
@@ -94,10 +102,13 @@ export default function SettingsPanel() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  // Fetch TOTP status when panel opens
+  // Fetch TOTP status + provider availability when panel opens
   useEffect(() => {
     if (isOpen && user) {
       getTOTPStatus().then((s) => setTotpEnabled(s.totp_enabled)).catch(() => {});
+      api.get<{ id: string; available: boolean }[]>('/providers')
+        .then((data) => setAvailableModels(new Set(data.filter((p) => p.available).map((p) => p.id))))
+        .catch(() => {});
     }
   }, [isOpen, user, getTOTPStatus]);
 
@@ -237,6 +248,47 @@ export default function SettingsPanel() {
                       enabled={use24HourTime}
                       onToggle={() => setUse24HourTime(!use24HourTime)}
                     />
+                  </div>
+                </div>
+
+                {/* Default Model */}
+                <div>
+                  <span className="hud-label text-[8px] block mb-3">DEFAULT MODEL</span>
+                  <div className="space-y-1">
+                    {MODEL_OPTIONS.map((m) => {
+                      const isAvail = availableModels.has(m.id);
+                      const isSelected = modelPreference === m.id;
+                      return (
+                        <button
+                          key={m.id}
+                          disabled={!isAvail}
+                          onClick={() => isAvail && setModelPreference(m.id)}
+                          className={clsx(
+                            'w-full text-left px-3.5 py-2.5 rounded-xl transition-all flex items-center justify-between',
+                            isSelected
+                              ? 'glass-subtle border border-white/[0.08]'
+                              : 'border border-transparent hover:bg-white/[0.03]',
+                            !isAvail && 'opacity-30 cursor-not-allowed',
+                          )}
+                        >
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[7px] font-mono text-gray-600 uppercase">{m.tag}</span>
+                              <span className={clsx('text-xs font-semibold', isSelected ? 'text-white' : 'text-gray-400')}>
+                                {m.label}
+                              </span>
+                            </div>
+                            <p className="text-[9px] text-gray-600 font-mono mt-0.5">{m.desc}</p>
+                          </div>
+                          {isSelected && isAvail && (
+                            <div
+                              className="w-2 h-2 rounded-full flex-shrink-0"
+                              style={{ backgroundColor: m.color, boxShadow: `0 0 8px ${m.color}66` }}
+                            />
+                          )}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
