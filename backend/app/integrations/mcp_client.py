@@ -235,19 +235,88 @@ class MCPStdioClient:
             logger.exception("MCP reader loop error")
 
 
+# ── Remote HTTP MCP client ───────────────────────────────────────────────
+
+class MCPHTTPClient:
+    """MCP client that talks to an iMCP HTTP bridge (remote mode).
+
+    Used when the backend is on Railway and iMCP runs on a different
+    machine, exposed via Cloudflare tunnel.
+    """
+
+    def __init__(self, base_url: str, api_key: str = "", timeout: float = 30.0):
+        self._base_url = base_url.rstrip("/")
+        self._api_key = api_key
+        self._timeout = timeout
+
+    async def start(self) -> None:
+        """No-op for HTTP client (bridge manages the iMCP process)."""
+        pass
+
+    async def stop(self) -> None:
+        """No-op for HTTP client."""
+        pass
+
+    async def list_tools(self) -> list[dict[str, Any]]:
+        import httpx
+        headers = self._headers()
+        async with httpx.AsyncClient(timeout=self._timeout) as client:
+            resp = await client.get(f"{self._base_url}/tools", headers=headers)
+            resp.raise_for_status()
+            return resp.json().get("tools", [])
+
+    async def call_tool(self, name: str, arguments: dict[str, Any] | None = None) -> Any:
+        import httpx
+        headers = self._headers()
+        async with httpx.AsyncClient(timeout=self._timeout) as client:
+            resp = await client.post(
+                f"{self._base_url}/tools/{name}",
+                json={"arguments": arguments or {}},
+                headers=headers,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            if "error" in data:
+                raise RuntimeError(data["error"])
+            return data.get("result", data)
+
+    def _headers(self) -> dict[str, str]:
+        headers: dict[str, str] = {}
+        if self._api_key:
+            headers["Authorization"] = f"Bearer {self._api_key}"
+        return headers
+
+
 # ── Singleton for iMCP ───────────────────────────────────────────────────
 
-_imcp_client: Optional[MCPStdioClient] = None
+_imcp_client: Optional[MCPStdioClient | MCPHTTPClient] = None
 
 
-def get_imcp_client() -> MCPStdioClient:
-    """Return a singleton MCPStdioClient configured for iMCP."""
+def get_imcp_client() -> MCPStdioClient | MCPHTTPClient:
+    """Return a singleton iMCP client.
+
+    Uses HTTP mode if IMCP_BRIDGE_URL is configured (for Railway deployment),
+    otherwise falls back to spawning the local iMCP process via stdio.
+    """
     global _imcp_client
     if _imcp_client is None:
-        _imcp_client = MCPStdioClient(
-            command="/Applications/iMCP.app/Contents/MacOS/imcp-server",
-            timeout=30.0,
-        )
+        from app.config import settings
+        bridge_url = getattr(settings, "IMCP_BRIDGE_URL", "")
+        bridge_key = getattr(settings, "IMCP_BRIDGE_KEY", "")
+
+        if bridge_url:
+            logger.info("iMCP: using remote HTTP bridge at %s", bridge_url)
+            _imcp_client = MCPHTTPClient(
+                base_url=bridge_url,
+                api_key=bridge_key,
+                timeout=30.0,
+            )
+        else:
+            logger.info("iMCP: using local stdio server")
+            _imcp_client = MCPStdioClient(
+                command="/Applications/iMCP.app/Contents/MacOS/imcp-server",
+                timeout=30.0,
+            )
     return _imcp_client
 
 

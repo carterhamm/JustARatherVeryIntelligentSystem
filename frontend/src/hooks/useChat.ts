@@ -120,6 +120,7 @@ export function useChat() {
           const tool = msg.tool as string;
           const arg = msg.tool_arg as string;
 
+          // System tool calls (embedded tag-based)
           if (tool === 'SWITCH_MODEL') {
             const validProviders = ['claude', 'gemini', 'stark_protocol'];
             if (validProviders.includes(arg)) {
@@ -127,7 +128,25 @@ export function useChat() {
             }
           } else if (tool === 'TOGGLE_VOICE') {
             useSettingsStore.getState().setVoiceEnabled(arg === 'on');
+          } else {
+            // Agentic tool call — show activity in the stream
+            const id = streamingMsgId.current;
+            if (id) {
+              const toolLabel = tool.replace(/_/g, ' ');
+              appendToMessage(id, `\n\n> **Using:** ${toolLabel}\n`);
+            }
+            setJarvisActivity(0.9);
           }
+          break;
+        }
+
+        // Backend sends type="tool_result" with tool + content
+        case 'tool_result': {
+          const id = streamingMsgId.current;
+          if (id && msg.content) {
+            appendToMessage(id, `> *Done*\n\n`);
+          }
+          setJarvisActivity(0.7);
           break;
         }
 

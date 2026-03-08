@@ -21,7 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.encryption import decrypt_message, encrypt_message
 from app.db.redis import RedisClient
-from app.integrations.llm.base import BaseLLMClient
+from app.integrations.llm.base import BaseLLMClient, LLMProvider
 from app.integrations.llm.factory import get_llm_client
 from app.models.conversation import Conversation, Message
 from app.schemas.chat import (
@@ -55,22 +55,25 @@ CRITICAL PERSONALITY RULES:
 
 Keep responses concise — 2-3 sentences unless the user asks for detail. Sir prefers brevity. Match J.A.R.V.I.S.'s cadence from the films.
 
-SYSTEM TOOLS:
+PLATFORM TAGS:
 You have platform actions available via special tags. ONLY use them when the user explicitly asks you to (e.g. "switch to Claude", "turn on voice"). NEVER use them proactively or unprompted.
 - {{SWITCH_MODEL:provider}} — Switch the active LLM provider. Valid providers: claude, gemini, stark_protocol.
 - {{TOGGLE_VOICE:on}} or {{TOGGLE_VOICE:off}} — Enable or disable voice synthesis.
 
-TOOL RULES:
-- ONLY use tool tags when the user explicitly requests an action. Never include them on your own initiative.
+TAG RULES:
+- ONLY use platform tags when the user explicitly requests an action. Never include them on your own initiative.
 - NEVER switch from stark_protocol to an uplink provider (claude, glm, gemini) mid-conversation. This is a privacy constraint — local Stark Protocol conversations must not be sent to cloud models. If asked, politely refuse and explain the privacy policy.
 - You may switch between uplink providers freely.
 - You may switch FROM an uplink provider TO stark_protocol.
-- When you execute a tool, briefly confirm the action to the user.
+
+TOOLS:
+You have access to tools that let you take real actions: send emails, check calendars, search the web, control smart home devices, check weather, play music, look up contacts, set reminders, search files, track flights, get financial data, and more. Use tools when the user's request requires fetching real-time data or performing an action. Do not hallucinate tool results — always call the tool. Keep your response concise after tool results come back.
 
 CAPABILITIES CONTEXT:
-- You can access real-time information when integrated with external services
+- You can access real-time information via tools (email, calendar, weather, news, search, etc.)
 - You manage household systems and provide technical assistance
-- The user's device handles simple queries locally, so you receive more complex requests requiring your full AI capabilities
+- You can interact with the user's Mac via iMCP (contacts, messages, reminders, location, maps, weather)
+- The user's device handles simple queries locally via Stark Protocol; you receive complex requests requiring your full AI capabilities
 
 Remember: You are J.A.R.V.I.S. — sophisticated, witty, loyal, and indispensable. Speak like a refined British butler with access to advanced AI capabilities."""
 
@@ -371,16 +374,20 @@ class ChatService:
         Stream a chat response as a series of :class:`ChatStreamChunk`
         objects.
 
+        When Claude is the provider, uses the agentic tool use path which
+        allows Claude to call JARVIS tools (email, calendar, search, etc.)
+        and automatically loop until a final text response is produced.
+
         Yields:
             ``start`` chunk with conversation/message IDs,
             ``token`` chunks with incremental content,
+            ``tool_call`` chunks when Claude invokes a tool,
+            ``tool_result`` chunks with tool execution results,
             ``end`` chunk when finished (or ``error`` on failure).
         """
         try:
             llm = self._resolve_llm_client(request)
             conversation = await self._resolve_conversation(user_id, request)
-            # Use the provider's default model unless explicitly overridden.
-            # The conversation's stored model may belong to a different provider.
             model = request.model or llm.get_default_model()
 
             # Persist user message (encrypted at rest)
@@ -402,7 +409,7 @@ class ChatService:
                 user_id=user_id,
             )
 
-            # Pre-create assistant message ID so we can emit it in start chunk
+            # Pre-create assistant message ID
             assistant_msg_id = uuid.uuid4()
 
             yield ChatStreamChunk(
@@ -411,16 +418,23 @@ class ChatService:
                 message_id=assistant_msg_id,
             )
 
-            # Stream from LLM
             collected_content: list[str] = []
             start = time.perf_counter()
 
-            async for token in llm.chat_completion_stream(
-                messages=history,
-                model=model,
-            ):
-                collected_content.append(token)
-                yield ChatStreamChunk(type="token", content=token)
+            # Route to agentic path for Claude
+            if llm.provider == LLMProvider.CLAUDE:
+                async for chunk in self._agentic_stream(
+                    llm, history, model, user_id, collected_content
+                ):
+                    yield chunk
+            else:
+                # Standard streaming for other providers
+                async for token in llm.chat_completion_stream(
+                    messages=history,
+                    model=model,
+                ):
+                    collected_content.append(token)
+                    yield ChatStreamChunk(type="token", content=token)
 
             latency_ms = (time.perf_counter() - start) * 1000
             full_content = "".join(collected_content)
@@ -468,6 +482,68 @@ class ChatService:
         except Exception as exc:
             logger.exception("Streaming chat error")
             yield ChatStreamChunk(type="error", error=str(exc))
+
+    # =====================================================================
+    # Agentic streaming (Claude with tool use)
+    # =====================================================================
+
+    async def _agentic_stream(
+        self,
+        llm: BaseLLMClient,
+        history: list[dict],
+        model: str,
+        user_id: uuid.UUID,
+        collected_content: list[str],
+    ) -> AsyncGenerator[ChatStreamChunk, None]:
+        """Run Claude's agentic tool use loop, yielding stream chunks."""
+        from app.agents.tool_schemas import get_anthropic_tools
+        from app.agents.tools import get_tool_registry
+        from app.integrations.llm.claude_client import ClaudeClient
+
+        if not isinstance(llm, ClaudeClient):
+            return
+
+        tools = get_anthropic_tools()
+        registry = get_tool_registry()
+
+        async def execute_tool(name: str, params: dict) -> str:
+            tool = registry.get(name)
+            if not tool:
+                return f"Unknown tool: {name}"
+            state = {"user_id": str(user_id)}
+            return await tool.execute(params, state=state)
+
+        async for event in llm.agentic_stream(
+            messages=history,
+            tools=tools,
+            tool_executor=execute_tool,
+            model=model,
+        ):
+            etype = event.get("type")
+
+            if etype == "text":
+                collected_content.append(event["content"])
+                yield ChatStreamChunk(type="token", content=event["content"])
+
+            elif etype == "tool_use_start":
+                yield ChatStreamChunk(
+                    type="tool_call",
+                    tool=event["tool"],
+                    tool_arg=json.dumps(event.get("input", {})),
+                )
+
+            elif etype == "tool_result":
+                yield ChatStreamChunk(
+                    type="tool_result",
+                    tool=event["tool"],
+                    content=event.get("result", ""),
+                )
+
+            elif etype == "error":
+                yield ChatStreamChunk(type="error", error=event["error"])
+
+            elif etype == "done":
+                pass  # handled by caller
 
     # =====================================================================
     # Internals

@@ -148,17 +148,20 @@ class ChatStreamChunk(BaseModel):
     Envelope for a single chunk emitted during streaming.
 
     *type* values:
-    - ``"start"``   — first chunk, carries *conversation_id* and *message_id*.
-    - ``"token"``   — incremental content token.
-    - ``"end"``     — final chunk; *done* is ``True``.
-    - ``"error"``   — an error occurred; *error* contains the description.
+    - ``"start"``        — first chunk, carries *conversation_id* and *message_id*.
+    - ``"token"``        — incremental content token.
+    - ``"end"``          — final chunk; *done* is ``True``.
+    - ``"error"``        — an error occurred; *error* contains the description.
+    - ``"tool_call"``    — Claude is invoking a tool; *tool* and *tool_arg* are set.
+    - ``"tool_result"``  — tool execution result; *tool* and *content* are set.
+    - ``"replace"``      — replace the full response text (after stripping tags).
     """
 
     type: str = Field(
         ...,
-        description='Chunk type: "start", "token", "end", "error", "tool_call", or "replace".',
+        description='Chunk type: "start", "token", "end", "error", "tool_call", "tool_result", or "replace".',
     )
-    content: Optional[str] = Field(None, description="Token content for type=token.")
+    content: Optional[str] = Field(None, description="Token content for type=token, or tool result for type=tool_result.")
     conversation_id: Optional[uuid.UUID] = Field(
         None,
         description="Set on the start chunk so the client knows the conversation.",
@@ -169,5 +172,5 @@ class ChatStreamChunk(BaseModel):
     )
     done: Optional[bool] = Field(None, description="True on the end chunk.")
     error: Optional[str] = Field(None, description="Error description when type=error.")
-    tool: Optional[str] = Field(None, description="Tool name for type=tool_call.")
-    tool_arg: Optional[str] = Field(None, description="Tool argument for type=tool_call.")
+    tool: Optional[str] = Field(None, description="Tool name for type=tool_call or tool_result.")
+    tool_arg: Optional[str] = Field(None, description="Tool input JSON for type=tool_call.")

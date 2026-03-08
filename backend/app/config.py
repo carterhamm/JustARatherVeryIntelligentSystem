@@ -96,6 +96,10 @@ class Settings(BaseSettings):
     GITHUB_TOKEN: str = ""
     GITHUB_ENABLED: bool = False
 
+    # -- iMCP Bridge (remote macOS tools via Cloudflare tunnel) ---------------
+    IMCP_BRIDGE_URL: str = ""      # e.g. https://imcp.malibupoint.dev
+    IMCP_BRIDGE_KEY: str = ""      # Bearer token for auth
+
     # -- Matter / Smart Home --------------------------------------------------
     MATTER_CONTROLLER_URL: str = "http://localhost:5580"
 
