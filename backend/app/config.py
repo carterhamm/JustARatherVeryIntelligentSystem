@@ -149,6 +149,9 @@ class Settings(BaseSettings):
     # -- Setup Token (required to create the owner account) -------------------
     SETUP_TOKEN: str = ""
 
+    # -- Service API Key (machine-to-machine auth for daemons) ----------------
+    SERVICE_API_KEY: str = ""
+
     @field_validator("JWT_SECRET_KEY", mode="before")
     @classmethod
     def _ensure_jwt_secret(cls, v: object) -> str:

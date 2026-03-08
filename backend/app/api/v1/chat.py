@@ -26,7 +26,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.core.dependencies import get_current_active_user, get_db
+from app.core.dependencies import get_current_active_user, get_current_active_user_or_service, get_db
 from app.core.security import decode_token
 from app.db.redis import RedisClient, get_redis_client
 from app.integrations.llm import BaseLLMClient, get_llm_client
@@ -291,7 +291,7 @@ async def get_messages(
 )
 async def chat(
     request: ChatRequest,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_current_active_user_or_service),
     service: ChatService = Depends(_build_chat_service),
 ) -> MessageResponse:
     try:
@@ -326,7 +326,7 @@ async def chat(
 )
 async def chat_stream_sse(
     request: ChatRequest,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_current_active_user_or_service),
     service: ChatService = Depends(_build_chat_service),
 ) -> StreamingResponse:
     """

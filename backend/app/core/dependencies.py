@@ -2,11 +2,11 @@
 
 from typing import AsyncGenerator
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.security import get_current_user
+from app.core.security import decode_token, get_current_user
 from app.db.postgres import get_session
 from app.db.redis import get_redis_client, RedisClient
 from app.models.user import User
@@ -45,3 +45,67 @@ async def get_current_active_user(
         )
 
     return user
+
+
+async def get_current_active_user_or_service(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    """Authenticate via ``X-Service-Key`` header **or** standard JWT Bearer.
+
+    Checks service key first (for daemons like the wake listener that run
+    24/7 and can't do JWT refresh loops), then falls back to JWT.
+    """
+    from app.config import settings
+
+    # Path 1: Service API key (X-Service-Key header)
+    service_key = request.headers.get("x-service-key")
+    if service_key:
+        if not settings.SERVICE_API_KEY:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Service key auth not configured on server",
+            )
+        if service_key != settings.SERVICE_API_KEY:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid service key",
+            )
+        # Return the owner (first active user — single-owner system)
+        result = await db.execute(
+            select(User).where(User.is_active.is_(True)).limit(1)
+        )
+        user = result.scalar_one_or_none()
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="No active user found",
+            )
+        return user
+
+    # Path 2: Standard JWT Bearer token
+    auth_header = request.headers.get("authorization", "")
+    if auth_header.startswith("Bearer "):
+        token = auth_header[7:]
+        try:
+            payload = decode_token(token)
+        except HTTPException:
+            raise
+        if payload.type != "access":
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token type",
+            )
+        result = await db.execute(select(User).where(User.id == payload.sub))
+        user = result.scalar_one_or_none()
+        if user is None:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+        if not user.is_active:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account deactivated")
+        return user
+
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Authentication required (Bearer token or X-Service-Key)",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
