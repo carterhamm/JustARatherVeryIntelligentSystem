@@ -90,7 +90,7 @@ async def _generate_jarvis_tts(text: str) -> bytes:
         api_key=settings.ELEVENLABS_API_KEY,
         default_voice_id=settings.ELEVENLABS_VOICE_ID,
     ) as client:
-        return await client.synthesize(text, output_format="mp3_44100_192")
+        return await client.synthesize(text, output_format="mp3_44100_128")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
