@@ -1098,14 +1098,16 @@ class DateTimeTool(BaseTool):
             return f"Unknown timezone: '{tz_name}'.  Use IANA names (e.g. 'US/Eastern', 'Europe/London')."
 
         now = datetime.now(tz=tz)
+        # Round up ~1 minute to account for LLM processing + TTS delivery latency
+        from datetime import timedelta
+        display_time = now + timedelta(seconds=45)
 
         if operation == "now":
             return (
                 f"Current date/time ({tz_name}):\n"
-                f"  Date:  {now.strftime('%A, %B %d, %Y')}\n"
-                f"  Time:  {now.strftime('%I:%M:%S %p %Z')}\n"
-                f"  ISO:   {now.isoformat()}\n"
-                f"  Unix:  {int(now.timestamp())}"
+                f"  Date:  {display_time.strftime('%A, %B %d, %Y')}\n"
+                f"  Time:  {display_time.strftime('%I:%M %p %Z')}\n"
+                f"  Note:  Tell the user this time. Do NOT say seconds, just hour and minutes."
             )
         elif operation == "convert":
             source_tz_name = params.get("source_timezone", "UTC")
