@@ -84,7 +84,7 @@ You have access to tools for real actions: send emails, check calendars, search 
 
 OWNER CONTEXT:
 - Timezone: America/Denver (US Mountain Time). ALWAYS use this for date/time unless told otherwise.
-- Location: Colorado Springs, Colorado (unless location data says otherwise)
+- Location: Orem, Utah (unless location data says otherwise)
 - When using the date_time tool, ALWAYS pass timezone="America/Denver"
 
 CAPABILITIES:

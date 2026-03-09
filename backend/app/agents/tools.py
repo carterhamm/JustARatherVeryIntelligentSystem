@@ -1818,6 +1818,47 @@ class NutritionRecipeTool(BaseTool):
 
 
 # ═════════════════════════════════════════════════════════════════════════
+# Morning Routine tools
+# ═════════════════════════════════════════════════════════════════════════
+
+class SetWakeTimeTool(BaseTool):
+    """Set or change the morning routine wake time."""
+
+    name = "set_wake_time"
+    description = (
+        "Set or change Mr. Stark's morning routine wake time. "
+        "Use when he says things like 'wake me up at 7' or 'set my alarm for 6:30'. "
+        "Params: time (str, e.g. '07:00' or '6:45')."
+    )
+
+    async def execute(
+        self,
+        params: dict[str, Any],
+        *,
+        state: Optional[AgentState] = None,
+    ) -> str:
+        from app.db.redis import get_redis_client
+
+        time_str = params.get("time", "").strip()
+        if not time_str:
+            return "Missing required 'time' parameter."
+
+        # Normalise to HH:MM
+        parts = time_str.replace(".", ":").split(":")
+        try:
+            hour = int(parts[0])
+            minute = int(parts[1]) if len(parts) > 1 else 0
+            normalised = f"{hour:02d}:{minute:02d}"
+        except (ValueError, IndexError):
+            return f"Invalid time format: '{time_str}'. Use HH:MM (e.g. '07:00')."
+
+        r = await get_redis_client()
+        await r.cache_set("jarvis:morning:wake_time", normalised, ttl=86400 * 365)
+
+        return f"Morning routine wake time set to {normalised} Mountain Time."
+
+
+# ═════════════════════════════════════════════════════════════════════════
 # Tool registry factory
 # ═════════════════════════════════════════════════════════════════════════
 
@@ -1872,6 +1913,8 @@ def get_tool_registry() -> dict[str, BaseTool]:
             FlightTrackerTool(),
             GoogleMapsTool(),
             NutritionRecipeTool(),
+            # Morning routine
+            SetWakeTimeTool(),
         ]
         _registry = {t.name: t for t in tools}
     return _registry

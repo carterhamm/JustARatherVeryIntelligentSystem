@@ -102,6 +102,10 @@ TOOL_CATEGORIES = {
         "description": "Slack messages, team communication",
         "tools": ["slack"],
     },
+    "morning_routine": {
+        "description": "Morning routine, wake time, alarm, wake up time",
+        "tools": ["set_wake_time"],
+    },
 }
 
 _CATEGORY_LIST = "\n".join(

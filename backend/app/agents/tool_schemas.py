@@ -662,4 +662,16 @@ _TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "required": ["action"],
         },
     },
+    # -- Morning Routine ------------------------------------------------
+    {
+        "name": "set_wake_time",
+        "description": "Set or change Mr. Stark's morning routine wake time.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "time": {"type": "string", "description": "Wake time in HH:MM format (e.g. '07:00', '6:45')."},
+            },
+            "required": ["time"],
+        },
+    },
 ]
