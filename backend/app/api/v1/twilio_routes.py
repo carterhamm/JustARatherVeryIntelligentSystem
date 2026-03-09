@@ -110,14 +110,71 @@ async def serve_audio(audio_id: str) -> Response:
     return Response(content=audio_bytes, media_type="audio/mpeg")
 
 
+async def _identify_caller(db: AsyncSession, from_phone: str) -> tuple[User | None, str]:
+    """Identify the caller by their phone number.
+
+    Checks user preferences first, then falls back to TWILIO_USER_PHONE config.
+    Returns (user, greeting_name).
+    """
+    import re
+
+    # Normalise to digits only for matching
+    digits = re.sub(r"[^\d]", "", from_phone)
+    if digits.startswith("1") and len(digits) == 11:
+        digits = digits[1:]  # strip country code
+
+    # Get all active users (ordered by creation for deterministic owner detection)
+    result = await db.execute(
+        select(User).where(User.is_active.is_(True)).order_by(User.created_at.asc())
+    )
+    users = list(result.scalars().all())
+    owner = users[0] if users else None
+
+    # Check user preferences for phone_number match
+    for user in users:
+        prefs = user.preferences or {}
+        user_phone = prefs.get("phone_number", "")
+        user_digits = re.sub(r"[^\d]", "", user_phone)
+        if user_digits.startswith("1") and len(user_digits) == 11:
+            user_digits = user_digits[1:]
+        if user_digits and user_digits == digits:
+            greeting_name = prefs.get("greeting_name", user.full_name or user.username)
+            return user, greeting_name
+
+    # Fallback: check TWILIO_USER_PHONE config (owner's phone)
+    if owner and settings.TWILIO_USER_PHONE:
+        config_digits = re.sub(r"[^\d]", "", settings.TWILIO_USER_PHONE)
+        if config_digits.startswith("1") and len(config_digits) == 11:
+            config_digits = config_digits[1:]
+        if config_digits and config_digits == digits:
+            return owner, "Sir"
+
+    # Unknown caller — still route to owner but note it
+    if owner:
+        logger.info("Unknown caller %s — routing to owner", from_phone)
+        return owner, "Sir"
+    return None, "Sir"
+
+
 @router.post("/incoming")
-async def incoming_call(request: Request) -> Response:
+async def incoming_call(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> Response:
     """Handle incoming calls to JARVIS's phone number.
 
+    Identifies caller by phone number and personalises greeting.
     Generates ElevenLabs greeting audio and returns TwiML with <Play>.
     """
+    # Extract caller phone from Twilio form data
+    form = await request.form()
+    from_phone = form.get("From", "")
+
+    caller, greeting_name = await _identify_caller(db, from_phone)
+    logger.info("Incoming call from %s → %s", from_phone, greeting_name)
+
     try:
-        greeting = "Good day, Sir. JARVIS at your service. How may I assist you?"
+        greeting = f"Good day, {greeting_name}. JARVIS at your service. How may I assist you?"
         audio = await _generate_jarvis_tts(greeting)
         audio_id = await _cache_audio(audio)
 
@@ -157,6 +214,7 @@ async def incoming_call(request: Request) -> Response:
 async def process_speech(
     request: Request,
     SpeechResult: str = Form(""),
+    From: str = Form(""),
     db: AsyncSession = Depends(get_db),
 ) -> Response:
     """Process speech from the user's phone call.
@@ -164,6 +222,8 @@ async def process_speech(
     Twilio sends the transcribed speech here. We send it to JARVIS,
     get a response, generate ElevenLabs audio, and return TwiML with <Play>.
     """
+    from_phone = From
+
     if not SpeechResult.strip():
         try:
             audio = await _generate_jarvis_tts(
@@ -186,18 +246,16 @@ async def process_speech(
             twiml = str(response)
         return Response(content=twiml, media_type="application/xml")
 
-    logger.info("Phone speech input: %s", SpeechResult)
+    logger.info("Phone speech input from %s: %s", from_phone, SpeechResult)
 
     try:
         redis = await get_redis_client()
         llm_client = get_llm_client()
         service = ChatService(db=db, redis=redis, llm_client=llm_client)
 
-        # Get the owner user (single-owner system)
-        result = await db.execute(
-            select(User).where(User.is_active.is_(True)).limit(1)
-        )
-        owner = result.scalar_one_or_none()
+        # Identify caller by phone number
+        caller, greeting_name = await _identify_caller(db, from_phone)
+        owner = caller
         if not owner:
             audio = await _generate_jarvis_tts(
                 "I'm having trouble authenticating, Sir."

@@ -82,12 +82,12 @@ async def register(
             detail="Invalid Secure Handshake Token.",
         )
 
-    # Only one user ever
+    # Max 2 users (owner + one trusted user)
     count = await db.scalar(select(func.count()).select_from(User))
-    if count and count > 0:
+    if count and count >= 2:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Registration is disabled. JARVIS is a single-owner system.",
+            detail="Registration is disabled. Maximum users reached.",
         )
     return await AuthService.register(db, payload)
 

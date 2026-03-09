@@ -55,9 +55,91 @@ class SearchKnowledgeTool(BaseTool):
     name = "search_knowledge"
     description = (
         "Search the user's personal knowledge base (documents, notes, "
-        "emails, messages) using semantic search.  Params: query (str), "
+        "emails, messages) for information about Mr. Stark, his family, "
+        "preferences, contacts, and personal details.  Params: query (str), "
         "limit? (int, default 5)."
     )
+
+    # Cache loaded knowledge files in memory
+    _knowledge_cache: Optional[list[dict[str, str]]] = None
+
+    @classmethod
+    def _load_knowledge_files(cls) -> list[dict[str, str]]:
+        """Load local knowledge files from backend/knowledge/ directory."""
+        if cls._knowledge_cache is not None:
+            return cls._knowledge_cache
+
+        import pathlib
+
+        knowledge_dir = pathlib.Path(__file__).parent.parent.parent / "knowledge"
+        entries: list[dict[str, str]] = []
+
+        if knowledge_dir.exists():
+            for fpath in knowledge_dir.glob("*.md"):
+                try:
+                    content = fpath.read_text(encoding="utf-8")
+                    # Split into sections by ## headers for granular search
+                    sections = content.split("\n## ")
+                    title = fpath.stem.replace("-", " ").title()
+                    for i, section in enumerate(sections):
+                        section = section.strip()
+                        if not section:
+                            continue
+                        # First section includes the # header
+                        if i == 0 and section.startswith("# "):
+                            header_end = section.find("\n")
+                            header = section[:header_end].lstrip("# ").strip() if header_end > 0 else title
+                            body = section[header_end:].strip() if header_end > 0 else section
+                        else:
+                            header_end = section.find("\n")
+                            header = section[:header_end].strip() if header_end > 0 else section
+                            body = section[header_end:].strip() if header_end > 0 else ""
+                        entries.append({
+                            "title": f"{title} — {header}",
+                            "text": f"{header}\n{body}" if body else header,
+                            "source": fpath.name,
+                        })
+                except Exception as exc:
+                    logger.warning("Failed to load knowledge file %s: %s", fpath, exc)
+
+        cls._knowledge_cache = entries
+        logger.info("Loaded %d knowledge sections from local files", len(entries))
+        return entries
+
+    def _search_local(self, query: str, limit: int = 5) -> list[dict[str, Any]]:
+        """Simple keyword search through local knowledge files."""
+        entries = self._load_knowledge_files()
+        if not entries:
+            return []
+
+        query_lower = query.lower()
+        query_words = [w for w in query_lower.split() if len(w) > 2]
+
+        scored: list[tuple[float, dict]] = []
+        for entry in entries:
+            text_lower = entry["text"].lower()
+            title_lower = entry["title"].lower()
+
+            # Score based on keyword matches
+            score = 0.0
+            for word in query_words:
+                if word in text_lower:
+                    score += 1.0
+                if word in title_lower:
+                    score += 1.5  # title matches weighted higher
+
+            # Exact phrase match bonus
+            if query_lower in text_lower:
+                score += 3.0
+
+            if score > 0:
+                scored.append((score, entry))
+
+        scored.sort(key=lambda x: x[0], reverse=True)
+        return [
+            {"score": s, "payload": {"title": e["title"], "text": e["text"]}}
+            for s, e in scored[:limit]
+        ]
 
     async def execute(
         self,
@@ -65,32 +147,42 @@ class SearchKnowledgeTool(BaseTool):
         *,
         state: Optional[AgentState] = None,
     ) -> str:
-        from app.db.qdrant import get_qdrant_store
-        from openai import AsyncOpenAI
-        from app.config import settings
-
         query = params.get("query", "")
         limit = params.get("limit", 5)
         if not query:
             return "No search query provided."
 
-        # Generate embedding
-        client = AsyncOpenAI(api_key="")  # TODO: swap to non-OpenAI embedding provider
-        embed_resp = await client.embeddings.create(
-            input=query,
-            model="text-embedding-3-small",
-        )
-        vector = embed_resp.data[0].embedding
+        results: list[dict] = []
 
-        store = get_qdrant_store()
-        user_id = (state or {}).get("user_id", "")
-        filters = {"user_id": user_id} if user_id else None
-        results = await store.search(
-            query_vector=vector,
-            limit=limit,
-            filter_conditions=filters,
-            score_threshold=0.5,
-        )
+        # Try Qdrant vector search first (if configured)
+        try:
+            from app.db.qdrant import get_qdrant_store
+            from openai import AsyncOpenAI
+
+            client = AsyncOpenAI(api_key="")
+            embed_resp = await client.embeddings.create(
+                input=query,
+                model="text-embedding-3-small",
+            )
+            vector = embed_resp.data[0].embedding
+
+            store = get_qdrant_store()
+            user_id = (state or {}).get("user_id", "")
+            filters = {"user_id": user_id} if user_id else None
+            qdrant_results = await store.search(
+                query_vector=vector,
+                limit=limit,
+                filter_conditions=filters,
+                score_threshold=0.5,
+            )
+            if qdrant_results:
+                results = qdrant_results
+        except Exception:
+            logger.debug("Qdrant search unavailable, using local knowledge files")
+
+        # Fall back to local knowledge file search
+        if not results:
+            results = self._search_local(query, limit)
 
         if not results:
             return f"No relevant results found for: '{query}'"

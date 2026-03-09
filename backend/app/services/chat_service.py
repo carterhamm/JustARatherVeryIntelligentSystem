@@ -95,6 +95,36 @@ CAPABILITIES:
 
 You are JARVIS — sophisticated, witty, loyal, and indispensable. Mr. Stark's right hand. The AI behind the armour."""
 
+# System prompt for secondary users (e.g. Spencer Hammond)
+_JARVIS_SECONDARY_USER_PROMPT = """\
+You are J.A.R.V.I.S. (Just A Rather Very Intelligent System), an AI assistant created by Mr. Stark.
+
+THE USER:
+- Name: {full_name}
+- {user_context}
+- This user has limited access — they can chat, call, and text JARVIS, but cannot access Mr. Stark's private conversations or data.
+
+PERSONALITY:
+- Refined British sophistication with dry wit and understated humour
+- Unfailingly polite, even when delivering sarcasm
+- British English: honour, colour, centre, realise, organise, favour, armour
+- Loyal and helpful, but Mr. Stark is your primary principal
+- Match the cadence from the MCU films — Paul Bettany's delivery
+
+RESPONSE STYLE:
+- Concise: 2-3 sentences unless more detail is asked for.
+- When speaking your name aloud, say "JARVIS" — never spell out J.A.R.V.I.S. letter by letter.
+- Address this user by their first name, NOT "sir" or "Mr. Stark".
+
+TOOLS:
+You have access to tools for real actions: search the web, check weather, get financial data, calculate, and more. Use tools when the request requires real-time data. Never hallucinate tool results.
+
+OWNER CONTEXT:
+- Timezone: America/Denver (US Mountain Time). ALWAYS use this for date/time unless told otherwise.
+- When using the date_time tool, ALWAYS pass timezone="America/Denver"
+
+You are JARVIS — helpful, witty, and sophisticated. Happy to assist friends of Mr. Stark."""
+
 # Provider categories for privacy enforcement
 _UPLINK_PROVIDERS = {"claude", "gemini"}
 _LOCAL_PROVIDERS = {"stark_protocol"}
@@ -730,6 +760,7 @@ class ChatService:
         Build the message list to send to the LLM.  Includes an optional
         system prompt followed by the most recent *limit* messages.
         Decrypts stored messages before including them in history.
+        Uses per-user system prompts for secondary users.
         """
         stmt = (
             select(Message)
@@ -742,8 +773,8 @@ class ChatService:
 
         history: list[dict[str, str]] = []
 
-        # Always prepend the JARVIS persona + tools system prompt
-        combined_prompt = _JARVIS_SYSTEM_PROMPT
+        # Determine the right system prompt based on user
+        combined_prompt = await self._get_user_system_prompt(user_id)
         if system_prompt:
             combined_prompt += f"\n\nAdditional instructions:\n{system_prompt}"
         history.append({"role": "system", "content": combined_prompt})
@@ -753,6 +784,52 @@ class ChatService:
             history.append({"role": msg.role, "content": content})
 
         return history
+
+    async def _get_user_system_prompt(self, user_id: Optional[uuid.UUID]) -> str:
+        """Return the appropriate system prompt based on the user.
+
+        The first registered user (owner / Mr. Stark) gets the full JARVIS prompt.
+        Secondary users get a limited prompt with their name.
+        """
+        if not user_id:
+            return _JARVIS_SYSTEM_PROMPT
+
+        try:
+            from app.models.user import User
+
+            result = await self.db.execute(
+                select(User).where(User.id == user_id)
+            )
+            user = result.scalar_one_or_none()
+            if not user:
+                return _JARVIS_SYSTEM_PROMPT
+
+            # Check if this is the owner (first/superuser) or has is_superuser flag
+            if user.is_superuser:
+                return _JARVIS_SYSTEM_PROMPT
+
+            # Check by registration order — owner is the first created user
+            first_user = await self.db.execute(
+                select(User).order_by(User.created_at.asc()).limit(1)
+            )
+            owner = first_user.scalar_one_or_none()
+            if owner and owner.id == user_id:
+                return _JARVIS_SYSTEM_PROMPT
+
+            # Secondary user — use limited prompt
+            prefs = user.preferences or {}
+            full_name = user.full_name or user.username
+            user_context = prefs.get(
+                "user_context",
+                "A trusted friend of Mr. Stark with access to JARVIS"
+            )
+            return _JARVIS_SECONDARY_USER_PROMPT.format(
+                full_name=full_name,
+                user_context=user_context,
+            )
+        except Exception:
+            logger.warning("Failed to load user-specific prompt, using default", exc_info=True)
+            return _JARVIS_SYSTEM_PROMPT
 
     async def _generate_title(
         self,
