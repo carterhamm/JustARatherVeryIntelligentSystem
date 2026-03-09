@@ -310,11 +310,10 @@ class ChatService:
         request: ChatRequest,
     ) -> Message:
         """
-        Handle a single non-streaming chat turn:
-        1. Create or retrieve the conversation.
-        2. Persist the user message.
-        3. Build message history and call the LLM.
-        4. Persist and return the assistant message.
+        Handle a single non-streaming chat turn with full tool access.
+
+        Uses the same agentic path as streaming (tools, intent routing)
+        so JARVIS is identical regardless of channel (web, phone, CLI, wake word).
         """
         llm = self._resolve_llm_client(request)
         conversation = await self._resolve_conversation(user_id, request)
@@ -338,14 +337,20 @@ class ChatService:
         )
 
         start = time.perf_counter()
-        response = await llm.chat_completion(
-            messages=history,
-            model=model,
-        )
-        latency_ms = (time.perf_counter() - start) * 1000
 
-        assistant_content: str = response["content"]
-        completion_tokens: int = response["usage"].get("completion_tokens", 0)
+        # Use agentic path (with tools) for Claude and Gemini
+        if llm.provider in (LLMProvider.CLAUDE, LLMProvider.GEMINI) and hasattr(llm, 'agentic_stream'):
+            assistant_content = await self._agentic_chat(llm, history, model, user_id)
+        else:
+            # Stark Protocol — local only, no tools (privacy)
+            response = await llm.chat_completion(
+                messages=history,
+                model=model,
+            )
+            assistant_content = response["content"]
+
+        latency_ms = (time.perf_counter() - start) * 1000
+        completion_tokens = await llm.count_tokens(assistant_content, model)
 
         # Generate title for brand-new conversations
         if conversation.title is None:
@@ -360,14 +365,71 @@ class ChatService:
             role="assistant",
             content=assistant_content,
             token_count=completion_tokens,
-            model=response["model"],
+            model=model,
             latency_ms=latency_ms,
-            tool_calls=response.get("tool_calls"),
             user_id=user_id,
         )
         # Return plaintext content (add_message stores encrypted)
         assistant_msg.content = assistant_content
         return assistant_msg
+
+    async def _agentic_chat(
+        self,
+        llm: BaseLLMClient,
+        history: list[dict],
+        model: str,
+        user_id: uuid.UUID,
+    ) -> str:
+        """Run the agentic tool loop non-streaming, return final text.
+
+        Same tool access as _agentic_stream but collects results into a string.
+        Used by phone calls, REST POST /chat, and any non-streaming channel.
+        """
+        from app.agents.intent_router import get_tools_for_intent, route_intent
+        from app.agents.tool_schemas import get_anthropic_tools
+        from app.agents.tools import get_tool_registry
+
+        all_tools = get_anthropic_tools()
+
+        # Route intent via Cerebras
+        try:
+            user_message = ""
+            for msg in reversed(history):
+                if msg.get("role") == "user":
+                    user_message = msg.get("content", "")
+                    break
+            if user_message:
+                tool_names = await route_intent(user_message)
+                tools = get_tools_for_intent(tool_names, all_tools)
+                if not tools:
+                    tools = all_tools
+            else:
+                tools = all_tools
+        except Exception:
+            logger.warning("Intent routing failed — using all tools", exc_info=True)
+            tools = all_tools
+
+        registry = get_tool_registry()
+
+        async def execute_tool(name: str, params: dict) -> str:
+            tool = registry.get(name)
+            if not tool:
+                return f"Unknown tool: {name}"
+            state = {"user_id": str(user_id)}
+            return await tool.execute(params, state=state)
+
+        # Collect text from the agentic stream
+        collected: list[str] = []
+        async for event in llm.agentic_stream(
+            messages=history,
+            tools=tools,
+            tool_executor=execute_tool,
+            model=model,
+        ):
+            if event.get("type") == "text":
+                collected.append(event["content"])
+
+        return "".join(collected)
 
     # =====================================================================
     # Chat (streaming)
