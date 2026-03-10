@@ -169,7 +169,7 @@ class MCPService:
 
         start_ts = time.monotonic()
         try:
-            result = await tool.execute(params, state=state)
+            result = await tool.run(params, state=state)
             elapsed = round((time.monotonic() - start_ts) * 1000, 2)
             return {
                 "tool": tool_name,

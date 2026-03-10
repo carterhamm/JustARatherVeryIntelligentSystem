@@ -121,6 +121,39 @@ async def get_system_info() -> dict[str, Any]:
         return {"error": f"Error: {e}"}
 
 
+async def get_location(name: str = "") -> dict[str, Any]:
+    """Get a person's location from Find My on the Mac Mini.
+
+    Args:
+        name: Person name to search for (empty = latest known location).
+
+    Returns:
+        Dict with found, name, latitude, longitude, accuracy, updated_at, source.
+    """
+    if not is_configured():
+        return {"found": False, "error": "Mac Mini agent not configured"}
+
+    url = f"{_get_url()}/get-location"
+    params = {"name": name} if name else {}
+
+    try:
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            resp = await client.get(url, params=params, headers=_get_headers())
+
+            if resp.status_code == 401:
+                return {"found": False, "error": "Mac Mini agent auth failed"}
+            resp.raise_for_status()
+            return resp.json()
+
+    except httpx.ConnectError:
+        return {"found": False, "error": "Cannot reach Mac Mini agent"}
+    except httpx.TimeoutException:
+        return {"found": False, "error": "Mac Mini agent request timed out"}
+    except Exception as e:
+        logger.exception("Mac Mini get_location error")
+        return {"found": False, "error": f"Error: {e}"}
+
+
 async def health_check() -> bool:
     """Check if the Mac Mini agent is reachable."""
     if not is_configured():
@@ -130,7 +163,7 @@ async def health_check() -> bool:
 
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
-            resp = await client.get(url)
+            resp = await client.get(url, headers=_get_headers())
             return resp.status_code == 200
     except Exception:
         return False

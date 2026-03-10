@@ -758,4 +758,31 @@ _TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "required": ["reference"],
         },
     },
+    # -- Navigate (Find My + Google Maps) --------------------------------
+    {
+        "name": "navigate",
+        "description": (
+            "Get driving distance and estimated travel time from Mr. Stark's "
+            "current location to a destination. Automatically gets live location "
+            "from Find My on the Mac Mini, then calculates route via Google Maps. "
+            "Also shows nearby place matches for disambiguation (e.g. 'La Jolla' "
+            "could be a restaurant nearby or the city in California)."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "destination": {
+                    "type": "string",
+                    "description": "Where to navigate to (place name, address, or city).",
+                },
+                "mode": {
+                    "type": "string",
+                    "enum": ["driving", "walking", "transit", "bicycling"],
+                    "description": "Travel mode.",
+                    "default": "driving",
+                },
+            },
+            "required": ["destination"],
+        },
+    },
 ]

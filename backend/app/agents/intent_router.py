@@ -39,8 +39,8 @@ TOOL_CATEGORIES = {
         "tools": ["weather", "mac_weather_current", "mac_weather_forecast"],
     },
     "navigation": {
-        "description": "Directions, maps, travel time, places, location",
-        "tools": ["google_maps", "mac_maps_search", "mac_maps_directions", "mac_maps_eta", "mac_location_current", "mac_location_geocode"],
+        "description": "Directions, maps, travel time, distance, places, location, how far, navigate",
+        "tools": ["navigate", "google_maps", "mac_maps_search", "mac_maps_directions", "mac_maps_eta", "mac_location_current", "mac_location_geocode"],
     },
     "web_search": {
         "description": "Searching the internet, looking up current information, research",
@@ -63,8 +63,8 @@ TOOL_CATEGORIES = {
         "tools": ["mac_contacts_me", "mac_contacts_search", "mac_contacts_create"],
     },
     "messages": {
-        "description": "iMessage, SMS, text messages (READ ONLY)",
-        "tools": ["mac_messages_fetch"],
+        "description": "iMessage, SMS, text messages, send a message, send a text",
+        "tools": ["mac_messages_fetch", "send_imessage"],
     },
     "reminders": {
         "description": "Reminders, to-do lists, tasks",
@@ -105,6 +105,14 @@ TOOL_CATEGORIES = {
     "morning_routine": {
         "description": "Morning routine, wake time, alarm, wake up time",
         "tools": ["set_wake_time"],
+    },
+    "sports": {
+        "description": "Sports scores, games, schedules, standings, BYU, football, basketball, NFL, NBA",
+        "tools": ["sports"],
+    },
+    "scripture": {
+        "description": "Bible verses, Book of Mormon, scriptures, D&C, Pearl of Great Price, LDS",
+        "tools": ["scripture_lookup"],
     },
 }
 

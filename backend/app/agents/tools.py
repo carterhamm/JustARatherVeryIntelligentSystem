@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import logging
 import math
+import time
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
 from typing import Any, Optional
@@ -63,6 +64,37 @@ class BaseTool(ABC):
 
     name: str = ""
     description: str = ""
+
+    async def run(
+        self,
+        params: dict[str, Any],
+        *,
+        state: Optional[AgentState] = None,
+    ) -> str:
+        """Execute with deep logging — wraps execute()."""
+        user_id = (state or {}).get("user_id", "?")
+        logger.info(
+            "TOOL_START tool=%s user=%s params=%s",
+            self.name, user_id, json.dumps(params, default=str)[:500],
+        )
+        t0 = time.monotonic()
+        try:
+            result = await self.execute(params, state=state)
+            elapsed = time.monotonic() - t0
+            # Truncate result for logging
+            preview = result[:300].replace("\n", " ") if result else "(empty)"
+            logger.info(
+                "TOOL_OK tool=%s user=%s elapsed=%.2fs result_len=%d preview=%s",
+                self.name, user_id, elapsed, len(result), preview,
+            )
+            return result
+        except Exception as exc:
+            elapsed = time.monotonic() - t0
+            logger.error(
+                "TOOL_ERROR tool=%s user=%s elapsed=%.2fs error=%s",
+                self.name, user_id, elapsed, exc, exc_info=True,
+            )
+            return f"Tool '{self.name}' failed: {exc}"
 
     @abstractmethod
     async def execute(
@@ -2213,6 +2245,124 @@ class ScriptureLookupTool(BaseTool):
 
 
 # ═════════════════════════════════════════════════════════════════════════
+# Navigate tool (Find My location → Google Maps directions)
+# ═════════════════════════════════════════════════════════════════════════
+
+class NavigateTool(BaseTool):
+    """Get navigation distance/time from user's current location to a destination."""
+
+    name = "navigate"
+    description = (
+        "Get driving distance and time from Mr. Stark's current location to a "
+        "destination. Uses Find My on the Mac Mini for live location, then "
+        "Google Maps for directions. Can disambiguate destination names "
+        "(e.g. 'La Jolla' could be a nearby restaurant or the city in CA). "
+        "Params: destination (str), mode? (str: driving/walking/transit, default driving)."
+    )
+
+    async def execute(
+        self,
+        params: dict[str, Any],
+        *,
+        state: Optional[AgentState] = None,
+    ) -> str:
+        from app.integrations.mac_mini import get_location, is_configured as mini_configured
+        from app.integrations.google_maps import GoogleMapsClient
+
+        destination = params.get("destination", "").strip()
+        mode = params.get("mode", "driving")
+        if not destination:
+            return "Missing 'destination' parameter."
+
+        # Step 1: Get user's current location from Mac Mini Find My
+        origin_str = ""
+        if mini_configured():
+            loc = await get_location()
+            if loc.get("found"):
+                lat, lng = loc["latitude"], loc["longitude"]
+                origin_str = f"{lat},{lng}"
+                logger.info(
+                    "NAVIGATE: Got location (%.4f, %.4f) source=%s updated=%s",
+                    lat, lng, loc.get("source", "?"), loc.get("updated_at", "?"),
+                )
+            else:
+                logger.warning("NAVIGATE: Location not found: %s", loc.get("error", "unknown"))
+
+        if not origin_str:
+            # Fallback: Orem, UT (user's home area)
+            origin_str = "40.2969,-111.6946"
+            logger.info("NAVIGATE: Using fallback location (Orem, UT)")
+
+        maps = GoogleMapsClient()
+
+        # Step 2: Search for the destination to find possible matches
+        places_result = await maps.places_search(
+            destination,
+            location=origin_str,
+            radius=50000,  # 50km radius for nearby matches
+        )
+
+        nearby_matches = []
+        if not places_result.get("error"):
+            for p in places_result.get("results", [])[:3]:
+                ploc = p.get("geometry", {}).get("location", {})
+                nearby_matches.append({
+                    "name": p.get("name", ""),
+                    "address": p.get("formatted_address", ""),
+                    "lat": ploc.get("lat"),
+                    "lng": ploc.get("lng"),
+                    "rating": p.get("rating"),
+                    "types": p.get("types", []),
+                })
+
+        # Step 3: Get directions to the destination (as typed)
+        dir_result = await maps.directions(origin_str, destination, mode)
+        if dir_result.get("error"):
+            # If directions fail, try with the first place match
+            if nearby_matches:
+                dest_coords = f"{nearby_matches[0]['lat']},{nearby_matches[0]['lng']}"
+                dir_result = await maps.directions(origin_str, dest_coords, mode)
+
+        lines = [f"Navigation to: {destination} ({mode})\n"]
+
+        # Main route
+        routes = dir_result.get("routes", [])
+        if routes:
+            leg = routes[0].get("legs", [{}])[0]
+            dist = leg.get("distance", {}).get("text", "N/A")
+            dur = leg.get("duration", {}).get("text", "N/A")
+            end_addr = leg.get("end_address", destination)
+            lines.append(f"  Distance: {dist}")
+            lines.append(f"  ETA: {dur}")
+            lines.append(f"  Destination: {end_addr}")
+        else:
+            lines.append("  Could not calculate route to this destination.")
+
+        # Show nearby disambiguation if there are interesting alternatives
+        if len(nearby_matches) > 1:
+            lines.append(f"\n  Other matches nearby:")
+            for m in nearby_matches[:3]:
+                rating_str = f" (rating: {m['rating']})" if m.get("rating") else ""
+                lines.append(f"    - {m['name']}: {m['address']}{rating_str}")
+
+                # Get distance to each alternative
+                if m.get("lat") and m.get("lng"):
+                    alt_result = await maps.distance_matrix(
+                        origin_str, f"{m['lat']},{m['lng']}", mode
+                    )
+                    if not alt_result.get("error"):
+                        rows = alt_result.get("rows", [])
+                        if rows:
+                            el = rows[0].get("elements", [{}])[0]
+                            alt_dist = el.get("distance", {}).get("text", "")
+                            alt_dur = el.get("duration", {}).get("text", "")
+                            if alt_dist:
+                                lines.append(f"      {alt_dist}, {alt_dur}")
+
+        return "\n".join(lines)
+
+
+# ═════════════════════════════════════════════════════════════════════════
 # Tool registry factory
 # ═════════════════════════════════════════════════════════════════════════
 
@@ -2274,6 +2424,8 @@ def get_tool_registry() -> dict[str, BaseTool]:
             # Quick-win integrations (free, no API key)
             SportsTool(),
             ScriptureLookupTool(),
+            # Navigation (Find My + Google Maps)
+            NavigateTool(),
         ]
         _registry = {t.name: t for t in tools}
     return _registry

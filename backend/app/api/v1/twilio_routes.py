@@ -271,7 +271,7 @@ async def process_speech(
             model_provider="gemini",
             voice_enabled=False,
         )
-        message = await service.chat(owner.id, chat_request)
+        message = await service.chat(owner.id, chat_request, channel="phone")
         response_text = message.content
 
         # Generate JARVIS voice for the response

@@ -250,9 +250,14 @@ def _get_tool_status(user_prefs: dict | None = None) -> str:
     imcp_ok = _ok(settings.IMCP_BRIDGE_URL)
     lines.append(f"- MacBook tools (calendar, contacts, messages, maps, weather via iMCP): {'CONNECTED' if imcp_ok else 'NOT CONNECTED — iMCP bridge not running'}")
 
-    # Mac Mini Agent (iMessage sending, shortcuts, system control)
+    # Mac Mini Agent (iMessage sending, shortcuts, location, system control)
     mini_ok = _ok(settings.MAC_MINI_AGENT_URL) and _ok(settings.MAC_MINI_AGENT_KEY)
-    lines.append(f"- Mac Mini (iMessage sending, shortcuts): {'CONNECTED' if mini_ok else 'NOT CONNECTED — MAC_MINI_AGENT_URL/KEY missing'}")
+    lines.append(f"- Mac Mini (iMessage, shortcuts, Find My location): {'CONNECTED' if mini_ok else 'NOT CONNECTED — MAC_MINI_AGENT_URL/KEY missing'}")
+
+    # Navigation (Find My + Google Maps)
+    maps_ok = _ok(settings.GOOGLE_MAPS_API_KEY)
+    nav_ok = mini_ok and maps_ok
+    lines.append(f"- Navigation (live location + Google Maps directions): {'CONNECTED' if nav_ok else 'PARTIAL — needs Mac Mini + Google Maps API key'}")
 
     # News
     news_ok = _ok(settings.NEWS_API_KEY)
@@ -330,13 +335,19 @@ class ChatService:
         self,
         user_id: uuid.UUID,
         data: ConversationCreate,
+        *,
+        channel: str = "web",
     ) -> Conversation:
-        """Create a new conversation for *user_id*."""
+        """Create a new conversation for *user_id*.
+
+        channel: Source channel — "web", "cli", "phone", "imessage".
+        """
         conversation = Conversation(
             user_id=user_id,
             title=data.title,
             model=data.model or "gpt-4o",
             system_prompt=data.system_prompt,
+            metadata_={"channel": channel},
         )
         self.db.add(conversation)
         await self.db.commit()
@@ -520,6 +531,8 @@ class ChatService:
         self,
         user_id: uuid.UUID,
         request: ChatRequest,
+        *,
+        channel: str = "web",
     ) -> Message:
         """
         Handle a single non-streaming chat turn with full tool access.
@@ -528,7 +541,7 @@ class ChatService:
         so JARVIS is identical regardless of channel (web, phone, CLI, wake word).
         """
         llm = self._resolve_llm_client(request)
-        conversation = await self._resolve_conversation(user_id, request)
+        conversation = await self._resolve_conversation(user_id, request, channel=channel)
         model = request.model or llm.get_default_model()
 
         # Persist user message (encrypted at rest)
@@ -628,7 +641,7 @@ class ChatService:
             if not tool:
                 return f"Unknown tool: {name}"
             state = {"user_id": str(user_id)}
-            return await tool.execute(params, state=state)
+            return await tool.run(params, state=state)
 
         # Collect text from the agentic stream
         collected: list[str] = []
@@ -812,7 +825,7 @@ class ChatService:
             if not tool:
                 return f"Unknown tool: {name}"
             state = {"user_id": str(user_id)}
-            return await tool.execute(params, state=state)
+            return await tool.run(params, state=state)
 
         # Both Claude and Gemini implement agentic_stream with the same interface
         if not hasattr(llm, 'agentic_stream'):
@@ -906,6 +919,8 @@ class ChatService:
         self,
         user_id: uuid.UUID,
         request: ChatRequest,
+        *,
+        channel: str = "web",
     ) -> Conversation:
         """Get an existing conversation or create a new one."""
         if request.conversation_id:
@@ -917,7 +932,7 @@ class ChatService:
             model=request.model or llm.get_default_model(),
             system_prompt=request.system_prompt,
         )
-        return await self.create_conversation(user_id, create_data)
+        return await self.create_conversation(user_id, create_data, channel=channel)
 
     async def _build_message_history(
         self,

@@ -69,7 +69,7 @@ async def executor_node(state: AgentState) -> dict[str, Any]:
         async with semaphore:
             try:
                 result = await asyncio.wait_for(
-                    tool.execute(params, state=state),
+                    tool.run(params, state=state),
                     timeout=_TOOL_TIMEOUT,
                 )
                 elapsed = (time.monotonic() - start) * 1000

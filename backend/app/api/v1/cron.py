@@ -56,7 +56,7 @@ async def _gather_morning_data() -> dict[str, Any]:
     weather_tool = registry.get("weather")
     if weather_tool:
         try:
-            data["weather"] = await weather_tool.execute(
+            data["weather"] = await weather_tool.run(
                 {"location": "Orem, Utah", "type": "current"},
             )
         except Exception as exc:
@@ -66,7 +66,7 @@ async def _gather_morning_data() -> dict[str, Any]:
     # Forecast
     if weather_tool:
         try:
-            data["forecast"] = await weather_tool.execute(
+            data["forecast"] = await weather_tool.run(
                 {"location": "Orem, Utah", "type": "forecast"},
             )
         except Exception as exc:
@@ -77,7 +77,7 @@ async def _gather_morning_data() -> dict[str, Any]:
     if cal_tool:
         try:
             today = now.strftime("%Y-%m-%d")
-            data["calendar"] = await cal_tool.execute(
+            data["calendar"] = await cal_tool.run(
                 {"start_date": f"{today}T00:00:00", "end_date": f"{today}T23:59:59"},
             )
         except Exception as exc:
@@ -88,7 +88,7 @@ async def _gather_morning_data() -> dict[str, Any]:
     news_tool = registry.get("news")
     if news_tool:
         try:
-            data["news"] = await news_tool.execute(
+            data["news"] = await news_tool.run(
                 {"category": "technology", "limit": 3},
             )
         except Exception as exc:
