@@ -68,13 +68,10 @@ async def retriever_node(state: AgentState) -> dict[str, Any]:
     results: list[dict[str, Any]] = []
     try:
         store: QdrantStore = get_qdrant_store()
-        user_id = state.get("user_id", "")
-        filter_conditions = {"user_id": user_id} if user_id else None
-
+        # No user_id filter — JARVIS needs all knowledge (system + user)
         results = await store.search(
             query_vector=embedding,
             limit=_TOP_K,
-            filter_conditions=filter_conditions,
             score_threshold=_SCORE_THRESHOLD,
         )
         logger.info(

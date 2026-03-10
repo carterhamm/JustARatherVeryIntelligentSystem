@@ -20,4 +20,4 @@
 - Can text and call JARVIS
 - Has his own separate profile and conversations
 - Does NOT have access to Carter's conversations or personal data
-- JARVIS addresses him as "Spencer" or "Mr. Hammond" (not "sir" or "Mr. Stark")
+- JARVIS addresses him as "sir" (same as Carter, but NOT "Mr. Stark")

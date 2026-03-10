@@ -103,40 +103,51 @@ class KnowledgeService:
             all_entities: list[Entity] = []
             all_relationships: list[Relationship] = []
 
-            # Extract from the full text (or from each chunk for very long docs)
-            if len(data.content) < 8000:
-                entities, relationships = await self._extractor.extract_all(
-                    data.content
-                )
-                all_entities.extend(entities)
-                all_relationships.extend(relationships)
-            else:
-                for chunk in chunks:
+            try:
+                if len(data.content) < 8000:
                     entities, relationships = await self._extractor.extract_all(
-                        chunk
+                        data.content
                     )
                     all_entities.extend(entities)
                     all_relationships.extend(relationships)
+                else:
+                    for chunk in chunks:
+                        entities, relationships = await self._extractor.extract_all(
+                            chunk
+                        )
+                        all_entities.extend(entities)
+                        all_relationships.extend(relationships)
 
-            # Deduplicate entities by name
-            seen_names: set[str] = set()
-            unique_entities: list[Entity] = []
-            for ent in all_entities:
-                if ent.name not in seen_names:
-                    seen_names.add(ent.name)
-                    unique_entities.append(ent)
-            all_entities = unique_entities
+                # Deduplicate entities by name
+                seen_names: set[str] = set()
+                unique_entities: list[Entity] = []
+                for ent in all_entities:
+                    if ent.name not in seen_names:
+                        seen_names.add(ent.name)
+                        unique_entities.append(ent)
+                all_entities = unique_entities
+            except Exception as extract_exc:
+                logger.warning(
+                    "Entity extraction failed, continuing with vector-only: %s",
+                    extract_exc,
+                )
 
             source.entity_count = len(all_entities)
 
-            # -- 4. Store in graph -------------------------------------------
+            # -- 4. Store in graph (optional — degrades gracefully) ----------
             user_id_str = str(user_id)
-            for entity in all_entities:
-                entity.properties["source_id"] = str(source.id)
-                await self._graph.add_entity(entity, user_id=user_id_str)
+            try:
+                for entity in all_entities:
+                    entity.properties["source_id"] = str(source.id)
+                    await self._graph.add_entity(entity, user_id=user_id_str)
 
-            for rel in all_relationships:
-                await self._graph.add_relationship(rel, user_id=user_id_str)
+                for rel in all_relationships:
+                    await self._graph.add_relationship(rel, user_id=user_id_str)
+            except Exception as graph_exc:
+                logger.warning(
+                    "Neo4j graph storage unavailable, skipping graph step: %s",
+                    graph_exc,
+                )
 
             # -- 5. Store chunks in vector store -----------------------------
             chunk_dicts = []

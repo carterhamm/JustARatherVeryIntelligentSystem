@@ -161,13 +161,12 @@ class SearchKnowledgeTool(BaseTool):
 
             store = get_qdrant_store()
             vs = VectorStore(qdrant_store=store)
-            user_id = (state or {}).get("user_id", "")
-            filters = {"user_id": user_id} if user_id else None
+            # No user_id filter — JARVIS needs all knowledge (system + user)
+            # Per-user isolation is handled by separate system prompts
             qdrant_results = await vs.search_similar(
                 query=query,
                 limit=limit,
                 min_score=0.5,
-                filter_conditions=filters,
             )
             if qdrant_results:
                 results = qdrant_results
