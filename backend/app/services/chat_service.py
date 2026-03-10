@@ -246,9 +246,13 @@ def _get_tool_status(user_prefs: dict | None = None) -> str:
     weather_ok = _ok(settings.WEATHER_API_KEY)
     lines.append(f"- Weather (OpenWeatherMap): {'CONNECTED' if weather_ok else 'NOT CONNECTED — API key missing'}")
 
-    # Apple Weather/Calendar/Contacts via iMCP
+    # Apple Weather/Calendar/Contacts via iMCP (MacBook)
     imcp_ok = _ok(settings.IMCP_BRIDGE_URL)
-    lines.append(f"- Mac tools (calendar, contacts, messages, maps, weather via iMCP): {'CONNECTED' if imcp_ok else 'NOT CONNECTED — iMCP bridge not running'}")
+    lines.append(f"- MacBook tools (calendar, contacts, messages, maps, weather via iMCP): {'CONNECTED' if imcp_ok else 'NOT CONNECTED — iMCP bridge not running'}")
+
+    # Mac Mini Agent (iMessage sending, shortcuts, system control)
+    mini_ok = _ok(settings.MAC_MINI_AGENT_URL) and _ok(settings.MAC_MINI_AGENT_KEY)
+    lines.append(f"- Mac Mini (iMessage sending, shortcuts): {'CONNECTED' if mini_ok else 'NOT CONNECTED — MAC_MINI_AGENT_URL/KEY missing'}")
 
     # News
     news_ok = _ok(settings.NEWS_API_KEY)

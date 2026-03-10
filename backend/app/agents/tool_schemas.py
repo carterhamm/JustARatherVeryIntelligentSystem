@@ -674,6 +674,29 @@ _TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "required": ["time"],
         },
     },
+    # -- Send iMessage (via Mac Mini) -----------------------------------
+    {
+        "name": "send_imessage",
+        "description": (
+            "Send an iMessage to a phone number or Apple ID via the Mac Mini. "
+            "This sends FROM JARVIS's Mac Mini — never from the user's device. "
+            "Use for sending links, alerts, or notifications to Mr. Stark or others."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "to": {
+                    "type": "string",
+                    "description": "Recipient phone number (E.164 format like '+17192136213') or Apple ID email.",
+                },
+                "text": {
+                    "type": "string",
+                    "description": "Message text to send.",
+                },
+            },
+            "required": ["to", "text"],
+        },
+    },
     # -- Sports (ESPN) -------------------------------------------------
     {
         "name": "sports",

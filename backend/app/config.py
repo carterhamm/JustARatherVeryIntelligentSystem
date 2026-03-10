@@ -111,6 +111,10 @@ class Settings(BaseSettings):
     IMCP_BRIDGE_URL: str = ""      # e.g. https://imcp.malibupoint.dev
     IMCP_BRIDGE_KEY: str = ""      # Bearer token for auth
 
+    # -- Mac Mini Agent (remote control via Cloudflare tunnel) ---------------
+    MAC_MINI_AGENT_URL: str = ""   # e.g. https://agent.malibupoint.dev
+    MAC_MINI_AGENT_KEY: str = ""   # Bearer token for auth
+
     # -- Matter / Smart Home --------------------------------------------------
     MATTER_CONTROLLER_URL: str = "http://localhost:5580"
 

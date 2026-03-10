@@ -2027,6 +2027,48 @@ class SetWakeTimeTool(BaseTool):
 
 
 # ═════════════════════════════════════════════════════════════════════════
+# Send iMessage (via Mac Mini Agent)
+# ═════════════════════════════════════════════════════════════════════════
+
+class SendIMessageTool(BaseTool):
+    """Send an iMessage via the Mac Mini agent service."""
+
+    name = "send_imessage"
+    description = (
+        "Send an iMessage to a phone number or Apple ID. "
+        "This sends FROM JARVIS's Mac Mini — NEVER from the user's account. "
+        "Params: to (str: phone number or Apple ID), text (str: message text)."
+    )
+
+    async def execute(
+        self,
+        params: dict[str, Any],
+        *,
+        state: Optional[AgentState] = None,
+    ) -> str:
+        from app.integrations.mac_mini import send_imessage, is_configured
+
+        if not is_configured():
+            return (
+                "Mac Mini agent is not configured. "
+                "MAC_MINI_AGENT_URL and MAC_MINI_AGENT_KEY need to be set on Railway."
+            )
+
+        to = params.get("to", "").strip()
+        text = params.get("text", "").strip()
+
+        if not to or not text:
+            return "Both 'to' (phone number or Apple ID) and 'text' are required."
+
+        result = await send_imessage(to=to, text=text)
+
+        if result.get("success"):
+            return f"iMessage sent to {result.get('recipient', to)}."
+        else:
+            return f"Failed to send iMessage: {result.get('message', 'Unknown error')}"
+
+
+# ═════════════════════════════════════════════════════════════════════════
 # Sports (ESPN) tool
 # ═════════════════════════════════════════════════════════════════════════
 
@@ -2227,6 +2269,8 @@ def get_tool_registry() -> dict[str, BaseTool]:
             NutritionRecipeTool(),
             # Morning routine
             SetWakeTimeTool(),
+            # Mac Mini agent
+            SendIMessageTool(),
             # Quick-win integrations (free, no API key)
             SportsTool(),
             ScriptureLookupTool(),

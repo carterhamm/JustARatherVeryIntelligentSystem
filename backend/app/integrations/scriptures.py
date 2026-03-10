@@ -1,115 +1,211 @@
 """
 Scripture lookup integration for JARVIS.
 
-Provides verse lookup for:
-- Bible (KJV via bible-api.com — free, no key)
-- Book of Mormon, Doctrine & Covenants, Pearl of Great Price
-  (via churchofjesuschrist.org public content)
+Three-tier lookup strategy:
+1. api.nephi.org — covers ALL LDS scriptures (Bible, BoM, D&C, PGP) in one call
+2. book-of-mormon-api.vercel.app — Book of Mormon specific (random, daily, exact verse)
+3. bible-api.com — Bible KJV fallback
+
+All free, no API keys required.
 """
 
 from __future__ import annotations
 
 import logging
-import re
-from typing import Any, Optional
+from typing import Any
 
 import httpx
-from bs4 import BeautifulSoup
 
 logger = logging.getLogger(__name__)
 
 _TIMEOUT = 10.0
 
-# ── Bible (KJV) via bible-api.com ────────────────────────────────────────
+# ── Primary: api.nephi.org (all LDS scriptures) ─────────────────────────
+
+_NEPHI_API = "https://api.nephi.org/scriptures/"
+
+
+async def _lookup_nephi(reference: str) -> dict[str, Any]:
+    """Look up any scripture via api.nephi.org.
+
+    Supports Bible (KJV), Book of Mormon, D&C, Pearl of Great Price.
+    Accepts standard references: "1 Nephi 3:7", "John 3:16", "D&C 121:7-8",
+    "Moses 1:39", "Alma 32:21", etc.
+    """
+    query = reference.strip().replace(" ", "+")
+
+    try:
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            resp = await client.get(_NEPHI_API, params={"q": query})
+            if resp.status_code != 200:
+                return {"error": f"api.nephi.org returned {resp.status_code}"}
+            data = resp.json()
+    except httpx.HTTPError as e:
+        return {"error": f"api.nephi.org request failed: {e}"}
+
+    scriptures = data.get("scriptures", [])
+    if not scriptures:
+        return {"error": f"No results from api.nephi.org for: '{reference}'"}
+
+    verses = []
+    for s in scriptures:
+        verses.append({
+            "reference": s.get("scripture", ""),
+            "book": s.get("book", ""),
+            "chapter": s.get("chapter", 0),
+            "verse": s.get("verse", 0),
+            "text": s.get("text", "").strip(),
+        })
+
+    full_text = " ".join(
+        f"{v['verse']} {v['text']}" if len(verses) > 1 else v["text"]
+        for v in verses
+    )
+
+    return {
+        "reference": verses[0]["reference"] if len(verses) == 1 else reference,
+        "text": full_text,
+        "verses": verses,
+        "verse_count": len(verses),
+        "source": "api.nephi.org",
+    }
+
+
+# ── Secondary: book-of-mormon-api.vercel.app (BoM specific) ─────────────
+
+_BOM_API = "https://book-of-mormon-api.vercel.app"
+
+_BOM_BOOKS: dict[str, str] = {
+    "1 nephi": "1nephi", "1 ne": "1nephi", "1ne": "1nephi",
+    "2 nephi": "2nephi", "2 ne": "2nephi", "2ne": "2nephi",
+    "jacob": "jacob", "enos": "enos", "jarom": "jarom", "omni": "omni",
+    "words of mormon": "wordsofmormon", "mosiah": "mosiah",
+    "alma": "alma", "helaman": "helaman",
+    "3 nephi": "3nephi", "3 ne": "3nephi", "3ne": "3nephi",
+    "4 nephi": "4nephi", "4 ne": "4nephi", "4ne": "4nephi",
+    "mormon": "mormon", "ether": "ether", "moroni": "moroni",
+}
+
+
+async def _lookup_bom_api(reference: str) -> dict[str, Any]:
+    """Fallback: look up Book of Mormon verse via BraydenTW API."""
+    ref_lower = reference.lower().strip()
+    api_book = None
+    chapter = ""
+    verse_str = ""
+
+    for alias in sorted(_BOM_BOOKS, key=len, reverse=True):
+        if ref_lower.startswith(alias):
+            remainder = ref_lower[len(alias):].strip()
+            api_book = _BOM_BOOKS[alias]
+            parts = remainder.split(":")
+            chapter = parts[0].strip()
+            if len(parts) > 1:
+                verse_str = parts[1].strip()
+            break
+
+    if not api_book or not chapter:
+        return {"error": f"Could not parse BoM reference: '{reference}'"}
+
+    target_verses = _parse_verse_range(verse_str) if verse_str else None
+
+    try:
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            if target_verses:
+                fetched = []
+                for vnum in sorted(target_verses):
+                    resp = await client.get(f"{_BOM_API}/{api_book}/{chapter}/{vnum}")
+                    if resp.status_code == 200:
+                        d = resp.json()
+                        fetched.append({
+                            "verse": d.get("verse", vnum),
+                            "text": d.get("text", "").strip(),
+                            "reference": d.get("reference", ""),
+                        })
+                if not fetched:
+                    return {"error": f"No verses found: {reference}"}
+                full_text = " ".join(f"{v['verse']} {v['text']}" for v in fetched)
+                return {
+                    "reference": reference,
+                    "text": full_text,
+                    "verses": fetched,
+                    "verse_count": len(fetched),
+                    "source": "book-of-mormon-api.vercel.app",
+                }
+            else:
+                # Whole chapter — fetch sequentially until 404
+                all_verses = []
+                for vnum in range(1, 101):
+                    resp = await client.get(f"{_BOM_API}/{api_book}/{chapter}/{vnum}")
+                    if resp.status_code != 200:
+                        break
+                    d = resp.json()
+                    text = d.get("text", "").strip()
+                    if not text:
+                        break
+                    all_verses.append({"verse": vnum, "text": text})
+                if all_verses:
+                    full_text = " ".join(f"{v['verse']} {v['text']}" for v in all_verses)
+                    return {
+                        "reference": f"{reference} (full chapter)",
+                        "text": full_text,
+                        "verses": all_verses,
+                        "verse_count": len(all_verses),
+                        "source": "book-of-mormon-api.vercel.app",
+                    }
+                return {"error": f"Chapter not found: {reference}"}
+    except httpx.HTTPError as e:
+        return {"error": f"BoM API error: {e}"}
+
+
+async def lookup_bom_random(book: str = "", chapter: str = "") -> dict[str, Any]:
+    """Get a random Book of Mormon verse."""
+    api_book = ""
+    if book:
+        bl = book.lower().strip()
+        for alias in sorted(_BOM_BOOKS, key=len, reverse=True):
+            if bl.startswith(alias) or alias.startswith(bl):
+                api_book = _BOM_BOOKS[alias]
+                break
+
+    if api_book and chapter:
+        url = f"{_BOM_API}/random/{api_book}/{chapter}"
+    elif api_book:
+        url = f"{_BOM_API}/random/{api_book}"
+    else:
+        url = f"{_BOM_API}/random"
+
+    try:
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            resp = await client.get(url)
+            if resp.status_code != 200:
+                return {"error": f"BoM random API returned {resp.status_code}"}
+            data = resp.json()
+        return {
+            "reference": data.get("reference", "Unknown"),
+            "text": data.get("text", "").strip(),
+            "verse": data.get("verse", 0),
+            "source": "Book of Mormon",
+        }
+    except httpx.HTTPError as e:
+        return {"error": f"BoM random API error: {e}"}
+
+
+# ── Tertiary: bible-api.com (Bible KJV fallback) ────────────────────────
 
 _BIBLE_API = "https://bible-api.com"
 
-# Book name normalization for bible-api.com
-_BIBLE_BOOKS = {
-    "genesis", "exodus", "leviticus", "numbers", "deuteronomy",
-    "joshua", "judges", "ruth", "1 samuel", "2 samuel",
-    "1 kings", "2 kings", "1 chronicles", "2 chronicles",
-    "ezra", "nehemiah", "esther", "job", "psalms", "psalm",
-    "proverbs", "ecclesiastes", "song of solomon",
-    "isaiah", "jeremiah", "lamentations", "ezekiel", "daniel",
-    "hosea", "joel", "amos", "obadiah", "jonah", "micah",
-    "nahum", "habakkuk", "zephaniah", "haggai", "zechariah", "malachi",
-    "matthew", "mark", "luke", "john", "acts", "romans",
-    "1 corinthians", "2 corinthians", "galatians", "ephesians",
-    "philippians", "colossians", "1 thessalonians", "2 thessalonians",
-    "1 timothy", "2 timothy", "titus", "philemon",
-    "hebrews", "james", "1 peter", "2 peter",
-    "1 john", "2 john", "3 john", "jude", "revelation",
-}
 
-# ── LDS Scripture paths for churchofjesuschrist.org ─────────────────────
-
-_LDS_BOOK_PATHS: dict[str, str] = {
-    # Book of Mormon
-    "1 nephi": "bofm/1-ne",
-    "1 ne": "bofm/1-ne",
-    "1ne": "bofm/1-ne",
-    "2 nephi": "bofm/2-ne",
-    "2 ne": "bofm/2-ne",
-    "2ne": "bofm/2-ne",
-    "jacob": "bofm/jacob",
-    "enos": "bofm/enos",
-    "jarom": "bofm/jarom",
-    "omni": "bofm/omni",
-    "words of mormon": "bofm/w-of-m",
-    "mosiah": "bofm/mosiah",
-    "alma": "bofm/alma",
-    "helaman": "bofm/hel",
-    "3 nephi": "bofm/3-ne",
-    "3 ne": "bofm/3-ne",
-    "3ne": "bofm/3-ne",
-    "4 nephi": "bofm/4-ne",
-    "4 ne": "bofm/4-ne",
-    "4ne": "bofm/4-ne",
-    "mormon": "bofm/morm",
-    "ether": "bofm/ether",
-    "moroni": "bofm/moro",
-    # Doctrine and Covenants
-    "d&c": "dc-testament/dc",
-    "dc": "dc-testament/dc",
-    "doctrine and covenants": "dc-testament/dc",
-    # Pearl of Great Price
-    "moses": "pgp/moses",
-    "abraham": "pgp/abr",
-    "joseph smith—matthew": "pgp/js-m",
-    "js-m": "pgp/js-m",
-    "joseph smith—history": "pgp/js-h",
-    "js-h": "pgp/js-h",
-    "articles of faith": "pgp/a-of-f",
-    "a of f": "pgp/a-of-f",
-}
-
-
-def classify_reference(reference: str) -> str:
-    """Classify a scripture reference as 'bible', 'lds', or 'unknown'."""
-    ref_lower = reference.lower().strip()
-
-    # Check LDS books first (more specific)
-    for alias in _LDS_BOOK_PATHS:
-        if ref_lower.startswith(alias):
-            return "lds"
-
-    # Check Bible books
-    for book in _BIBLE_BOOKS:
-        if ref_lower.startswith(book):
-            return "bible"
-
-    return "unknown"
-
-
-async def lookup_bible(reference: str) -> dict[str, Any]:
-    """Look up a Bible verse/passage via bible-api.com (KJV)."""
-    # bible-api.com uses format like "john 3:16" or "romans 8:28-30"
-    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
-        resp = await client.get(f"{_BIBLE_API}/{reference}?translation=kjv")
-        if resp.status_code != 200:
-            return {"error": f"Bible API returned {resp.status_code}", "reference": reference}
-        data = resp.json()
+async def _lookup_bible(reference: str) -> dict[str, Any]:
+    """Fallback: look up Bible verse via bible-api.com (KJV)."""
+    try:
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            resp = await client.get(f"{_BIBLE_API}/{reference}?translation=kjv")
+            if resp.status_code != 200:
+                return {"error": f"Bible API returned {resp.status_code}"}
+            data = resp.json()
+    except httpx.HTTPError as e:
+        return {"error": f"Bible API error: {e}"}
 
     if "error" in data:
         return {"error": data["error"], "reference": reference}
@@ -129,119 +225,55 @@ async def lookup_bible(reference: str) -> dict[str, Any]:
         "text": data.get("text", "").strip(),
         "verses": verses,
         "verse_count": data.get("verse_count", len(verses)),
+        "source": "bible-api.com",
     }
 
 
-async def lookup_lds(reference: str) -> dict[str, Any]:
-    """Look up an LDS scripture (Book of Mormon, D&C, Pearl of Great Price).
-
-    Fetches from churchofjesuschrist.org and extracts verse text.
-    """
-    ref_lower = reference.lower().strip()
-    book_path = None
-    chapter = ""
-    verses_range = ""
-
-    # Parse reference: e.g. "1 Nephi 3:7", "Alma 32:21", "D&C 121:7-8"
-    for alias, path in sorted(_LDS_BOOK_PATHS.items(), key=lambda x: -len(x[0])):
-        if ref_lower.startswith(alias):
-            remainder = ref_lower[len(alias):].strip()
-            book_path = path
-            # Parse chapter:verse(s)
-            parts = remainder.split(":")
-            chapter = parts[0].strip() if parts else ""
-            if len(parts) > 1:
-                verses_range = parts[1].strip()
-            break
-
-    if not book_path or not chapter:
-        return {"error": f"Could not parse LDS scripture reference: '{reference}'"}
-
-    url = f"https://www.churchofjesuschrist.org/study/scriptures/{book_path}/{chapter}?lang=eng"
-
-    try:
-        async with httpx.AsyncClient(timeout=_TIMEOUT, follow_redirects=True) as client:
-            resp = await client.get(url, headers={"User-Agent": "JARVIS/1.0"})
-            if resp.status_code != 200:
-                return {
-                    "error": f"Church website returned {resp.status_code}",
-                    "reference": reference,
-                    "url": url,
-                }
-
-        soup = BeautifulSoup(resp.text, "html.parser")
-
-        # Extract verses from the page
-        verse_elements = soup.find_all("p", class_=re.compile(r"verse"))
-        if not verse_elements:
-            # Try alternate selector
-            verse_elements = soup.find_all(attrs={"data-aid": True})
-
-        extracted = []
-        target_verses = _parse_verse_range(verses_range) if verses_range else None
-
-        for el in verse_elements:
-            # Get verse number from the element
-            verse_num_el = el.find("span", class_=re.compile(r"verse-number"))
-            if verse_num_el:
-                try:
-                    vnum = int(verse_num_el.get_text(strip=True).rstrip("."))
-                except (ValueError, TypeError):
-                    continue
-
-                if target_verses and vnum not in target_verses:
-                    continue
-
-                # Get verse text (exclude the verse number span)
-                verse_num_el.decompose()
-                text = el.get_text(strip=True)
-                extracted.append({"verse": vnum, "text": text})
-
-        if not extracted:
-            # Fallback: return the URL for manual lookup
-            return {
-                "reference": reference,
-                "text": f"Verse text could not be extracted automatically.",
-                "url": url,
-                "source": "The Church of Jesus Christ of Latter-day Saints",
-            }
-
-        full_text = " ".join(f"{v['verse']} {v['text']}" for v in extracted)
-        display_ref = reference.title() if not any(c.isupper() for c in reference[1:]) else reference
-
-        return {
-            "reference": display_ref,
-            "text": full_text,
-            "verses": extracted,
-            "verse_count": len(extracted),
-            "url": url,
-            "source": "The Church of Jesus Christ of Latter-day Saints",
-        }
-
-    except httpx.HTTPError as e:
-        return {"error": f"HTTP error fetching scripture: {e}", "reference": reference, "url": url}
-
+# ── Universal lookup with fallback chain ─────────────────────────────────
 
 async def lookup_scripture(reference: str) -> dict[str, Any]:
-    """Universal scripture lookup — auto-detects Bible vs LDS scriptures."""
-    kind = classify_reference(reference)
+    """Universal scripture lookup with three-tier fallback.
 
-    if kind == "bible":
-        return await lookup_bible(reference)
-    elif kind == "lds":
-        return await lookup_lds(reference)
-    else:
-        # Try Bible first, then LDS
-        result = await lookup_bible(reference)
+    1. api.nephi.org (all scriptures)
+    2. book-of-mormon-api.vercel.app (BoM fallback)
+    3. bible-api.com (Bible fallback)
+    """
+    ref = reference.strip()
+
+    # Handle random requests
+    if ref.lower().startswith("random"):
+        return await lookup_bom_random()
+
+    # Tier 1: api.nephi.org (covers everything)
+    result = await _lookup_nephi(ref)
+    if not result.get("error"):
+        return result
+
+    logger.debug("api.nephi.org failed for '%s': %s", ref, result.get("error"))
+
+    # Tier 2: BoM-specific API (if it looks like a BoM reference)
+    ref_lower = ref.lower()
+    is_bom = any(ref_lower.startswith(alias) for alias in _BOM_BOOKS)
+    if is_bom:
+        result = await _lookup_bom_api(ref)
         if not result.get("error"):
             return result
-        return {
-            "error": (
-                f"Could not identify scripture reference: '{reference}'. "
-                "Try a specific format like 'John 3:16', '1 Nephi 3:7', or 'D&C 121:7-8'."
-            ),
-            "reference": reference,
-        }
+        logger.debug("BoM API failed for '%s': %s", ref, result.get("error"))
+
+    # Tier 3: Bible API fallback
+    result = await _lookup_bible(ref)
+    if not result.get("error"):
+        return result
+
+    # All tiers failed
+    return {
+        "error": (
+            f"Could not find scripture: '{ref}'. "
+            "Try: 'John 3:16', '1 Nephi 3:7', 'Alma 32:21', 'D&C 121:7-8', "
+            "'Moroni 10:4-5', or 'Moses 1:39'."
+        ),
+        "reference": ref,
+    }
 
 
 def _parse_verse_range(verses_str: str) -> set[int]:
