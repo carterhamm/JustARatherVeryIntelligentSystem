@@ -157,23 +157,17 @@ class SearchKnowledgeTool(BaseTool):
         # Try Qdrant vector search first (if configured)
         try:
             from app.db.qdrant import get_qdrant_store
-            from openai import AsyncOpenAI
-
-            client = AsyncOpenAI(api_key="")
-            embed_resp = await client.embeddings.create(
-                input=query,
-                model="text-embedding-3-small",
-            )
-            vector = embed_resp.data[0].embedding
+            from app.graphrag.vector_store import VectorStore
 
             store = get_qdrant_store()
+            vs = VectorStore(qdrant_store=store)
             user_id = (state or {}).get("user_id", "")
             filters = {"user_id": user_id} if user_id else None
-            qdrant_results = await store.search(
-                query_vector=vector,
+            qdrant_results = await vs.search_similar(
+                query=query,
                 limit=limit,
+                min_score=0.5,
                 filter_conditions=filters,
-                score_threshold=0.5,
             )
             if qdrant_results:
                 results = qdrant_results
@@ -598,7 +592,7 @@ class WebSearchTool(BaseTool):
 
         import httpx
 
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
+        url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent"
         payload = {
             "contents": [{"parts": [{"text": f"Search the web and answer: {query}"}]}],
             "tools": [{"google_search": {}}],

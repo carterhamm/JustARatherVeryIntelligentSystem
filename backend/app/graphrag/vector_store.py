@@ -2,7 +2,7 @@
 Qdrant-backed vector store for the JARVIS knowledge graph.
 
 Wraps :class:`app.db.qdrant.QdrantStore` with Gemini embedding
-generation (``text-embedding-004``) and a convenient document / chunk
+generation (``gemini-embedding-001``) and a convenient document / chunk
 ingestion API.
 """
 
@@ -16,9 +16,9 @@ from app.db.qdrant import QdrantStore
 
 logger = logging.getLogger(__name__)
 
-# Gemini text-embedding-004: 768 dimensions, free with Gemini API key
-_EMBEDDING_MODEL = "text-embedding-004"
-_EMBEDDING_DIM = 768
+# Gemini embedding model (replaced text-embedding-004, shut down Jan 2026)
+_EMBEDDING_MODEL = "gemini-embedding-001"
+_EMBEDDING_DIM = 768  # request 768 via Matryoshka (default is 3072)
 
 
 class VectorStore:
@@ -38,7 +38,7 @@ class VectorStore:
     async def embed_text(self, text: str) -> list[float]:
         """
         Generate an embedding vector for *text* using Google Gemini
-        ``text-embedding-004``.
+        ``gemini-embedding-001``.
 
         Returns a list of 768 floats.
         """
@@ -54,7 +54,11 @@ class VectorStore:
             resp = await client.post(
                 url,
                 params={"key": settings.GOOGLE_GEMINI_API_KEY},
-                json={"model": f"models/{self._model}", "content": {"parts": [{"text": truncated}]}},
+                json={
+                    "model": f"models/{self._model}",
+                    "content": {"parts": [{"text": truncated}]},
+                    "outputDimensionality": _EMBEDDING_DIM,
+                },
             )
             resp.raise_for_status()
             data = resp.json()

@@ -332,15 +332,13 @@ class DataImportService:
         return chunks
 
     async def _embed_chunks(self, chunks: list[str]) -> list[list[float]]:
-        """Generate embeddings for a list of text chunks."""
-        from openai import AsyncOpenAI
+        """Generate embeddings for a list of text chunks via Gemini."""
+        from app.db.qdrant import get_qdrant_store
+        from app.graphrag.vector_store import VectorStore
 
-        client = AsyncOpenAI(api_key="")  # TODO: swap to non-OpenAI embedding provider
-        response = await client.embeddings.create(
-            input=chunks,
-            model="text-embedding-3-small",
-        )
-        return [item.embedding for item in response.data]
+        store = get_qdrant_store()
+        vs = VectorStore(qdrant_store=store)
+        return await vs.embed_texts(chunks)
 
     async def _upsert_vectors(
         self,

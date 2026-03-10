@@ -114,8 +114,8 @@ Rules:
 class EntityExtractor:
     """Extract entities and relationships from text using an LLM."""
 
-    def __init__(self, llm_client: Optional[Any] = None, model: str = "gemini-2.0-flash") -> None:
-        self._llm = llm_client  # unused now — we use Gemini directly
+    def __init__(self, llm_client: Optional[Any] = None, model: str = "gemini-3.1-pro-preview") -> None:
+        self._llm = llm_client  # unused — we call Gemini REST directly
         self._model = model
 
     # -- public API ----------------------------------------------------------

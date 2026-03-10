@@ -3,7 +3,7 @@ Qdrant async client wrapper for the JARVIS vector store.
 
 Manages a ``QdrantAsyncClient`` instance, auto-creates the target
 collection (768-dim, cosine distance — compatible with Gemini
-``text-embedding-004``), and exposes simple CRUD + search helpers.
+``gemini-embedding-001``), and exposes simple CRUD + search helpers.
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 _store: Optional["QdrantStore"] = None
 
-# Default vector size for Gemini text-embedding-004
+# Default vector size for Gemini gemini-embedding-001 (Matryoshka @ 768 dims)
 _DEFAULT_VECTOR_SIZE = 768
 
 

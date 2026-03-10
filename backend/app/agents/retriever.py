@@ -107,12 +107,10 @@ async def retriever_node(state: AgentState) -> dict[str, Any]:
 # ── Helpers ──────────────────────────────────────────────────────────────
 
 async def _embed_query(text: str) -> list[float]:
-    """Generate an embedding vector for the given text."""
-    from openai import AsyncOpenAI
+    """Generate an embedding vector for the given text via Gemini."""
+    from app.db.qdrant import get_qdrant_store
+    from app.graphrag.vector_store import VectorStore
 
-    client = AsyncOpenAI(api_key="")  # TODO: swap to non-OpenAI embedding provider
-    response = await client.embeddings.create(
-        input=text,
-        model="text-embedding-3-small",
-    )
-    return response.data[0].embedding
+    store = get_qdrant_store()
+    vs = VectorStore(qdrant_store=store)
+    return await vs.embed_text(text)
