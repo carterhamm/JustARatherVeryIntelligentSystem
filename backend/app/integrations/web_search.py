@@ -48,9 +48,13 @@ class WebSearchClient:
         brave_api_key: Optional[str] = None,
         timeout: float = 20.0,
     ) -> None:
-        self._tavily_key = tavily_api_key or settings.TAVILY_API_KEY
-        self._serpapi_key = serpapi_api_key or settings.SERPAPI_API_KEY
-        self._brave_key = brave_api_key or settings.BRAVE_SEARCH_API_KEY
+        _placeholders = {"", "placeholder", "sk-placeholder"}
+        raw_tavily = tavily_api_key or settings.TAVILY_API_KEY
+        raw_serpapi = serpapi_api_key or settings.SERPAPI_API_KEY
+        raw_brave = brave_api_key or settings.BRAVE_SEARCH_API_KEY
+        self._tavily_key = raw_tavily if raw_tavily not in _placeholders else ""
+        self._serpapi_key = raw_serpapi if raw_serpapi not in _placeholders else ""
+        self._brave_key = raw_brave if raw_brave not in _placeholders else ""
 
         self._http = httpx.AsyncClient(
             timeout=httpx.Timeout(timeout),

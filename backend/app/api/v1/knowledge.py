@@ -49,24 +49,18 @@ async def _build_knowledge_service(
     db: AsyncSession = Depends(get_db),
 ) -> KnowledgeService:
     """
-    Construct a :class:`KnowledgeService` with all required dependencies
-    wired together.
-    """
-    from openai import AsyncOpenAI
+    Construct a :class:`KnowledgeService` with all required dependencies.
 
+    Uses Gemini for embeddings and entity extraction (free with existing API key).
+    """
     # -- infrastructure clients --
     neo4j_client = get_neo4j_client()
     qdrant_store = get_qdrant_store()
 
-    # -- embedding client (OpenAI-compatible SDK, key not configured) --
-    embedding_client = AsyncOpenAI(api_key="")  # TODO: swap to non-OpenAI embedding provider
-
-    # -- graphrag components --
-    entity_extractor = EntityExtractor(llm_client=embedding_client)
+    # -- graphrag components (all use Gemini now, no OpenAI needed) --
+    entity_extractor = EntityExtractor()
     graph_store = GraphStore(neo4j_client=neo4j_client)
-    vector_store = VectorStore(
-        qdrant_store=qdrant_store, embedding_client=embedding_client
-    )
+    vector_store = VectorStore(qdrant_store=qdrant_store)
     hybrid_retriever = HybridRetriever(
         graph_store=graph_store,
         vector_store=vector_store,

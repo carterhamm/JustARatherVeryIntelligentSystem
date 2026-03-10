@@ -1,8 +1,8 @@
 """
 Qdrant-backed vector store for the JARVIS knowledge graph.
 
-Wraps :class:`app.db.qdrant.QdrantStore` with automatic OpenAI embedding
-generation (``text-embedding-3-small``) and a convenient document / chunk
+Wraps :class:`app.db.qdrant.QdrantStore` with Gemini embedding
+generation (``text-embedding-004``) and a convenient document / chunk
 ingestion API.
 """
 
@@ -12,14 +12,13 @@ import hashlib
 import logging
 from typing import Any, Optional
 
-from openai import AsyncOpenAI
-
 from app.db.qdrant import QdrantStore
 
 logger = logging.getLogger(__name__)
 
-_EMBEDDING_MODEL = "text-embedding-3-small"
-_EMBEDDING_DIM = 1536  # dimensions for text-embedding-3-small
+# Gemini text-embedding-004: 768 dimensions, free with Gemini API key
+_EMBEDDING_MODEL = "text-embedding-004"
+_EMBEDDING_DIM = 768
 
 
 class VectorStore:
@@ -28,53 +27,47 @@ class VectorStore:
     def __init__(
         self,
         qdrant_store: QdrantStore,
-        embedding_client: Optional[AsyncOpenAI] = None,
         embedding_model: str = _EMBEDDING_MODEL,
+        **kwargs,
     ) -> None:
         self._qdrant = qdrant_store
         self._model = embedding_model
-        self._oai: Optional[AsyncOpenAI] = embedding_client
 
-    def _get_openai(self) -> AsyncOpenAI:
-        """Lazy-initialise the embedding client if not injected."""
-        if self._oai is None:
-            self._oai = AsyncOpenAI(api_key="")  # TODO: swap to non-OpenAI embedding provider
-        return self._oai
-
-    # ── Embedding ───────────────────────────────────────────────────────
+    # ── Embedding via Gemini ─────────────────────────────────────────
 
     async def embed_text(self, text: str) -> list[float]:
         """
-        Generate an embedding vector for *text* using OpenAI
-        ``text-embedding-3-small``.
+        Generate an embedding vector for *text* using Google Gemini
+        ``text-embedding-004``.
 
-        Returns a list of 1536 floats.
+        Returns a list of 768 floats.
         """
-        client = self._get_openai()
-        # Truncate very long texts to stay within token limits (~8191 tokens)
-        # A rough heuristic: 1 token ~ 4 chars
-        max_chars = 8191 * 4
+        import httpx
+        from app.config import settings
+
+        # Truncate to ~8000 tokens (~32000 chars)
+        max_chars = 32000
         truncated = text[:max_chars] if len(text) > max_chars else text
 
-        response = await client.embeddings.create(
-            model=self._model,
-            input=truncated,
-        )
-        return response.data[0].embedding
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{self._model}:embedContent"
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.post(
+                url,
+                params={"key": settings.GOOGLE_GEMINI_API_KEY},
+                json={"model": f"models/{self._model}", "content": {"parts": [{"text": truncated}]}},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+
+        return data["embedding"]["values"]
 
     async def embed_texts(self, texts: list[str]) -> list[list[float]]:
-        """Batch-embed multiple texts in a single API call."""
-        client = self._get_openai()
-        max_chars = 8191 * 4
-        truncated = [t[:max_chars] for t in texts]
-
-        response = await client.embeddings.create(
-            model=self._model,
-            input=truncated,
-        )
-        # Sort by index to maintain order
-        sorted_data = sorted(response.data, key=lambda d: d.index)
-        return [d.embedding for d in sorted_data]
+        """Batch-embed multiple texts via Gemini (sequential calls)."""
+        results = []
+        for text in texts:
+            vec = await self.embed_text(text)
+            results.append(vec)
+        return results
 
     # ── Document / chunk CRUD ──────────────────────────────────────────
 

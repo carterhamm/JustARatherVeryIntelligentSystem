@@ -81,14 +81,16 @@ def _audio_url(audio_id: str) -> str:
 async def _generate_jarvis_tts(text: str) -> bytes:
     """Generate JARVIS voice audio via ElevenLabs.
 
-    Uses the configured ELEVENLABS_VOICE_ID for the custom JARVIS voice.
-    Returns MP3 bytes.
+    Uses eleven_turbo_v2_5 for phone calls — much lower latency (~300ms)
+    than eleven_multilingual_v2 (~1-2s). Quality is slightly lower but
+    indistinguishable over a phone line.
     """
     from app.integrations.elevenlabs import ElevenLabsClient
 
     async with ElevenLabsClient(
         api_key=settings.ELEVENLABS_API_KEY,
         default_voice_id=settings.ELEVENLABS_VOICE_ID,
+        default_model="eleven_turbo_v2_5",
     ) as client:
         return await client.synthesize(text, output_format="mp3_44100_128")
 

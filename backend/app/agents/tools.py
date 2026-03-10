@@ -547,7 +547,8 @@ class WebSearchTool(BaseTool):
 
     name = "web_search"
     description = (
-        "Search the web for up-to-date information.  "
+        "Search the web for up-to-date information, facts, celebrity info, "
+        "sports scores, current events, or anything you're unsure about.  "
         "Params: query (str), max_results? (int, default 5)."
     )
 
@@ -557,27 +558,69 @@ class WebSearchTool(BaseTool):
         *,
         state: Optional[AgentState] = None,
     ) -> str:
-        from app.integrations.web_search import WebSearchClient
-
         query = params.get("query", "")
         max_results = params.get("max_results", 5)
         if not query:
             return "No search query provided."
 
-        async with WebSearchClient() as client:
-            results = await client.search(query=query, max_results=max_results)
+        # Try dedicated search APIs first (Tavily, SerpAPI, Brave)
+        try:
+            from app.integrations.web_search import WebSearchClient
 
-        if not results:
-            return f"No results found for: '{query}'"
+            async with WebSearchClient() as client:
+                results = await client.search(query=query, max_results=max_results)
 
-        lines: list[str] = [f"Web search results for: '{query}'\n"]
-        for i, result in enumerate(results, 1):
-            title = result.get("title", "Untitled")
-            url = result.get("url", "")
-            snippet = result.get("snippet", "")[:300]
-            lines.append(f"{i}. {title}\n   URL: {url}\n   {snippet}")
+            if results and not any(r.get("title") == "Search unavailable" for r in results):
+                lines: list[str] = [f"Web search results for: '{query}'\n"]
+                for i, result in enumerate(results, 1):
+                    title = result.get("title", "Untitled")
+                    url = result.get("url", "")
+                    snippet = result.get("snippet", "")[:300]
+                    lines.append(f"{i}. {title}\n   URL: {url}\n   {snippet}")
+                return "\n".join(lines)
+        except Exception as exc:
+            logger.debug("Dedicated search APIs failed: %s", exc)
 
-        return "\n".join(lines)
+        # Fallback: use Gemini with Google Search grounding
+        try:
+            return await self._gemini_grounded_search(query)
+        except Exception as exc:
+            logger.warning("Gemini grounded search also failed: %s", exc)
+
+        return f"Web search is currently unavailable. Please answer '{query}' from your training knowledge if possible."
+
+    async def _gemini_grounded_search(self, query: str) -> str:
+        """Use Gemini API with Google Search grounding as a free fallback."""
+        from app.config import settings
+
+        if not settings.GOOGLE_GEMINI_API_KEY:
+            raise RuntimeError("Gemini API key not configured")
+
+        import httpx
+
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
+        payload = {
+            "contents": [{"parts": [{"text": f"Search the web and answer: {query}"}]}],
+            "tools": [{"google_search": {}}],
+        }
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            resp = await client.post(
+                url,
+                json=payload,
+                params={"key": settings.GOOGLE_GEMINI_API_KEY},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+
+        # Extract text from Gemini response
+        candidates = data.get("candidates", [])
+        if candidates:
+            parts = candidates[0].get("content", {}).get("parts", [])
+            texts = [p.get("text", "") for p in parts if p.get("text")]
+            if texts:
+                return f"Web search results for '{query}':\n\n" + "\n".join(texts)
+
+        return f"No results found for: '{query}'"
 
 
 # ═════════════════════════════════════════════════════════════════════════

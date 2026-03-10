@@ -1,9 +1,9 @@
 """
 LLM-based entity and relationship extraction for the JARVIS knowledge graph.
 
-Uses OpenAI's structured-output (JSON mode) capabilities to pull named
-entities and directed relationships from arbitrary text, returning typed
-dataclass instances ready for graph and vector storage.
+Uses Gemini or any LLM with JSON output to pull named entities and directed
+relationships from arbitrary text, returning typed dataclass instances ready
+for graph and vector storage.
 """
 
 from __future__ import annotations
@@ -11,9 +11,7 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass, field
-from typing import Any
-
-from openai import AsyncOpenAI
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -116,8 +114,8 @@ Rules:
 class EntityExtractor:
     """Extract entities and relationships from text using an LLM."""
 
-    def __init__(self, llm_client: AsyncOpenAI, model: str = "gpt-4o") -> None:
-        self._llm = llm_client
+    def __init__(self, llm_client: Optional[Any] = None, model: str = "gemini-2.0-flash") -> None:
+        self._llm = llm_client  # unused now — we use Gemini directly
         self._model = model
 
     # -- public API ----------------------------------------------------------
@@ -162,23 +160,31 @@ class EntityExtractor:
         """Send the extraction prompt to the LLM and parse the JSON reply."""
         prompt = self._build_extraction_prompt(text)
         try:
-            response = await self._llm.chat.completions.create(
-                model=self._model,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": (
-                            "You are a precise entity-extraction engine. "
-                            "Reply ONLY with valid JSON."
-                        ),
-                    },
-                    {"role": "user", "content": prompt},
-                ],
-                temperature=0.0,
-                response_format={"type": "json_object"},
-            )
-            raw = response.choices[0].message.content or "{}"
-            return json.loads(raw)
+            import httpx
+            from app.config import settings
+
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{self._model}:generateContent"
+            payload = {
+                "contents": [{"parts": [{"text": (
+                    "You are a precise entity-extraction engine. "
+                    "Reply ONLY with valid JSON.\n\n" + prompt
+                )}]}],
+                "generationConfig": {
+                    "responseMimeType": "application/json",
+                    "temperature": 0.0,
+                },
+            }
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                resp = await client.post(
+                    url,
+                    json=payload,
+                    params={"key": settings.GOOGLE_GEMINI_API_KEY},
+                )
+                resp.raise_for_status()
+                data = resp.json()
+
+            raw_text = data["candidates"][0]["content"]["parts"][0]["text"]
+            return json.loads(raw_text)
         except json.JSONDecodeError:
             logger.warning("LLM returned invalid JSON for entity extraction.")
             return {"entities": [], "relationships": []}

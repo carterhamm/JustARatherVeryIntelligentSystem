@@ -2,8 +2,8 @@
 Qdrant async client wrapper for the JARVIS vector store.
 
 Manages a ``QdrantAsyncClient`` instance, auto-creates the target
-collection (1536-dim, cosine distance — compatible with OpenAI
-``text-embedding-3-small``), and exposes simple CRUD + search helpers.
+collection (768-dim, cosine distance — compatible with Gemini
+``text-embedding-004``), and exposes simple CRUD + search helpers.
 """
 
 from __future__ import annotations
@@ -31,8 +31,8 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 _store: Optional["QdrantStore"] = None
 
-# Default vector size for OpenAI text-embedding-3-small
-_DEFAULT_VECTOR_SIZE = 1536
+# Default vector size for Gemini text-embedding-004
+_DEFAULT_VECTOR_SIZE = 768
 
 
 class QdrantStore:
@@ -245,7 +245,8 @@ def get_qdrant_store() -> QdrantStore:
             collection_name=getattr(
                 settings, "QDRANT_COLLECTION", "jarvis_knowledge"
             ),
-            api_key=getattr(settings, "QDRANT_API_KEY", None),
+            api_key=settings.QDRANT_API_KEY or None,
+            vector_size=_DEFAULT_VECTOR_SIZE,
         )
     return _store
 
