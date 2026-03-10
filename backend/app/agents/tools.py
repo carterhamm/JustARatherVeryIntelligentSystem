@@ -24,6 +24,36 @@ from app.agents.state import AgentState
 logger = logging.getLogger("jarvis.agents.tools")
 
 
+async def _get_google_tokens(state: Optional[AgentState]) -> Optional[dict]:
+    """Load per-user Google OAuth tokens from DB preferences.
+
+    Returns the token dict if connected, or None if not.
+    """
+    user_id = (state or {}).get("user_id", "")
+    if not user_id:
+        return None
+    try:
+        from sqlalchemy import select
+        from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession as _AS
+        from sqlalchemy.orm import sessionmaker
+        from app.config import settings
+        from app.models.user import User
+
+        engine = create_async_engine(settings.DATABASE_URL)
+        async_session = sessionmaker(engine, class_=_AS, expire_on_commit=False)
+        async with async_session() as session:
+            result = await session.execute(
+                select(User).where(User.id == user_id)
+            )
+            user = result.scalar_one_or_none()
+            if user and user.preferences and user.preferences.get("google_tokens"):
+                return user.preferences["google_tokens"]
+        await engine.dispose()
+    except Exception:
+        logger.debug("Failed to load Google tokens for user %s", user_id, exc_info=True)
+    return None
+
+
 # ═════════════════════════════════════════════════════════════════════════
 # Base class
 # ═════════════════════════════════════════════════════════════════════════
@@ -211,28 +241,31 @@ class SendEmailTool(BaseTool):
         *,
         state: Optional[AgentState] = None,
     ) -> str:
-        from app.integrations.gmail import GmailClient
+        tokens = await _get_google_tokens(state)
+        if not tokens:
+            return (
+                "Gmail is not connected. The user needs to sign in with Google first.\n"
+                "They can do this at: https://app.malibupoint.dev/api/v1/google/auth-url"
+            )
 
         to = params.get("to", "")
         subject = params.get("subject", "")
         body = params.get("body", "")
-        cc = params.get("cc")
-        bcc = params.get("bcc")
 
         if not to or not subject:
             return "Missing required email fields (to, subject)."
 
-        async with GmailClient() as gmail:
-            result = await gmail.send_email(
-                to=to, subject=subject, body=body, cc=cc, bcc=bcc,
+        try:
+            from app.integrations.google_workspace import gmail_send
+            result = await gmail_send(tokens, to=to, subject=subject, body=body)
+            return (
+                f"Email sent successfully.\n"
+                f"  To: {to}\n"
+                f"  Subject: {subject}\n"
+                f"  Message ID: {result.get('id', 'N/A')}"
             )
-
-        return (
-            f"Email sent successfully.\n"
-            f"  To: {result.get('to', to)}\n"
-            f"  Subject: {result.get('subject', subject)}\n"
-            f"  Message ID: {result.get('message_id', 'N/A')}"
-        )
+        except Exception as exc:
+            return f"Failed to send email: {exc}"
 
 
 class ReadEmailTool(BaseTool):
@@ -250,13 +283,21 @@ class ReadEmailTool(BaseTool):
         *,
         state: Optional[AgentState] = None,
     ) -> str:
-        from app.integrations.gmail import GmailClient
+        tokens = await _get_google_tokens(state)
+        if not tokens:
+            return (
+                "Gmail is not connected. The user needs to sign in with Google first.\n"
+                "They can do this at: https://app.malibupoint.dev/api/v1/google/auth-url"
+            )
 
         query = params.get("query", "")
         limit = params.get("limit", 5)
 
-        async with GmailClient() as gmail:
-            emails = await gmail.read_emails(query=query, max_results=limit)
+        try:
+            from app.integrations.google_workspace import gmail_read
+            emails = await gmail_read(tokens, query=query, limit=limit)
+        except Exception as exc:
+            return f"Failed to read emails: {exc}"
 
         if not emails:
             return "No emails found matching the query."
@@ -333,35 +374,38 @@ class CreateCalendarEventTool(BaseTool):
         *,
         state: Optional[AgentState] = None,
     ) -> str:
-        from app.integrations.calendar import CalendarClient
+        tokens = await _get_google_tokens(state)
+        if not tokens:
+            return (
+                "Google Calendar is not connected. The user needs to sign in with Google first.\n"
+                "They can do this at: https://app.malibupoint.dev/api/v1/google/auth-url"
+            )
 
         title = params.get("title", "")
         start = params.get("start", "")
         end = params.get("end", "")
         description = params.get("description", "")
-        location = params.get("location")
+        location = params.get("location", "")
         attendees = params.get("attendees")
 
         if not title or not start or not end:
             return "Missing required fields (title, start, end)."
 
-        async with CalendarClient() as cal:
-            result = await cal.create_event(
-                title=title,
-                start=start,
-                end=end,
-                description=description,
-                location=location,
-                attendees=attendees,
+        try:
+            from app.integrations.google_workspace import calendar_create_event
+            result = await calendar_create_event(
+                tokens, title=title, start=start, end=end,
+                description=description, location=location, attendees=attendees,
             )
-
-        return (
-            f"Calendar event created.\n"
-            f"  Title: {result.get('title', title)}\n"
-            f"  Start: {result.get('start', start)}\n"
-            f"  End: {result.get('end', end)}\n"
-            f"  Event ID: {result.get('event_id', 'N/A')}"
-        )
+            return (
+                f"Calendar event created.\n"
+                f"  Title: {result.get('title', title)}\n"
+                f"  Start: {result.get('start', start)}\n"
+                f"  End: {result.get('end', end)}\n"
+                f"  Link: {result.get('link', 'N/A')}"
+            )
+        except Exception as exc:
+            return f"Failed to create calendar event: {exc}"
 
 
 class ListCalendarEventsTool(BaseTool):
@@ -379,17 +423,23 @@ class ListCalendarEventsTool(BaseTool):
         *,
         state: Optional[AgentState] = None,
     ) -> str:
-        from app.integrations.calendar import CalendarClient
+        tokens = await _get_google_tokens(state)
+        if not tokens:
+            return (
+                "Google Calendar is not connected. The user needs to sign in with Google first.\n"
+                "They can do this at: https://app.malibupoint.dev/api/v1/google/auth-url"
+            )
 
         start_date = params.get("start_date", "")
         end_date = params.get("end_date", "")
         if not start_date or not end_date:
             return "Missing required fields (start_date, end_date)."
 
-        async with CalendarClient() as cal:
-            events = await cal.list_events(
-                start_date=start_date, end_date=end_date,
-            )
+        try:
+            from app.integrations.google_workspace import calendar_list_events
+            events = await calendar_list_events(tokens, start_date=start_date, end_date=end_date)
+        except Exception as exc:
+            return f"Failed to list calendar events: {exc}"
 
         if not events:
             return f"No events found between {start_date} and {end_date}."
@@ -1262,13 +1312,13 @@ class DateTimeTool(BaseTool):
 # ═════════════════════════════════════════════════════════════════════════
 
 class GoogleDriveTool(BaseTool):
-    """Search, read, and create Google Drive documents."""
+    """Search, list, and read Google Drive files."""
 
     name = "google_drive"
     description = (
-        "Search files, read documents, or create new docs on Google Drive.  "
-        "Params: action (str: 'search' | 'read' | 'create'), "
-        "query? (str), file_id? (str), title? (str), content? (str)."
+        "Interact with Google Drive: list, search, read files.  "
+        "Params: action (str: 'list' | 'search' | 'read'), "
+        "query? (str), file_id? (str), folder_id? (str), limit? (int)."
     )
 
     async def execute(
@@ -1277,25 +1327,31 @@ class GoogleDriveTool(BaseTool):
         *,
         state: Optional[AgentState] = None,
     ) -> str:
-        from app.integrations.google_drive import GoogleDriveClient
+        tokens = await _get_google_tokens(state)
+        if not tokens:
+            return (
+                "Google Drive is not connected. The user needs to sign in with Google first.\n"
+                "They can do this at: https://app.malibupoint.dev/api/v1/google/auth-url"
+            )
 
-        action = params.get("action", "search")
-        client = GoogleDriveClient()
+        action = params.get("action", "list")
 
         try:
-            if action == "search":
+            from app.integrations.google_workspace import drive_list_files
+
+            if action in ("list", "search"):
                 query = params.get("query", "")
-                if not query:
-                    return "Missing 'query' for Drive search."
-                files = await client.search_files(query, max_results=params.get("max_results", 5))
+                folder_id = params.get("folder_id", "")
+                limit = params.get("limit", 10)
+                files = await drive_list_files(tokens, query=query, folder_id=folder_id, limit=limit)
                 if not files:
-                    return f"No files found for: '{query}'"
-                lines = [f"Google Drive files for '{query}':\n"]
+                    return f"No files found{' for: ' + query if query else ''}."
+                lines = [f"Google Drive files{' for ' + repr(query) if query else ''}:\n"]
                 for f in files:
                     lines.append(
-                        f"  {f.get('name', 'Untitled')} ({f.get('mimeType', '')})\n"
-                        f"    Modified: {f.get('modifiedTime', 'N/A')}\n"
-                        f"    Link: {f.get('webViewLink', '')}"
+                        f"  {f.get('name', 'Untitled')} ({f.get('type', '')})\n"
+                        f"    Modified: {f.get('modified', 'N/A')}\n"
+                        f"    Link: {f.get('link', '')}"
                     )
                 return "\n".join(lines)
 
@@ -1303,23 +1359,7 @@ class GoogleDriveTool(BaseTool):
                 file_id = params.get("file_id", "")
                 if not file_id:
                     return "Missing 'file_id' to read."
-                result = await client.read_file(file_id)
-                content = result.get("content", "")
-                return (
-                    f"File: {result.get('name', 'Unknown')}\n"
-                    f"Type: {result.get('mimeType', '')}\n"
-                    f"Content:\n{content[:5000]}"
-                )
-
-            elif action == "create":
-                title = params.get("title", "Untitled")
-                content = params.get("content", "")
-                result = await client.create_doc(title, content)
-                return (
-                    f"Document created.\n"
-                    f"  Title: {result.get('title', title)}\n"
-                    f"  URL: {result.get('url', '')}"
-                )
+                return f"File reading via Drive API requires file export — use the file link instead."
 
             return f"Unknown Drive action: '{action}'."
         except Exception as exc:

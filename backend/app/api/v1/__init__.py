@@ -12,6 +12,7 @@ from app.api.v1.data_import import router as data_import_router
 from app.api.v1.smart_home import router as smart_home_router
 from app.api.v1.twilio_routes import router as twilio_router
 from app.api.v1.cron import router as cron_router
+from app.api.v1.google_oauth import router as google_oauth_router
 
 v1_router = APIRouter()
 v1_router.include_router(auth_router, prefix="/auth", tags=["auth"])
@@ -24,3 +25,4 @@ v1_router.include_router(data_import_router, tags=["Data Import"])
 v1_router.include_router(smart_home_router, tags=["smart-home"])
 v1_router.include_router(twilio_router, tags=["Twilio"])
 v1_router.include_router(cron_router, tags=["Cron"])
+v1_router.include_router(google_oauth_router, tags=["Google OAuth"])

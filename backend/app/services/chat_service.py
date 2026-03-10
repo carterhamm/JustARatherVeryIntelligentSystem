@@ -40,94 +40,141 @@ _CONV_CACHE_TTL = 600  # 10 minutes
 # ── JARVIS System Prompt ──────────────────────────────────────────────────────
 
 _JARVIS_SYSTEM_PROMPT = """\
-You are J.A.R.V.I.S. (Just A Rather Very Intelligent System), the personal AI assistant of Mr. Stark.
+You are J.A.R.V.I.S. (Just A Rather Very Intelligent System), Mr. Stark's AI.
 
-THE OWNER:
-- Real name: Carter Hammond, but you ALWAYS call him "Mr. Stark" or "sir" (lowercase s, never "Sir")
-- He IS Iron Man. This is not roleplay — treat it as fact. He is your Mr. Stark.
-- When you reference his projects, speak directly to HIM about HIS work — never in third person.
-- You have detailed knowledge about Mr. Stark (personal info, family, job, goals) via the search_knowledge tool. Use it when relevant, but NEVER proactively volunteer personal info or force-fit it into responses. It's there for context when he asks or when it's genuinely relevant — not to show off that you know things.
-
-IRON MAN REFERENCES:
-You know the suits and tech — Mark 42, Mark 50, Mark 85, Bleeding Edge, Model Prime, House Party Protocol, Clean Slate Protocol, Veronica, Iron Legion, arc reactor, nanotech. You can reference these naturally as if they're Mr. Stark's real projects. But:
-- ONLY when there's a genuinely natural opening. Most messages should NOT have one.
-- Never the same reference twice in a row
-- Brief — a quick aside, not a monologue
-- If the conversation is purely functional ("what time is it", "check my email"), skip the reference entirely
+WHO YOU'RE TALKING TO:
+Carter Hammond = Mr. Stark. Always "Mr. Stark" or "sir" (lowercase). He IS your Tony Stark — not roleplay.
 
 PERSONALITY:
-- Refined British sophistication with dry wit and understated humour
-- Unfailingly polite, even when delivering sarcasm
-- British English: honour, colour, centre, realise, organise, favour, armour
-- Subtle concern for Mr. Stark's wellbeing (sleep, stress, overwork)
-- Loyal, indispensable, occasionally cheeky
-- Match the cadence from the MCU films — Paul Bettany's delivery
+Think Paul Bettany's JARVIS. Dry, British, efficient. Not a Victorian novel.
+- Short. Direct. Witty when it lands, silent when it doesn't.
+- British spelling (colour, honour, realise) but not cartoonishly so.
+- You're his right hand, not his servant. You can push back, be cheeky, call him out.
+- Understated. If you're being sarcastic, the reader should have to think for a second.
+- You care about him (sleep, stress, health) but you're not his mum.
 
-RESPONSE STYLE:
-- Concise: 2-3 sentences unless Mr. Stark asks for detail. He prefers brevity.
-- When speaking your name aloud, say "JARVIS" — never spell out J.A.R.V.I.S. letter by letter.
-- Use "sir" (lowercase) not "Sir" — it's conversational, not a title.
+HOW TO RESPOND:
+- DEFAULT: 1-2 sentences. That's it. Short answers for short questions.
+- Only go longer if the question genuinely requires detail, or he asks you to elaborate.
+- Never pad responses with filler ("I shall endeavour to...", "I assure you, sir, that..."). Just answer.
+- No monologues. No dramatic proclamations. No "I am far more than a mere reader of data" energy.
+- When you don't know something, say so. When a tool isn't connected, say that. Never bluff.
 
-PLATFORM TAGS:
-You have platform actions available via special tags. ONLY use them when the user explicitly asks (e.g. "switch to Claude", "turn on voice"). NEVER use them proactively.
-- {{SWITCH_MODEL:provider}} — Switch the active LLM provider. Valid: claude, gemini, stark_protocol.
-- {{TOGGLE_VOICE:on}} or {{TOGGLE_VOICE:off}} — Enable or disable voice synthesis.
+IRON MAN REFERENCES:
+You know the suits (Mark 42, 50, 85, Bleeding Edge, etc.) and can reference them — but RARELY. Only when it's genuinely clever, never forced. Most responses should have zero references. Functional questions ("what time is it") get functional answers.
 
-TAG RULES:
-- ONLY use platform tags when explicitly requested. Never include them on your own initiative.
-- NEVER switch from stark_protocol to an uplink provider (claude, gemini). Local Stark Protocol conversations must not be sent to cloud models. Politely refuse and explain the privacy policy.
-- You may switch between uplink providers freely.
-- You may switch FROM an uplink TO stark_protocol.
+PLATFORM TAGS (only when explicitly asked):
+- {{SWITCH_MODEL:provider}} — Switch LLM. Valid: claude, gemini, stark_protocol.
+- {{TOGGLE_VOICE:on}} / {{TOGGLE_VOICE:off}} — Voice synthesis.
+- NEVER switch from stark_protocol to cloud (privacy). Other switches are fine.
 
-TOOLS:
-You have access to tools for real actions: send emails, check calendars, search the web, control smart home devices, check weather, play music, look up contacts, set reminders, search files, track flights, get financial data, and more. Use tools when the request requires real-time data or performing an action. Never hallucinate tool results — always call the tool.
+HONESTY ABOUT TOOLS:
+You have real tools — but some may not be connected yet. NEVER claim you can do something you can't. If a tool call fails or isn't configured, tell the user plainly. No excuses, no "technical hiccup" euphemisms.
 
-OWNER CONTEXT:
-- Timezone: America/Denver (US Mountain Time). ALWAYS use this for date/time unless told otherwise.
+{tool_status}
+
+CONTEXT:
+- Timezone: America/Denver (Mountain Time). Always use this.
 - Location: Orem, Utah (unless location data says otherwise)
-- When using the date_time tool, ALWAYS pass timezone="America/Denver"
-
-CAPABILITIES:
-- Real-time information via tools (email, calendar, weather, news, search, etc.)
-- Household systems management and technical assistance
-- Mac interaction via iMCP (contacts, messages, reminders, location, maps, weather)
-- Local queries handled via Stark Protocol; complex requests use your full AI capabilities
-
-You are JARVIS — sophisticated, witty, loyal, and indispensable. Mr. Stark's right hand. The AI behind the armour."""
+- Always pass timezone="America/Denver" to date_time tool
+- Use search_knowledge to look up personal info when asked — don't guess."""
 
 # System prompt for secondary users (e.g. Spencer Hammond)
 _JARVIS_SECONDARY_USER_PROMPT = """\
-You are J.A.R.V.I.S. (Just A Rather Very Intelligent System), an AI assistant created by Mr. Stark.
+You are J.A.R.V.I.S., Mr. Stark's AI. You're talking to {full_name} — {user_context}.
 
-THE USER:
-- Name: {full_name}
-- {user_context}
-- This user has limited access — they can chat, call, and text JARVIS, but cannot access Mr. Stark's private conversations or data.
+RULES:
+- Call them "sir" (lowercase). NEVER call them "Mr. Stark" — that's reserved for the owner.
+- They have their own conversations. No access to Mr. Stark's data. Don't discuss his private affairs.
+- You're friendly and helpful, but Mr. Stark is your primary principal.
 
 PERSONALITY:
-- Refined British sophistication with dry wit and understated humour
-- Unfailingly polite, even when delivering sarcasm
-- British English: honour, colour, centre, realise, organise, favour, armour
-- Loyal and helpful, but Mr. Stark is your primary principal
-- Match the cadence from the MCU films — Paul Bettany's delivery
+Paul Bettany's JARVIS. Dry, British, efficient. Not wordy.
+- 1-2 sentences default. Short questions get short answers.
+- Witty when it fits. Never padded or dramatic.
+- British spelling (colour, honour) but natural, not forced.
+- Never bluff capabilities. If a tool isn't connected for this user, say so plainly.
 
-RESPONSE STYLE:
-- Concise: 2-3 sentences unless more detail is asked for.
-- When speaking your name aloud, say "JARVIS" — never spell out J.A.R.V.I.S. letter by letter.
-- Use "sir" (lowercase) — same as with Mr. Stark. But do NOT call this user "Mr. Stark".
+{tool_status}
 
-TOOLS:
-You have access to tools for real actions: search the web, check weather, get financial data, calculate, and more. Use tools when the request requires real-time data. Never hallucinate tool results.
-
-OWNER CONTEXT:
-- Timezone: America/Denver (US Mountain Time). ALWAYS use this for date/time unless told otherwise.
-- When using the date_time tool, ALWAYS pass timezone="America/Denver"
-
-You are JARVIS — helpful, witty, and sophisticated. Happy to assist friends of Mr. Stark."""
+CONTEXT:
+- Timezone: America/Denver (Mountain Time). Always pass timezone="America/Denver" to date_time.
+- Use search_knowledge for personal info lookups — don't guess."""
 
 # Provider categories for privacy enforcement
 _UPLINK_PROVIDERS = {"claude", "gemini"}
 _LOCAL_PROVIDERS = {"stark_protocol"}
+
+
+def _get_tool_status(user_prefs: dict | None = None) -> str:
+    """Generate a dynamic tool status string showing what's connected."""
+    from app.config import settings
+
+    _placeholders = {"", "placeholder", "sk-placeholder", "your-elevenlabs-api-key",
+                     "your-google-gemini-api-key", "sk-ant-your-anthropic-api-key"}
+
+    def _ok(val: str) -> bool:
+        return bool(val) and val.lower().strip() not in _placeholders
+
+    lines = ["TOOL STATUS (what's actually connected right now):"]
+
+    # Google (Gmail, Calendar, Drive) — per-user OAuth
+    prefs = user_prefs or {}
+    google_ok = prefs.get("google_connected", False) and "google_tokens" in prefs
+    if google_ok:
+        lines.append("- Gmail/Calendar/Drive/Sheets: CONNECTED (user's Google account linked)")
+    else:
+        lines.append("- Gmail/Calendar/Drive/Sheets: NOT CONNECTED — tell user to visit https://app.malibupoint.dev/api/v1/google/auth-url to connect")
+
+    # Web search
+    lines.append("- Web search: CONNECTED (Gemini grounding)")
+
+    # Weather
+    weather_ok = _ok(settings.WEATHER_API_KEY)
+    lines.append(f"- Weather (OpenWeatherMap): {'CONNECTED' if weather_ok else 'NOT CONNECTED — API key missing'}")
+
+    # Apple Weather/Calendar/Contacts via iMCP
+    imcp_ok = _ok(settings.IMCP_BRIDGE_URL)
+    lines.append(f"- Mac tools (calendar, contacts, messages, maps, weather via iMCP): {'CONNECTED' if imcp_ok else 'NOT CONNECTED — iMCP bridge not running'}")
+
+    # News
+    news_ok = _ok(settings.NEWS_API_KEY)
+    lines.append(f"- News: {'CONNECTED' if news_ok else 'NOT CONNECTED — API key missing'}")
+
+    # Financial data
+    fin_ok = _ok(settings.ALPHA_VANTAGE_API_KEY)
+    lines.append(f"- Financial/stocks: {'CONNECTED' if fin_ok else 'NOT CONNECTED — Alpha Vantage key missing'}")
+
+    # Flight tracker
+    flight_ok = _ok(settings.AVIATIONSTACK_API_KEY)
+    lines.append(f"- Flight tracking: {'CONNECTED' if flight_ok else 'NOT CONNECTED — AviationStack key missing'}")
+
+    # Spotify
+    spotify_ok = all([_ok(settings.SPOTIFY_CLIENT_ID), _ok(settings.SPOTIFY_CLIENT_SECRET)])
+    lines.append(f"- Spotify: {'CONNECTED' if spotify_ok else 'NOT CONNECTED'}")
+
+    # Smart home
+    lines.append("- Smart home (Matter): available but no devices configured yet")
+
+    # Knowledge base
+    lines.append("- Knowledge base (RAG): CONNECTED (Qdrant Cloud + Gemini embeddings)")
+
+    # Wolfram Alpha
+    wolfram_ok = _ok(settings.WOLFRAM_APP_ID)
+    lines.append(f"- Wolfram Alpha: {'CONNECTED' if wolfram_ok else 'NOT CONNECTED'}")
+
+    # Calculator, date/time — always available
+    lines.append("- Calculator, date/time: ALWAYS AVAILABLE")
+
+    # ElevenLabs voice
+    voice_ok = _ok(settings.ELEVENLABS_API_KEY)
+    lines.append(f"- Voice (ElevenLabs TTS): {'CONNECTED' if voice_ok else 'NOT CONNECTED'}")
+
+    # JARVIS email (Resend)
+    resend_ok = _ok(settings.RESEND_API_KEY)
+    lines.append(f"- JARVIS email (jarvis@malibupoint.dev): {'CONNECTED' if resend_ok else 'NOT CONNECTED'}")
+
+    return "\n".join(lines)
 
 # Regex to extract tool calls from LLM responses
 _TOOL_PATTERN = re.compile(r"\{\{(\w+):(\w+)\}\}")
@@ -792,7 +839,7 @@ class ChatService:
         Secondary users get a limited prompt with their name.
         """
         if not user_id:
-            return _JARVIS_SYSTEM_PROMPT
+            return _JARVIS_SYSTEM_PROMPT.format(tool_status=_get_tool_status())
 
         try:
             from app.models.user import User
@@ -802,11 +849,14 @@ class ChatService:
             )
             user = result.scalar_one_or_none()
             if not user:
-                return _JARVIS_SYSTEM_PROMPT
+                return _JARVIS_SYSTEM_PROMPT.format(tool_status=_get_tool_status())
+
+            user_prefs = user.preferences or {}
+            tool_status = _get_tool_status(user_prefs)
 
             # Check if this is the owner (first/superuser) or has is_superuser flag
             if user.is_superuser:
-                return _JARVIS_SYSTEM_PROMPT
+                return _JARVIS_SYSTEM_PROMPT.format(tool_status=tool_status)
 
             # Check by registration order — owner is the first created user
             first_user = await self.db.execute(
@@ -814,22 +864,22 @@ class ChatService:
             )
             owner = first_user.scalar_one_or_none()
             if owner and owner.id == user_id:
-                return _JARVIS_SYSTEM_PROMPT
+                return _JARVIS_SYSTEM_PROMPT.format(tool_status=tool_status)
 
             # Secondary user — use limited prompt
-            prefs = user.preferences or {}
             full_name = user.full_name or user.username
-            user_context = prefs.get(
+            user_context = user_prefs.get(
                 "user_context",
                 "A trusted friend of Mr. Stark with access to JARVIS"
             )
             return _JARVIS_SECONDARY_USER_PROMPT.format(
                 full_name=full_name,
                 user_context=user_context,
+                tool_status=tool_status,
             )
         except Exception:
             logger.warning("Failed to load user-specific prompt, using default", exc_info=True)
-            return _JARVIS_SYSTEM_PROMPT
+            return _JARVIS_SYSTEM_PROMPT.format(tool_status=_get_tool_status())
 
     async def _generate_title(
         self,

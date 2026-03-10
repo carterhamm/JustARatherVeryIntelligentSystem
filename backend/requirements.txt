@@ -47,6 +47,11 @@ openai>=1.57.0,<2.0                     # SDK used by Perplexity, GLM, Stark Pro
 anthropic>=0.40.0,<1.0
 google-genai>=1.0.0
 
+# -- Google Workspace (Gmail, Calendar, Drive, Sheets) -------------------------
+google-api-python-client>=2.100.0,<3.0
+google-auth-oauthlib>=1.2.0,<2.0
+google-auth-httplib2>=0.2.0,<1.0
+
 # -- Agent orchestration -------------------------------------------------------
 langgraph>=0.2.0,<1.0
 
