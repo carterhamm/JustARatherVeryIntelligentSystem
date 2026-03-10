@@ -674,4 +674,65 @@ _TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "required": ["time"],
         },
     },
+    # -- Sports (ESPN) -------------------------------------------------
+    {
+        "name": "sports",
+        "description": (
+            "Get sports scores, schedules, standings, and team info via ESPN. "
+            "Supports college football (BYU Cougars, etc.), NFL, NBA, MLB, NHL, college basketball."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["scores", "schedule", "standings", "team"],
+                    "description": "Sports action to perform.",
+                },
+                "team": {
+                    "type": "string",
+                    "description": "Team name (e.g. 'BYU', 'Utah'). Defaults to BYU.",
+                    "default": "BYU",
+                },
+                "sport": {
+                    "type": "string",
+                    "description": "Sport/league (e.g. 'football', 'basketball', 'nfl', 'nba', 'mlb').",
+                    "default": "football",
+                },
+                "season": {
+                    "type": "string",
+                    "description": "Season year (e.g. '2025'). Defaults to current.",
+                },
+                "groups": {
+                    "type": "string",
+                    "description": "Conference group ID for scoreboard filtering.",
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Max results for scoreboard.",
+                    "default": 10,
+                },
+            },
+            "required": ["action"],
+        },
+    },
+    # -- Scripture Lookup -----------------------------------------------
+    {
+        "name": "scripture_lookup",
+        "description": (
+            "Look up scripture verses from the Bible (KJV) or LDS scriptures "
+            "(Book of Mormon, Doctrine & Covenants, Pearl of Great Price). "
+            "Supports references like 'John 3:16', '1 Nephi 3:7', 'Alma 32:21', 'D&C 121:7-8'."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "reference": {
+                    "type": "string",
+                    "description": "Scripture reference (e.g. 'John 3:16', '1 Nephi 3:7', 'D&C 121:7-8', 'Mosiah 2:17').",
+                },
+            },
+            "required": ["reference"],
+        },
+    },
 ]

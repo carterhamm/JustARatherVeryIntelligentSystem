@@ -2027,6 +2027,150 @@ class SetWakeTimeTool(BaseTool):
 
 
 # ═════════════════════════════════════════════════════════════════════════
+# Sports (ESPN) tool
+# ═════════════════════════════════════════════════════════════════════════
+
+class SportsTool(BaseTool):
+    """Get sports scores, schedules, and standings via ESPN."""
+
+    name = "sports"
+    description = (
+        "Get sports scores, schedules, standings, and team info via ESPN. "
+        "Supports college football (BYU, etc.), NFL, NBA, MLB, NHL. "
+        "Params: action (str: 'scores' | 'schedule' | 'standings' | 'team'), "
+        "team? (str), sport? (str, default 'football')."
+    )
+
+    async def execute(
+        self,
+        params: dict[str, Any],
+        *,
+        state: Optional[AgentState] = None,
+    ) -> str:
+        from app.integrations.sports import (
+            get_scoreboard,
+            get_schedule,
+            get_standings,
+            get_team_info,
+        )
+
+        action = params.get("action", "scores")
+        team = params.get("team", "BYU")
+        sport = params.get("sport", "football")
+
+        try:
+            if action == "team":
+                info = await get_team_info(team, sport)
+                lines = [
+                    f"{info['name']} ({info['abbreviation']})",
+                    f"  Record: {info['record']}",
+                ]
+                if info.get("standing"):
+                    lines.append(f"  Standing: {info['standing']}")
+                if info.get("next_game"):
+                    ng = info["next_game"]
+                    lines.append(f"  Next game: {ng.get('shortName', ng.get('name', 'TBD'))} — {ng.get('date', 'TBD')}")
+                return "\n".join(lines)
+
+            elif action == "schedule":
+                season = params.get("season", "")
+                games = await get_schedule(team, sport, season)
+                if not games:
+                    return f"No schedule found for {team} ({sport})."
+                lines = [f"{team.upper()} {sport.title()} Schedule:\n"]
+                for g in games[:15]:
+                    status = g["result"] if g["completed"] else "Upcoming"
+                    lines.append(f"  {g['shortName'] or g['name']}: {status} — {g['date'][:10]}")
+                return "\n".join(lines)
+
+            elif action == "standings":
+                group = params.get("group", "")
+                standings = await get_standings(sport, group)
+                if not standings:
+                    return f"No standings data found for {sport}."
+                lines = [f"{sport.title()} Standings:\n"]
+                current_group = ""
+                for s in standings[:30]:
+                    if s["group"] != current_group:
+                        current_group = s["group"]
+                        lines.append(f"\n  {current_group}:")
+                    conf = f" (Conf: {s['conference']})" if s.get("conference") else ""
+                    lines.append(f"    {s['team']}: {s.get('overall', f'{s.get(\"wins\", \"?\")}-{s.get(\"losses\", \"?\")}')}{conf}")
+                return "\n".join(lines)
+
+            else:  # scores / scoreboard
+                groups = params.get("groups", "")
+                limit = params.get("limit", 10)
+                games = await get_scoreboard(sport, groups, limit)
+                if not games:
+                    return f"No games on the scoreboard right now for {sport}."
+                lines = [f"{sport.title()} Scoreboard:\n"]
+                for g in games:
+                    teams_str = " vs ".join(
+                        f"{t['name']} {t['score']}" for t in g.get("teams", [])
+                    )
+                    lines.append(f"  {teams_str} — {g['status']}")
+                return "\n".join(lines)
+
+        except ValueError as e:
+            return str(e)
+        except Exception as e:
+            logger.exception("Sports tool error")
+            return f"Sports lookup failed: {e}"
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# Scripture Lookup tool
+# ═════════════════════════════════════════════════════════════════════════
+
+class ScriptureLookupTool(BaseTool):
+    """Look up Bible and LDS scripture verses."""
+
+    name = "scripture_lookup"
+    description = (
+        "Look up scripture verses from the Bible (KJV) or LDS scriptures "
+        "(Book of Mormon, Doctrine & Covenants, Pearl of Great Price). "
+        "Params: reference (str, e.g. 'John 3:16', '1 Nephi 3:7', 'D&C 121:7-8')."
+    )
+
+    async def execute(
+        self,
+        params: dict[str, Any],
+        *,
+        state: Optional[AgentState] = None,
+    ) -> str:
+        from app.integrations.scriptures import lookup_scripture
+
+        reference = params.get("reference", "").strip()
+        if not reference:
+            return "Missing 'reference' parameter. Provide a scripture reference like 'John 3:16' or '1 Nephi 3:7'."
+
+        try:
+            result = await lookup_scripture(reference)
+
+            if result.get("error"):
+                return f"Scripture lookup error: {result['error']}"
+
+            lines = [f"{result.get('reference', reference)}"]
+            if result.get("translation"):
+                lines[0] += f" ({result['translation']})"
+
+            text = result.get("text", "")
+            if text:
+                lines.append(text)
+
+            if result.get("url"):
+                lines.append(f"\nSource: {result.get('source', 'churchofjesuschrist.org')}")
+                lines.append(result["url"])
+
+            return "\n".join(lines)
+
+        except Exception as e:
+            logger.exception("Scripture lookup error")
+            return f"Scripture lookup failed: {e}"
+
+
+# ═════════════════════════════════════════════════════════════════════════
 # Tool registry factory
 # ═════════════════════════════════════════════════════════════════════════
 
@@ -2083,6 +2227,9 @@ def get_tool_registry() -> dict[str, BaseTool]:
             NutritionRecipeTool(),
             # Morning routine
             SetWakeTimeTool(),
+            # Quick-win integrations (free, no API key)
+            SportsTool(),
+            ScriptureLookupTool(),
         ]
         _registry = {t.name: t for t in tools}
     return _registry
