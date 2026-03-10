@@ -114,6 +114,10 @@ TOOL_CATEGORIES = {
         "description": "Bible verses, Book of Mormon, scriptures, D&C, Pearl of Great Price, LDS",
         "tools": ["scripture_lookup"],
     },
+    "mac_mini": {
+        "description": "Mac Mini control, remote commands, SSH, shell, screenshot, Claude Code on the Mini, system admin",
+        "tools": ["mac_mini_exec", "mac_mini_claude_code", "mac_mini_screenshot"],
+    },
 }
 
 _CATEGORY_LIST = "\n".join(

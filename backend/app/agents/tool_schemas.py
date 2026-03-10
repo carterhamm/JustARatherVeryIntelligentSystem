@@ -785,4 +785,84 @@ _TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "required": ["destination"],
         },
     },
+    # -- Mac Mini Remote Exec -------------------------------------------
+    {
+        "name": "mac_mini_exec",
+        "description": (
+            "Run a shell command on the Mac Mini remotely. Full SSH-like access. "
+            "Use for system admin, checking logs, installing packages, running scripts, "
+            "managing files, or any shell task on the Mini."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "command": {
+                    "type": "string",
+                    "description": "Shell command to execute (e.g. 'ls -la', 'brew update', 'cat /var/log/system.log').",
+                },
+                "working_dir": {
+                    "type": "string",
+                    "description": "Working directory (defaults to home).",
+                },
+                "timeout": {
+                    "type": "integer",
+                    "description": "Max seconds to wait.",
+                    "default": 120,
+                },
+            },
+            "required": ["command"],
+        },
+    },
+    # -- Mac Mini Claude Code -------------------------------------------
+    {
+        "name": "mac_mini_claude_code",
+        "description": (
+            "Run Claude Code on the Mac Mini with full autonomous permissions. "
+            "Use for complex multi-step development tasks, system configuration, "
+            "debugging, or any task that benefits from Claude Code's capabilities "
+            "running directly on the Mini."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "prompt": {
+                    "type": "string",
+                    "description": "The task/prompt for Claude Code to execute.",
+                },
+                "working_dir": {
+                    "type": "string",
+                    "description": "Working directory for Claude Code.",
+                },
+                "timeout": {
+                    "type": "integer",
+                    "description": "Max seconds (default 600 = 10 min).",
+                    "default": 600,
+                },
+                "model": {
+                    "type": "string",
+                    "description": "Model override (empty = default).",
+                },
+            },
+            "required": ["prompt"],
+        },
+    },
+    # -- Mac Mini Screenshot --------------------------------------------
+    {
+        "name": "mac_mini_screenshot",
+        "description": (
+            "Capture a screenshot of the Mac Mini's screen. Returns the image "
+            "as base64 PNG. Use to see what's currently displayed on the Mini."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "thumbnail": {
+                    "type": "boolean",
+                    "description": "Return smaller image (1024px wide). Default true.",
+                    "default": True,
+                },
+            },
+            "required": [],
+        },
+    },
 ]

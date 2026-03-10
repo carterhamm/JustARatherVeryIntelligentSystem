@@ -2363,6 +2363,149 @@ class NavigateTool(BaseTool):
 
 
 # ═════════════════════════════════════════════════════════════════════════
+# Mac Mini Remote Exec tool
+# ═════════════════════════════════════════════════════════════════════════
+
+class MacMiniExecTool(BaseTool):
+    """Execute shell commands on the Mac Mini remotely."""
+
+    name = "mac_mini_exec"
+    description = (
+        "Run a shell command on the Mac Mini. Full remote access — can install "
+        "packages, manage files, check logs, run scripts, admin the system. "
+        "Params: command (str), working_dir? (str), timeout? (int, default 120)."
+    )
+
+    async def execute(
+        self,
+        params: dict[str, Any],
+        *,
+        state: Optional[AgentState] = None,
+    ) -> str:
+        from app.integrations.mac_mini import remote_exec, is_configured
+
+        if not is_configured():
+            return "Mac Mini agent not configured."
+
+        command = params.get("command", "").strip()
+        if not command:
+            return "Missing 'command' parameter."
+
+        result = await remote_exec(
+            command=command,
+            working_dir=params.get("working_dir", ""),
+            timeout=params.get("timeout", 120),
+        )
+
+        lines = []
+        if result.get("success"):
+            lines.append(f"Command succeeded (exit 0, {result.get('duration_ms', 0):.0f}ms)")
+        else:
+            lines.append(f"Command failed (exit {result.get('exit_code', -1)}, {result.get('duration_ms', 0):.0f}ms)")
+
+        stdout = result.get("stdout", "").strip()
+        stderr = result.get("stderr", "").strip()
+        if stdout:
+            lines.append(f"\nstdout:\n{stdout[:10000]}")
+        if stderr:
+            lines.append(f"\nstderr:\n{stderr[:5000]}")
+
+        return "\n".join(lines)
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# Mac Mini Claude Code tool
+# ═════════════════════════════════════════════════════════════════════════
+
+class MacMiniClaudeCodeTool(BaseTool):
+    """Run Claude Code on the Mac Mini with full permissions."""
+
+    name = "mac_mini_claude_code"
+    description = (
+        "Run Claude Code (claude CLI) on the Mac Mini with full autonomous "
+        "permissions. Use for development tasks, file management, system "
+        "configuration, or any complex multi-step task on the Mini. "
+        "Params: prompt (str), working_dir? (str), timeout? (int, default 600), model? (str)."
+    )
+
+    async def execute(
+        self,
+        params: dict[str, Any],
+        *,
+        state: Optional[AgentState] = None,
+    ) -> str:
+        from app.integrations.mac_mini import run_claude_code, is_configured
+
+        if not is_configured():
+            return "Mac Mini agent not configured."
+
+        prompt = params.get("prompt", "").strip()
+        if not prompt:
+            return "Missing 'prompt' parameter."
+
+        result = await run_claude_code(
+            prompt=prompt,
+            working_dir=params.get("working_dir", ""),
+            timeout=params.get("timeout", 600),
+            model=params.get("model", ""),
+        )
+
+        lines = []
+        if result.get("success"):
+            lines.append(f"Claude Code completed (exit 0, {result.get('duration_ms', 0):.0f}ms)")
+        else:
+            lines.append(f"Claude Code failed (exit {result.get('exit_code', -1)}, {result.get('duration_ms', 0):.0f}ms)")
+
+        output = result.get("output", "").strip()
+        if output:
+            lines.append(f"\n{output[:20000]}")
+
+        return "\n".join(lines)
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# Mac Mini Screenshot tool
+# ═════════════════════════════════════════════════════════════════════════
+
+class MacMiniScreenshotTool(BaseTool):
+    """Capture a screenshot from the Mac Mini's display."""
+
+    name = "mac_mini_screenshot"
+    description = (
+        "Take a screenshot of the Mac Mini's screen. Returns a base64 PNG "
+        "image. Use to see what's currently displayed on the Mini. "
+        "Params: thumbnail? (bool, default true)."
+    )
+
+    async def execute(
+        self,
+        params: dict[str, Any],
+        *,
+        state: Optional[AgentState] = None,
+    ) -> str:
+        from app.integrations.mac_mini import take_screenshot, is_configured
+
+        if not is_configured():
+            return "Mac Mini agent not configured."
+
+        result = await take_screenshot(
+            thumbnail=params.get("thumbnail", True),
+        )
+
+        if result.get("error"):
+            return f"Screenshot failed: {result['error']}"
+
+        size = result.get("size_bytes", 0)
+        b64 = result.get("image_base64", "")
+
+        return (
+            f"Screenshot captured ({size:,} bytes).\n"
+            f"Base64 PNG data ({len(b64)} chars) — use this in vision-capable "
+            f"models or save to file for viewing."
+        )
+
+
+# ═════════════════════════════════════════════════════════════════════════
 # Tool registry factory
 # ═════════════════════════════════════════════════════════════════════════
 
@@ -2426,6 +2569,10 @@ def get_tool_registry() -> dict[str, BaseTool]:
             ScriptureLookupTool(),
             # Navigation (Find My + Google Maps)
             NavigateTool(),
+            # Mac Mini remote control
+            MacMiniExecTool(),
+            MacMiniClaudeCodeTool(),
+            MacMiniScreenshotTool(),
         ]
         _registry = {t.name: t for t in tools}
     return _registry

@@ -5,6 +5,10 @@ Communicates with the Mac Mini agent service (mac_mini_agent.py) running
 on the Mac Mini behind Caddy auth + Cloudflare tunnel. Used for:
 - Sending iMessages
 - Running Shortcuts
+- Remote shell execution
+- Claude Code execution
+- Screenshot capture
+- Find My location
 - System info queries
 """
 
@@ -152,6 +156,107 @@ async def get_location(name: str = "") -> dict[str, Any]:
     except Exception as e:
         logger.exception("Mac Mini get_location error")
         return {"found": False, "error": f"Error: {e}"}
+
+
+async def remote_exec(
+    command: str,
+    working_dir: str = "",
+    timeout: int = 120,
+    shell: bool = True,
+) -> dict[str, Any]:
+    """Execute a shell command on the Mac Mini.
+
+    Args:
+        command: Shell command to run.
+        working_dir: Working directory (defaults to home).
+        timeout: Max seconds to wait.
+        shell: Use shell=True (default) or split into args.
+
+    Returns:
+        Dict with success, stdout, stderr, exit_code, duration_ms.
+    """
+    if not is_configured():
+        return {"success": False, "stdout": "", "stderr": "Mac Mini agent not configured", "exit_code": -1, "duration_ms": 0}
+
+    url = f"{_get_url()}/exec"
+    payload = {"command": command, "working_dir": working_dir, "timeout": timeout, "shell": shell}
+
+    try:
+        async with httpx.AsyncClient(timeout=float(timeout + 10)) as client:
+            resp = await client.post(url, json=payload, headers=_get_headers())
+            if resp.status_code == 401:
+                return {"success": False, "stdout": "", "stderr": "Auth failed", "exit_code": -1, "duration_ms": 0}
+            resp.raise_for_status()
+            return resp.json()
+    except httpx.TimeoutException:
+        return {"success": False, "stdout": "", "stderr": "Request timed out", "exit_code": -1, "duration_ms": 0}
+    except Exception as e:
+        logger.exception("Mac Mini remote_exec error")
+        return {"success": False, "stdout": "", "stderr": str(e), "exit_code": -1, "duration_ms": 0}
+
+
+async def run_claude_code(
+    prompt: str,
+    working_dir: str = "",
+    timeout: int = 600,
+    model: str = "",
+) -> dict[str, Any]:
+    """Run Claude Code on the Mac Mini with full permissions.
+
+    Args:
+        prompt: The prompt/task for Claude Code.
+        working_dir: Working directory for Claude Code.
+        timeout: Max seconds (default 10 min).
+        model: Model override (empty = default).
+
+    Returns:
+        Dict with success, output, exit_code, duration_ms.
+    """
+    if not is_configured():
+        return {"success": False, "output": "Mac Mini agent not configured", "exit_code": -1, "duration_ms": 0}
+
+    url = f"{_get_url()}/claude-code"
+    payload = {"prompt": prompt, "working_dir": working_dir, "timeout": timeout}
+    if model:
+        payload["model"] = model
+
+    try:
+        async with httpx.AsyncClient(timeout=float(timeout + 30)) as client:
+            resp = await client.post(url, json=payload, headers=_get_headers())
+            if resp.status_code == 401:
+                return {"success": False, "output": "Auth failed", "exit_code": -1, "duration_ms": 0}
+            resp.raise_for_status()
+            return resp.json()
+    except httpx.TimeoutException:
+        return {"success": False, "output": "Request timed out", "exit_code": -1, "duration_ms": 0}
+    except Exception as e:
+        logger.exception("Mac Mini claude_code error")
+        return {"success": False, "output": str(e), "exit_code": -1, "duration_ms": 0}
+
+
+async def take_screenshot(thumbnail: bool = True) -> dict[str, Any]:
+    """Capture a screenshot from the Mac Mini.
+
+    Args:
+        thumbnail: Return a smaller image (1024px wide).
+
+    Returns:
+        Dict with image_base64, media_type, size_bytes.
+    """
+    if not is_configured():
+        return {"error": "Mac Mini agent not configured"}
+
+    url = f"{_get_url()}/screenshot/base64"
+    params = {"thumbnail": str(thumbnail).lower()}
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.get(url, params=params, headers=_get_headers())
+            resp.raise_for_status()
+            return resp.json()
+    except Exception as e:
+        logger.exception("Mac Mini screenshot error")
+        return {"error": str(e)}
 
 
 async def health_check() -> bool:

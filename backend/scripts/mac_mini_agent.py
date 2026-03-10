@@ -18,11 +18,14 @@ After updating, redeploy on the Mac Mini:
 
 from __future__ import annotations
 
+import asyncio
+import base64
 import glob
 import json
 import logging
 import os
 import plistlib
+import shutil
 import subprocess
 import time
 from datetime import datetime, timezone
@@ -30,6 +33,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Header, Query
+from fastapi.responses import Response
 from pydantic import BaseModel
 
 logging.basicConfig(
@@ -38,7 +42,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger("jarvis.mac_mini_agent")
 
-app = FastAPI(title="JARVIS Mac Mini Agent", version="1.1.0")
+app = FastAPI(title="JARVIS Mac Mini Agent", version="2.0.0")
 
 AUTH_TOKEN = os.environ.get("AGENT_AUTH_TOKEN", "")
 
@@ -100,12 +104,41 @@ class LocationResponse(BaseModel):
     source: str = ""
 
 
+class ExecRequest(BaseModel):
+    command: str
+    working_dir: str = ""
+    timeout: int = 120
+    shell: bool = True
+
+
+class ExecResponse(BaseModel):
+    success: bool
+    stdout: str
+    stderr: str
+    exit_code: int
+    duration_ms: float
+
+
+class ClaudeCodeRequest(BaseModel):
+    prompt: str
+    working_dir: str = ""
+    timeout: int = 600  # Claude Code can take a while
+    model: str = ""  # empty = default
+
+
+class ClaudeCodeResponse(BaseModel):
+    success: bool
+    output: str
+    exit_code: int
+    duration_ms: float
+
+
 # ── Endpoints ────────────────────────────────────────────────────────────
 
 @app.get("/health")
 async def health():
     """Health check — no auth required."""
-    return {"status": "online", "service": "jarvis-mac-mini-agent", "version": "1.1.0"}
+    return {"status": "online", "service": "jarvis-mac-mini-agent", "version": "2.0.0"}
 
 
 @app.post("/send-imessage", response_model=SendMessageResponse)
@@ -291,6 +324,277 @@ async def system_info(_: str = Depends(verify_token)):
         "agent_version": "1.1.0",
         "location_cache_size": len(_location_cache),
     }
+
+
+# ── Remote Execution ─────────────────────────────────────────────────────
+
+@app.post("/exec", response_model=ExecResponse)
+async def remote_exec(
+    req: ExecRequest,
+    _: str = Depends(verify_token),
+):
+    """Execute a shell command on the Mac Mini.
+
+    Full remote shell access for JARVIS. Protected by Bearer token auth,
+    Caddy proxy, and Cloudflare tunnel.
+    """
+    command = req.command.strip()
+    if not command:
+        raise HTTPException(400, "Command is required")
+
+    logger.info("EXEC: command=%r cwd=%r timeout=%d", command, req.working_dir, req.timeout)
+
+    cwd = req.working_dir or str(Path.home())
+    if not Path(cwd).exists():
+        cwd = str(Path.home())
+
+    t0 = time.monotonic()
+    try:
+        if req.shell:
+            result = subprocess.run(
+                command,
+                shell=True,
+                capture_output=True,
+                text=True,
+                timeout=req.timeout,
+                cwd=cwd,
+                env={**os.environ, "PATH": f"/opt/homebrew/bin:/usr/local/bin:{os.environ.get('PATH', '')}"},
+            )
+        else:
+            result = subprocess.run(
+                command.split(),
+                capture_output=True,
+                text=True,
+                timeout=req.timeout,
+                cwd=cwd,
+                env={**os.environ, "PATH": f"/opt/homebrew/bin:/usr/local/bin:{os.environ.get('PATH', '')}"},
+            )
+
+        elapsed = (time.monotonic() - t0) * 1000
+        logger.info(
+            "EXEC_DONE: exit=%d elapsed=%.0fms stdout_len=%d stderr_len=%d",
+            result.returncode, elapsed, len(result.stdout), len(result.stderr),
+        )
+
+        return ExecResponse(
+            success=result.returncode == 0,
+            stdout=result.stdout[-50000:],  # cap at 50KB
+            stderr=result.stderr[-10000:],
+            exit_code=result.returncode,
+            duration_ms=round(elapsed, 2),
+        )
+
+    except subprocess.TimeoutExpired:
+        elapsed = (time.monotonic() - t0) * 1000
+        logger.error("EXEC_TIMEOUT: command=%r after %ds", command, req.timeout)
+        return ExecResponse(
+            success=False,
+            stdout="",
+            stderr=f"Command timed out after {req.timeout}s",
+            exit_code=-1,
+            duration_ms=round(elapsed, 2),
+        )
+    except Exception as e:
+        elapsed = (time.monotonic() - t0) * 1000
+        logger.exception("EXEC_ERROR: command=%r", command)
+        return ExecResponse(
+            success=False,
+            stdout="",
+            stderr=str(e),
+            exit_code=-1,
+            duration_ms=round(elapsed, 2),
+        )
+
+
+@app.post("/claude-code", response_model=ClaudeCodeResponse)
+async def run_claude_code(
+    req: ClaudeCodeRequest,
+    _: str = Depends(verify_token),
+):
+    """Run Claude Code (claude CLI) on the Mac Mini with full permissions.
+
+    Executes `claude` with --dangerously-skip-permissions so JARVIS can
+    autonomously perform development tasks, system admin, file management, etc.
+    """
+    prompt = req.prompt.strip()
+    if not prompt:
+        raise HTTPException(400, "Prompt is required")
+
+    # Find claude binary
+    claude_bin = shutil.which("claude")
+    if not claude_bin:
+        # Check common install locations
+        for candidate in [
+            Path.home() / ".claude" / "local" / "claude",
+            Path("/opt/homebrew/bin/claude"),
+            Path("/usr/local/bin/claude"),
+        ]:
+            if candidate.exists():
+                claude_bin = str(candidate)
+                break
+
+    if not claude_bin:
+        return ClaudeCodeResponse(
+            success=False,
+            output="Claude Code CLI not found. Install with: npm install -g @anthropic-ai/claude-code",
+            exit_code=-1,
+            duration_ms=0,
+        )
+
+    cwd = req.working_dir or str(Path.home())
+    if not Path(cwd).exists():
+        cwd = str(Path.home())
+
+    cmd = [claude_bin, "--dangerously-skip-permissions", "-p", prompt, "--output-format", "text"]
+    if req.model:
+        cmd.extend(["--model", req.model])
+
+    logger.info("CLAUDE_CODE: prompt=%r cwd=%r model=%r", prompt[:200], cwd, req.model or "default")
+
+    t0 = time.monotonic()
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=req.timeout,
+            cwd=cwd,
+            env={**os.environ, "PATH": f"/opt/homebrew/bin:/usr/local/bin:{os.environ.get('PATH', '')}"},
+        )
+        elapsed = (time.monotonic() - t0) * 1000
+
+        output = result.stdout.strip() or result.stderr.strip()
+        logger.info(
+            "CLAUDE_CODE_DONE: exit=%d elapsed=%.0fms output_len=%d",
+            result.returncode, elapsed, len(output),
+        )
+
+        return ClaudeCodeResponse(
+            success=result.returncode == 0,
+            output=output[-50000:],  # cap at 50KB
+            exit_code=result.returncode,
+            duration_ms=round(elapsed, 2),
+        )
+
+    except subprocess.TimeoutExpired:
+        elapsed = (time.monotonic() - t0) * 1000
+        logger.error("CLAUDE_CODE_TIMEOUT after %ds", req.timeout)
+        return ClaudeCodeResponse(
+            success=False,
+            output=f"Claude Code timed out after {req.timeout}s",
+            exit_code=-1,
+            duration_ms=round(elapsed, 2),
+        )
+    except Exception as e:
+        elapsed = (time.monotonic() - t0) * 1000
+        logger.exception("CLAUDE_CODE_ERROR")
+        return ClaudeCodeResponse(
+            success=False,
+            output=str(e),
+            exit_code=-1,
+            duration_ms=round(elapsed, 2),
+        )
+
+
+@app.get("/screenshot")
+async def take_screenshot(
+    _: str = Depends(verify_token),
+    display: int = Query(1, description="Display number (1 = main)"),
+    thumbnail: bool = Query(False, description="Return smaller thumbnail"),
+):
+    """Capture a screenshot of the Mac Mini's screen.
+
+    Returns the PNG image directly (Content-Type: image/png).
+    Use thumbnail=true for a smaller version (~800px wide).
+    """
+    logger.info("SCREENSHOT: display=%d thumbnail=%s", display, thumbnail)
+
+    tmp_path = f"/tmp/jarvis_screenshot_{int(time.time())}.png"
+
+    try:
+        # -x = no sound, -D = specific display
+        cmd = ["screencapture", "-x", f"-D{display}", tmp_path]
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+
+        if result.returncode != 0 or not Path(tmp_path).exists():
+            logger.error("Screenshot failed: %s", result.stderr.strip())
+            raise HTTPException(500, f"Screenshot failed: {result.stderr.strip()}")
+
+        if thumbnail:
+            thumb_path = f"/tmp/jarvis_screenshot_thumb_{int(time.time())}.png"
+            # Use sips to resize (built into macOS)
+            subprocess.run(
+                ["sips", "--resampleWidth", "800", tmp_path, "--out", thumb_path],
+                capture_output=True, timeout=10,
+            )
+            if Path(thumb_path).exists():
+                img_bytes = Path(thumb_path).read_bytes()
+                Path(thumb_path).unlink(missing_ok=True)
+            else:
+                img_bytes = Path(tmp_path).read_bytes()
+        else:
+            img_bytes = Path(tmp_path).read_bytes()
+
+        Path(tmp_path).unlink(missing_ok=True)
+
+        logger.info("SCREENSHOT_OK: %d bytes", len(img_bytes))
+        return Response(content=img_bytes, media_type="image/png")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        Path(tmp_path).unlink(missing_ok=True)
+        logger.exception("SCREENSHOT_ERROR")
+        raise HTTPException(500, f"Screenshot error: {e}")
+
+
+@app.get("/screenshot/base64")
+async def take_screenshot_base64(
+    _: str = Depends(verify_token),
+    display: int = Query(1, description="Display number"),
+    thumbnail: bool = Query(True, description="Return smaller thumbnail"),
+):
+    """Capture screenshot and return as base64 JSON (for LLM vision input)."""
+    logger.info("SCREENSHOT_B64: display=%d thumbnail=%s", display, thumbnail)
+
+    tmp_path = f"/tmp/jarvis_screenshot_{int(time.time())}.png"
+
+    try:
+        cmd = ["screencapture", "-x", f"-D{display}", tmp_path]
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+
+        if result.returncode != 0 or not Path(tmp_path).exists():
+            raise HTTPException(500, f"Screenshot failed: {result.stderr.strip()}")
+
+        if thumbnail:
+            thumb_path = f"/tmp/jarvis_screenshot_thumb_{int(time.time())}.png"
+            subprocess.run(
+                ["sips", "--resampleWidth", "1024", tmp_path, "--out", thumb_path],
+                capture_output=True, timeout=10,
+            )
+            if Path(thumb_path).exists():
+                img_bytes = Path(thumb_path).read_bytes()
+                Path(thumb_path).unlink(missing_ok=True)
+            else:
+                img_bytes = Path(tmp_path).read_bytes()
+        else:
+            img_bytes = Path(tmp_path).read_bytes()
+
+        Path(tmp_path).unlink(missing_ok=True)
+        b64 = base64.b64encode(img_bytes).decode("ascii")
+
+        return {
+            "image_base64": b64,
+            "media_type": "image/png",
+            "size_bytes": len(img_bytes),
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        Path(tmp_path).unlink(missing_ok=True)
+        logger.exception("SCREENSHOT_B64_ERROR")
+        raise HTTPException(500, f"Screenshot error: {e}")
 
 
 # ── Find My helpers ──────────────────────────────────────────────────────
