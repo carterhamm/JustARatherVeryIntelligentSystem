@@ -124,7 +124,13 @@ export default function AuthPage() {
         setTotpCode('');
         setStep('totp');
       } else {
-        navigate('/');
+        const pendingRedirect = localStorage.getItem('jarvis_post_login_redirect');
+        if (pendingRedirect) {
+          localStorage.removeItem('jarvis_post_login_redirect');
+          navigate(pendingRedirect);
+        } else {
+          navigate('/');
+        }
       }
     } catch (err: any) {
       const detail = err?.response?.data?.detail || err?.message || 'Authentication failed.';
@@ -147,7 +153,13 @@ export default function AuthPage() {
       setIsLoading(true);
       try {
         await verifyTOTPLogin(totpToken, totpCode);
-        navigate('/');
+        const pendingRedirect = localStorage.getItem('jarvis_post_login_redirect');
+        if (pendingRedirect) {
+          localStorage.removeItem('jarvis_post_login_redirect');
+          navigate(pendingRedirect);
+        } else {
+          navigate('/');
+        }
       } catch (err: any) {
         const detail = err?.response?.data?.detail || err?.message || 'Invalid code.';
         setError(detail);
@@ -212,7 +224,13 @@ export default function AuthPage() {
     setIsLoading(true);
     try {
       await passkeyRegister(emailVal, usernameVal, fullName || undefined, setupToken.trim());
-      navigate('/');
+      const pendingRedirect = localStorage.getItem('jarvis_post_login_redirect');
+      if (pendingRedirect) {
+        localStorage.removeItem('jarvis_post_login_redirect');
+        navigate(pendingRedirect);
+      } else {
+        navigate('/');
+      }
     } catch (err: any) {
       const detail = err?.response?.data?.detail || err?.message || 'Registration failed.';
       setError(detail);

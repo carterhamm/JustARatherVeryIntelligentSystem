@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
 import AuthPage from '@/pages/AuthPage';
 import MainPage from '@/pages/MainPage';
+import GoogleConnectPage from '@/pages/GoogleConnectPage';
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -86,6 +87,7 @@ export default function App() {
             </PublicRoute>
           }
         />
+        <Route path="/connect/google" element={<GoogleConnectPage />} />
         <Route path="/register" element={<Navigate to="/login" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

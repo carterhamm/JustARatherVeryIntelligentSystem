@@ -277,7 +277,7 @@ class SendEmailTool(BaseTool):
         if not tokens:
             return (
                 "Gmail is not connected. The user needs to sign in with Google first.\n"
-                "They can do this at: https://app.malibupoint.dev/api/v1/google/auth-url"
+                "They can do this at: https://app.malibupoint.dev/connect/google"
             )
 
         to = params.get("to", "")
@@ -319,7 +319,7 @@ class ReadEmailTool(BaseTool):
         if not tokens:
             return (
                 "Gmail is not connected. The user needs to sign in with Google first.\n"
-                "They can do this at: https://app.malibupoint.dev/api/v1/google/auth-url"
+                "They can do this at: https://app.malibupoint.dev/connect/google"
             )
 
         query = params.get("query", "")
@@ -410,7 +410,7 @@ class CreateCalendarEventTool(BaseTool):
         if not tokens:
             return (
                 "Google Calendar is not connected. The user needs to sign in with Google first.\n"
-                "They can do this at: https://app.malibupoint.dev/api/v1/google/auth-url"
+                "They can do this at: https://app.malibupoint.dev/connect/google"
             )
 
         title = params.get("title", "")
@@ -459,7 +459,7 @@ class ListCalendarEventsTool(BaseTool):
         if not tokens:
             return (
                 "Google Calendar is not connected. The user needs to sign in with Google first.\n"
-                "They can do this at: https://app.malibupoint.dev/api/v1/google/auth-url"
+                "They can do this at: https://app.malibupoint.dev/connect/google"
             )
 
         start_date = params.get("start_date", "")
@@ -1363,7 +1363,7 @@ class GoogleDriveTool(BaseTool):
         if not tokens:
             return (
                 "Google Drive is not connected. The user needs to sign in with Google first.\n"
-                "They can do this at: https://app.malibupoint.dev/api/v1/google/auth-url"
+                "They can do this at: https://app.malibupoint.dev/connect/google"
             )
 
         action = params.get("action", "list")

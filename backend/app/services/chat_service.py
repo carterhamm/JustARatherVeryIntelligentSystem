@@ -237,7 +237,7 @@ def _get_tool_status(user_prefs: dict | None = None) -> str:
     if google_ok:
         lines.append("- Gmail/Calendar/Drive/Sheets: CONNECTED (user's Google account linked)")
     else:
-        lines.append("- Gmail/Calendar/Drive/Sheets: NOT CONNECTED — tell user to visit https://app.malibupoint.dev/api/v1/google/auth-url to connect")
+        lines.append("- Gmail/Calendar/Drive/Sheets: NOT CONNECTED — tell user to visit https://app.malibupoint.dev/connect/google to connect")
 
     # Web search
     lines.append("- Web search: CONNECTED (Gemini grounding)")
