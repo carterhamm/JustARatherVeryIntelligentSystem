@@ -674,7 +674,7 @@ class WebSearchTool(BaseTool):
         import httpx
 
         # Try multiple models in case one is down
-        models = ["gemini-2.5-flash", "gemini-2.5-pro"]
+        models = ["gemini-3.1-flash-lite-preview", "gemini-2.5-flash"]
         last_exc = None
 
         for model in models:
@@ -2348,7 +2348,7 @@ class SportsTool(BaseTool):
         import httpx
 
         # Try multiple models for resilience
-        models = ["gemini-2.5-flash", "gemini-2.5-pro"]
+        models = ["gemini-3.1-flash-lite-preview", "gemini-2.5-flash"]
 
         for model in models:
             try:

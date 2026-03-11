@@ -63,8 +63,9 @@ async def get_weather(
     prefs = current_user.preferences or {}
     location = prefs.get("current_location", {})
     city = location.get("city", "Orem")
-    state = location.get("state", "Utah")
-    location_str = f"{city}, {state}" if state else city
+    country = location.get("country", "US")
+    # OWM wants "City,CountryCode" format (NOT state names/abbreviations)
+    location_str = f"{city},{country}" if country else city
 
     try:
         async with WeatherClient() as client:

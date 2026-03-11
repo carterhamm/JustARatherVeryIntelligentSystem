@@ -7,7 +7,7 @@ Token (SETUP_TOKEN) and is locked after the first user is created.
 import logging
 from typing import Any
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 
 logger = logging.getLogger(__name__)
 from sqlalchemy import func, select
@@ -151,8 +151,8 @@ async def passkey_login_begin(
 @router.post("/login/complete")
 async def passkey_login_complete(
     payload: PasskeyLoginCompleteRequest,
+    request: Request,
     db: AsyncSession = Depends(get_db),
-    x_device_trust: str | None = Header(None),
 ) -> AuthResponse | dict:
     """Complete WebAuthn authentication, return tokens with user data.
 
@@ -169,17 +169,21 @@ async def passkey_login_complete(
     if user:
         prefs = user.preferences or {}
         if prefs.get("totp_enabled"):
-            # Check for valid device trust token (skip TOTP if trusted)
-            if x_device_trust:
+            # Read device trust from header directly (bypass FastAPI Header() mapping)
+            device_trust = request.headers.get("x-device-trust")
+            logger.info("Device trust header present: %s (user=%s)", bool(device_trust), user.id)
+            if device_trust:
                 try:
-                    trust_data = decode_token(x_device_trust)
+                    trust_data = decode_token(device_trust)
+                    logger.info("Device trust decoded: type=%s, sub=%s, user=%s",
+                                trust_data.type, trust_data.sub, user.id)
                     if trust_data.type == "device_trust" and trust_data.sub == str(user.id):
-                        logger.info("Device trust valid for user %s — skipping TOTP", user.id)
+                        logger.info("Device trust valid — skipping TOTP for user %s", user.id)
                         return auth_response
                     logger.warning("Device trust token mismatch: type=%s, sub=%s vs user=%s",
                                    trust_data.type, trust_data.sub, user.id)
                 except Exception as exc:
-                    logger.info("Device trust token invalid/expired: %s", exc)
+                    logger.warning("Device trust token invalid/expired: %s", exc)
             totp_token = create_totp_pending_token(user.id)
             return {"needs_totp": True, "totp_token": totp_token}
     return auth_response
