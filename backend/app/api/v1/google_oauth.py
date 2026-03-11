@@ -101,13 +101,17 @@ async def get_auth_url(
         state=str(current_user.id),  # Pass user ID through the state param
     )
 
-    # Store state in Redis for CSRF protection
+    # Store state + PKCE code_verifier in Redis (needed for token exchange)
     try:
         from app.db.redis import get_redis_client
         redis = await get_redis_client()
+        state_data = json.dumps({
+            "user_id": str(current_user.id),
+            "code_verifier": getattr(flow, "code_verifier", None),
+        })
         await redis.cache_set(
             f"google_oauth_state:{state}",
-            str(current_user.id),
+            state_data,
             ttl=600,  # 10 minute expiry
         )
     except Exception:
@@ -142,21 +146,30 @@ async def oauth_callback(
             status_code=400,
         )
 
-    # Verify state and get user ID
-    user_id = state  # State contains the user ID
+    # Verify state and restore PKCE code_verifier from Redis
+    user_id = state  # Fallback: state contains user ID
+    code_verifier = None
     try:
         from app.db.redis import get_redis_client
         redis = await get_redis_client()
-        stored_user_id = await redis.cache_get(f"google_oauth_state:{state}")
-        if stored_user_id:
-            user_id = stored_user_id
+        stored_raw = await redis.cache_get(f"google_oauth_state:{state}")
+        if stored_raw:
+            try:
+                state_data = json.loads(stored_raw)
+                user_id = state_data.get("user_id", state)
+                code_verifier = state_data.get("code_verifier")
+            except (json.JSONDecodeError, TypeError):
+                # Legacy format: plain user_id string
+                user_id = stored_raw
             await redis.cache_delete(f"google_oauth_state:{state}")
     except Exception:
         logger.warning("Could not verify OAuth state via Redis", exc_info=True)
 
-    # Exchange code for tokens
+    # Exchange code for tokens (restore PKCE code_verifier)
     try:
         flow = _build_oauth_flow()
+        if code_verifier:
+            flow.code_verifier = code_verifier
         flow.fetch_token(code=code)
         credentials = flow.credentials
 
