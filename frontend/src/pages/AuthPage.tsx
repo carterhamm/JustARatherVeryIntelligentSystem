@@ -471,7 +471,7 @@ export default function AuthPage() {
       })}
 
       {/* Auth Card */}
-      <div className="relative z-10 w-full max-w-2xl mx-5">
+      <div className="relative z-10 w-full max-w-xl mx-5">
         {/* Header label */}
         <div ref={headerRef} className="text-center mb-5 opacity-0">
           <span className="hud-label text-[10px]">STARK INDUSTRIES — SECURE ACCESS TERMINAL</span>
@@ -480,7 +480,7 @@ export default function AuthPage() {
         {/* Main panel — HUD bezel frame */}
         <div ref={cardRef} className="opacity-0">
         <HudBezel>
-          <div className="px-8 py-8">
+          <div className="px-8 py-8 max-w-sm mx-auto">
           {/* Branding */}
           <div className="text-center mb-6">
             <div className="inline-flex items-center justify-center w-14 h-14 mb-3 rounded-2xl bg-gradient-to-br from-jarvis-blue/15 to-blue-500/10 border border-jarvis-blue/10">

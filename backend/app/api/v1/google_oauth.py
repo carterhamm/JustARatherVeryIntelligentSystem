@@ -191,6 +191,7 @@ async def oauth_callback(
     # Store tokens in user preferences
     try:
         from app.models.user import User
+        from sqlalchemy.orm.attributes import flag_modified
         result = await db.execute(
             __import__("sqlalchemy").select(User).where(
                 User.id == user_id
@@ -198,10 +199,11 @@ async def oauth_callback(
         )
         user = result.scalar_one_or_none()
         if user:
-            prefs = user.preferences or {}
+            prefs = dict(user.preferences or {})
             prefs["google_tokens"] = token_data
             prefs["google_connected"] = True
             user.preferences = prefs
+            flag_modified(user, "preferences")
             await db.commit()
             logger.info("Stored Google OAuth tokens for user %s", user_id)
         else:
@@ -269,19 +271,35 @@ def _success_redirect_page() -> str:
     <title>JARVIS — Google Connected</title>
     <meta http-equiv="refresh" content="2;url=https://app.malibupoint.dev/" />
     <style>
-        body { background: #0a0a0a; color: #00d4ff; font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-               display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-        .card { text-align: center; max-width: 500px; padding: 40px; }
-        h1 { font-size: 24px; margin-bottom: 8px; }
-        p { color: #8899aa; font-size: 16px; line-height: 1.5; }
-        .check { font-size: 64px; margin-bottom: 16px; color: #39ff14; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: #0A0E17; font-family: 'SF Mono', 'Fira Code', monospace;
+               display: flex; align-items: center; justify-content: center; height: 100vh; }
+        .card { text-align: center; padding: 48px 40px;
+                background: rgba(8, 14, 30, 0.9); border: 1px solid rgba(0, 212, 255, 0.15);
+                clip-path: polygon(0 10px, 10px 0, calc(100% - 10px) 0, 100% 10px,
+                                   100% calc(100% - 10px), calc(100% - 10px) 100%,
+                                   10px 100%, 0 calc(100% - 10px)); }
+        .icon { width: 48px; height: 48px; margin: 0 auto 20px;
+                clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+                background: linear-gradient(135deg, rgba(57, 255, 20, 0.25), rgba(0, 212, 255, 0.15));
+                display: flex; align-items: center; justify-content: center; }
+        .icon span { color: #39ff14; font-size: 22px; }
+        .label { font-size: 8px; letter-spacing: 3px; text-transform: uppercase;
+                 color: rgba(0, 212, 255, 0.5); margin-bottom: 12px; }
+        h1 { font-size: 16px; color: #39ff14; letter-spacing: 2px; margin-bottom: 8px;
+             text-shadow: 0 0 20px rgba(57, 255, 20, 0.3); }
+        p { color: rgba(255, 255, 255, 0.4); font-size: 11px; }
+        .bar { width: 60px; height: 2px; margin: 16px auto 0;
+               background: linear-gradient(90deg, transparent, rgba(0, 212, 255, 0.3), transparent); }
     </style>
 </head>
 <body>
     <div class="card">
-        <div class="check">&#10003;</div>
-        <h1>Google Account Connected</h1>
-        <p>Redirecting back to JARVIS...</p>
+        <div class="icon"><span>&#10003;</span></div>
+        <div class="label">System Link Established</div>
+        <h1>GOOGLE CONNECTED</h1>
+        <p>Redirecting to JARVIS...</p>
+        <div class="bar"></div>
     </div>
     <script>setTimeout(function(){ window.location.href = 'https://app.malibupoint.dev/'; }, 1500);</script>
 </body>
@@ -294,21 +312,37 @@ def _error_page(error: str) -> str:
 <head>
     <title>JARVIS — Connection Failed</title>
     <style>
-        body {{ background: #0a0a0a; color: #ff4444; font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-               display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }}
-        .card {{ text-align: center; max-width: 500px; padding: 40px; }}
-        h1 {{ font-size: 24px; margin-bottom: 8px; }}
-        p {{ color: #8899aa; font-size: 16px; line-height: 1.5; }}
-        .x {{ font-size: 64px; margin-bottom: 16px; }}
-        .error {{ color: #ff6666; font-size: 14px; margin-top: 16px; font-family: monospace; }}
+        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+        body {{ background: #0A0E17; font-family: 'SF Mono', 'Fira Code', monospace;
+               display: flex; align-items: center; justify-content: center; height: 100vh; }}
+        .card {{ text-align: center; padding: 48px 40px;
+                background: rgba(8, 14, 30, 0.9); border: 1px solid rgba(255, 68, 68, 0.2);
+                clip-path: polygon(0 10px, 10px 0, calc(100% - 10px) 0, 100% 10px,
+                                   100% calc(100% - 10px), calc(100% - 10px) 100%,
+                                   10px 100%, 0 calc(100% - 10px)); }}
+        .icon {{ width: 48px; height: 48px; margin: 0 auto 20px;
+                clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+                background: linear-gradient(135deg, rgba(255, 68, 68, 0.25), rgba(255, 100, 100, 0.1));
+                display: flex; align-items: center; justify-content: center; }}
+        .icon span {{ color: #ff4444; font-size: 22px; }}
+        .label {{ font-size: 8px; letter-spacing: 3px; text-transform: uppercase;
+                 color: rgba(255, 68, 68, 0.5); margin-bottom: 12px; }}
+        h1 {{ font-size: 16px; color: #ff4444; letter-spacing: 2px; margin-bottom: 8px; }}
+        p {{ color: rgba(255, 255, 255, 0.4); font-size: 11px; margin-bottom: 12px; }}
+        .error {{ color: rgba(255, 100, 100, 0.7); font-size: 10px; padding: 8px 12px;
+                 background: rgba(255, 68, 68, 0.06); border: 1px solid rgba(255, 68, 68, 0.1); }}
+        .bar {{ width: 60px; height: 2px; margin: 16px auto 0;
+               background: linear-gradient(90deg, transparent, rgba(255, 68, 68, 0.3), transparent); }}
     </style>
 </head>
 <body>
     <div class="card">
-        <div class="x">&#10007;</div>
-        <h1>Connection Failed</h1>
-        <p>Something went wrong connecting your Google account.</p>
+        <div class="icon"><span>&#10007;</span></div>
+        <div class="label">Link Failed</div>
+        <h1>CONNECTION ERROR</h1>
+        <p>Could not establish Google link.</p>
         <div class="error">{error}</div>
+        <div class="bar"></div>
     </div>
 </body>
 </html>"""
