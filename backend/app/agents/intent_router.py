@@ -168,7 +168,7 @@ async def route_intent(message: str) -> list[str]:
         logger.debug("Cerebras not configured — sending all tools")
         return []  # empty = send all tools (fallback)
 
-    models = ["llama3.1-8b", "gpt-oss-120b"]
+    models = ["qwen-3-235b-a22b-instruct-2507", "llama3.1-8b"]
 
     for model in models:
         try:
