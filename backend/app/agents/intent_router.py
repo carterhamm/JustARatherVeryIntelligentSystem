@@ -168,7 +168,7 @@ async def route_intent(message: str) -> list[str]:
         logger.debug("Cerebras not configured — sending all tools")
         return []  # empty = send all tools (fallback)
 
-    models = ["qwen-3-235b-a22b-instruct-2507", "gpt-oss-120b"]
+    models = ["llama3.1-8b", "gpt-oss-120b"]
 
     for model in models:
         try:
@@ -182,7 +182,12 @@ async def route_intent(message: str) -> list[str]:
                 temperature=0,
             )
 
-            raw = response.choices[0].message.content.strip().lower()
+            content = response.choices[0].message.content
+            if not content:
+                logger.warning("Cerebras %s returned empty content — trying fallback", model)
+                continue
+
+            raw = content.strip().lower()
             # Handle <think>...</think> tags from reasoning models
             if "<think>" in raw:
                 # Extract content after </think>
@@ -281,7 +286,7 @@ async def classify_sports_intent(message: str) -> dict[str, str]:
 
     import json as _json
 
-    models = ["qwen-3-235b-a22b-instruct-2507", "gpt-oss-120b"]
+    models = ["llama3.1-8b", "gpt-oss-120b"]
 
     for model in models:
         try:
@@ -295,7 +300,12 @@ async def classify_sports_intent(message: str) -> dict[str, str]:
                 temperature=0,
             )
 
-            raw = response.choices[0].message.content.strip()
+            content = response.choices[0].message.content
+            if not content:
+                logger.warning("Cerebras %s returned empty content for sports — trying fallback", model)
+                continue
+
+            raw = content.strip()
 
             # Handle <think>...</think> tags from reasoning models
             if "<think>" in raw:
