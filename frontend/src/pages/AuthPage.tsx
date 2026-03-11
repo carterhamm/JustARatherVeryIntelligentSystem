@@ -6,6 +6,144 @@ import { Loader2, Shield, Fingerprint, User, Mail, ArrowRight, AlertTriangle, Ch
 import gsap from 'gsap';
 import clsx from 'clsx';
 
+// ── HUD Bezel Frame ──────────────────────────────────────────────────
+// Techno-industrial bezel with double-stepped notched corners,
+// header recess, L-brackets, and accent tabs.
+
+function HudBezel({ children }: { children: React.ReactNode }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [dims, setDims] = useState({ w: 0, h: 0 });
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const update = () => setDims({ w: el.offsetWidth, h: el.offsetHeight });
+    update();
+    const ro = new ResizeObserver((entries) => {
+      const { width, height } = entries[0].contentRect;
+      setDims({ w: Math.round(width), h: Math.round(height) });
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const { w, h } = dims;
+
+  // Double-stepped notch: step1 = small outer ledge, step2 = main notch
+  const S1H = 14, S1V = 5, S2H = 8, S2V = 16;
+  const NW = S1H + S2H; // 22px corner width
+  const NH = S1V + S2V; // 21px corner height
+  const BVL = 12;       // bottom corner bevel
+  // Header recess (trapezoidal dip at top center)
+  const RH = 80, RD = 6, RA = 12;
+
+  const bezelPath = w > 0 ? [
+    // Start after TL notch, go clockwise
+    `M ${NW} 0`,
+    // Top edge → header recess
+    `L ${w / 2 - RH} 0`,
+    `L ${w / 2 - RH + RA} ${RD}`,
+    `L ${w / 2 + RH - RA} ${RD}`,
+    `L ${w / 2 + RH} 0`,
+    // Top edge → TR notch
+    `L ${w - NW} 0`,
+    // TR double-stepped notch
+    `L ${w - S1H} 0`, `L ${w - S1H} ${S1V}`,
+    `L ${w - S2H} ${S1V}`, `L ${w - S2H} ${NH}`,
+    `L ${w} ${NH}`,
+    // Right wall down → BR bevel
+    `L ${w} ${h - BVL}`, `L ${w - BVL} ${h}`,
+    // Bottom edge → BL bevel
+    `L ${BVL} ${h}`, `L 0 ${h - BVL}`,
+    // Left wall up → TL notch
+    `L 0 ${NH}`,
+    // TL double-stepped notch
+    `L ${S2H} ${NH}`, `L ${S2H} ${S1V}`,
+    `L ${S1H} ${S1V}`, `L ${S1H} 0`,
+    'Z',
+  ].join(' ') : '';
+
+  return (
+    <div ref={containerRef} className="relative">
+      {w > 0 && (
+        <svg
+          className="absolute inset-0 w-full h-full pointer-events-none"
+          viewBox={`-6 -6 ${w + 12} ${h + 12}`}
+          style={{ filter: 'drop-shadow(0 0 10px rgba(0, 212, 255, 0.12))' }}
+        >
+          <defs>
+            <linearGradient id="bezelFill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="rgba(8, 14, 30, 0.92)" />
+              <stop offset="100%" stopColor="rgba(4, 8, 20, 0.96)" />
+            </linearGradient>
+          </defs>
+
+          {/* Background fill */}
+          <path d={bezelPath} fill="url(#bezelFill)" />
+          {/* Inner glow stroke */}
+          <path d={bezelPath} fill="none" stroke="rgba(0, 212, 255, 0.05)" strokeWidth="8" />
+          {/* Main border */}
+          <path d={bezelPath} fill="none" stroke="rgba(0, 212, 255, 0.4)" strokeWidth="1.5" />
+
+          {/* ── Corner L-brackets (layered outside main border) ── */}
+          <path d={`M ${NW + 10} -4 L -4 -4 L -4 ${NH + 10}`}
+                fill="none" stroke="rgba(0, 212, 255, 0.2)" strokeWidth="1" />
+          <path d={`M ${w - NW - 10} -4 L ${w + 4} -4 L ${w + 4} ${NH + 10}`}
+                fill="none" stroke="rgba(0, 212, 255, 0.2)" strokeWidth="1" />
+          <path d={`M -4 ${h - BVL - 10} L -4 ${h + 4} L ${BVL + 10} ${h + 4}`}
+                fill="none" stroke="rgba(0, 212, 255, 0.12)" strokeWidth="1" />
+          <path d={`M ${w + 4} ${h - BVL - 10} L ${w + 4} ${h + 4} L ${w - BVL - 10} ${h + 4}`}
+                fill="none" stroke="rgba(0, 212, 255, 0.12)" strokeWidth="1" />
+
+          {/* ── Corner bolts / dots ── */}
+          <circle cx={-3} cy={-3} r="1.5" fill="rgba(0, 212, 255, 0.25)" />
+          <circle cx={w + 3} cy={-3} r="1.5" fill="rgba(0, 212, 255, 0.25)" />
+          <circle cx={-3} cy={h + 3} r="1.5" fill="rgba(0, 212, 255, 0.15)" />
+          <circle cx={w + 3} cy={h + 3} r="1.5" fill="rgba(0, 212, 255, 0.15)" />
+
+          {/* ── Accent tabs (sensor/button protrusions) ── */}
+          {/* Right side */}
+          <rect x={w + 0.5} y={h * 0.3} width="3" height="16"
+                fill="rgba(0, 212, 255, 0.14)" rx="0.5" />
+          <rect x={w + 0.5} y={h * 0.55} width="3" height="12"
+                fill="rgba(0, 212, 255, 0.08)" rx="0.5" />
+          {/* Left side */}
+          <rect x={-3.5} y={h * 0.42} width="3" height="14"
+                fill="rgba(0, 212, 255, 0.1)" rx="0.5" />
+          {/* Bottom edge */}
+          <rect x={w * 0.25} y={h + 0.5} width="16" height="2.5"
+                fill="rgba(0, 212, 255, 0.08)" rx="0.5" />
+          <rect x={w * 0.65} y={h + 0.5} width="16" height="2.5"
+                fill="rgba(0, 212, 255, 0.08)" rx="0.5" />
+          {/* Top edge (flanking the header recess) */}
+          <rect x={NW + 4} y={-3} width="10" height="2"
+                fill="rgba(0, 212, 255, 0.1)" rx="0.5" />
+          <rect x={w - NW - 14} y={-3} width="10" height="2"
+                fill="rgba(0, 212, 255, 0.1)" rx="0.5" />
+
+          {/* ── Header recess accent line ── */}
+          <line x1={w / 2 - RH + RA + 8} y1={RD}
+                x2={w / 2 + RH - RA - 8} y2={RD}
+                stroke="rgba(0, 212, 255, 0.1)" strokeWidth="0.5" />
+
+          {/* ── Structural tick marks along edges ── */}
+          {/* Right side ticks */}
+          <line x1={w - 1} y1={NH + 20} x2={w + 2} y2={NH + 20}
+                stroke="rgba(0, 212, 255, 0.08)" strokeWidth="0.5" />
+          <line x1={w - 1} y1={h - BVL - 20} x2={w + 2} y2={h - BVL - 20}
+                stroke="rgba(0, 212, 255, 0.08)" strokeWidth="0.5" />
+          {/* Left side ticks */}
+          <line x1={-2} y1={NH + 20} x2={1} y2={NH + 20}
+                stroke="rgba(0, 212, 255, 0.08)" strokeWidth="0.5" />
+          <line x1={-2} y1={h - BVL - 20} x2={1} y2={h - BVL - 20}
+                stroke="rgba(0, 212, 255, 0.08)" strokeWidth="0.5" />
+        </svg>
+      )}
+      <div className="relative z-10">{children}</div>
+    </div>
+  );
+}
+
 type AuthStep = 'identify' | 'authenticate' | 'register' | 'totp';
 
 export default function AuthPage() {
@@ -342,8 +480,10 @@ export default function AuthPage() {
           <span className="hud-label text-[10px]">STARK INDUSTRIES — SECURE ACCESS TERMINAL</span>
         </div>
 
-        {/* Main panel */}
-        <div ref={cardRef} className="glass-heavy rounded-3xl p-8 opacity-0">
+        {/* Main panel — HUD bezel frame */}
+        <div ref={cardRef} className="opacity-0">
+        <HudBezel>
+          <div className="px-8 py-8">
           {/* Branding */}
           <div className="text-center mb-6">
             <div className="inline-flex items-center justify-center w-14 h-14 mb-3 rounded-2xl bg-gradient-to-br from-jarvis-blue/15 to-blue-500/10 border border-jarvis-blue/10">
@@ -679,6 +819,8 @@ export default function AuthPage() {
               </button>
             </form>
           )}
+          </div>
+        </HudBezel>
         </div>
 
         {/* Footer */}
