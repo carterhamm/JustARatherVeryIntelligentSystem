@@ -2105,14 +2105,14 @@ class SendIMessageTool(BaseTool):
 # ═════════════════════════════════════════════════════════════════════════
 
 class SportsTool(BaseTool):
-    """Get sports scores, schedules, and standings via ESPN."""
+    """Cerebras-routed sports tool: zero LLM pattern recognition."""
 
     name = "sports"
     description = (
-        "Get sports scores, schedules, standings, and team info via ESPN. "
-        "Supports college football (BYU, etc.), NFL, NBA, MLB, NHL. "
-        "Params: action (str: 'scores' | 'schedule' | 'standings' | 'team'), "
-        "team? (str), sport? (str, default 'football')."
+        "Answer ANY sports question. Pass the user's question as 'query'. "
+        "This tool uses Cerebras to classify the intent and routes to ESPN "
+        "live data or Gemini web search automatically. You do NOT need to "
+        "decide the action — just pass the query."
     )
 
     async def execute(
@@ -2121,47 +2121,156 @@ class SportsTool(BaseTool):
         *,
         state: Optional[AgentState] = None,
     ) -> str:
+        from app.agents.intent_router import classify_sports_intent
         from app.integrations.sports import (
+            detect_sport_for_team,
+            get_recent_team_result,
             get_scoreboard,
             get_schedule,
             get_standings,
             get_team_info,
         )
 
-        action = params.get("action", "scores")
-        team = params.get("team", "BYU")
-        sport = params.get("sport", "football")
+        query = params.get("query", "").strip()
+        if not query:
+            return "No sports query provided."
+
+        # ── Step 1: Cerebras classifies intent (fast, <100ms) ──
+        intent = await classify_sports_intent(query)
+        sub_intent = intent["sub_intent"]
+        team = intent.get("team", "") or params.get("team", "")
+        sport = intent.get("sport", "") or params.get("sport", "")
+
+        # Auto-detect sport from month if Cerebras didn't extract one
+        if not sport and team:
+            sport = detect_sport_for_team(team)
+            if sport == "both":
+                sport = ""  # let handlers below deal with it
+
+        logger.info(
+            "SportsTool: sub_intent=%s team=%s sport=%s query=%s",
+            sub_intent, team, sport, query[:80],
+        )
+
+        # ── Step 2: Route to data source based on sub-intent ──
+
+        # Historical or general → ALWAYS web search (never trust ESPN for past data)
+        if sub_intent in ("historical", "general"):
+            return await self._gemini_search(query)
+
+        # Live scores → ESPN scoreboard
+        if sub_intent == "live_scores":
+            return await self._handle_live_scores(team, sport, query)
+
+        # Recent result → ESPN scoreboard + schedule lookup
+        if sub_intent == "recent_result":
+            return await self._handle_recent_result(team, sport, query)
+
+        # Schedule → ESPN schedule
+        if sub_intent == "schedule":
+            return await self._handle_schedule(team, sport, query)
+
+        # Standings → ESPN standings
+        if sub_intent == "standings":
+            return await self._handle_standings(team, sport, query)
+
+        # Fallback: web search
+        return await self._gemini_search(query)
+
+    # ── ESPN handlers ────────────────────────────────────────────────
+
+    async def _handle_live_scores(self, team: str, sport: str, query: str) -> str:
+        """Check ESPN scoreboard for live/today's games."""
+        from app.integrations.sports import get_scoreboard
+
+        sports_to_check = self._resolve_sports(team, sport)
+
+        for s in sports_to_check:
+            try:
+                games = await get_scoreboard(sport=s, limit=50)
+                if not games:
+                    continue
+
+                # If a specific team is mentioned, filter for it
+                if team:
+                    team_lower = team.lower()
+                    matching = [
+                        g for g in games
+                        if any(team_lower in t["name"].lower() or team_lower in t.get("abbreviation", "").lower()
+                               for t in g.get("teams", []))
+                    ]
+                    if matching:
+                        return self._format_games(matching, s)
+
+                # No specific team or no match — show full scoreboard
+                if games:
+                    return self._format_games(games[:15], s)
+
+            except Exception as exc:
+                logger.debug("Live scores failed for %s: %s", s, exc)
+
+        # ESPN had nothing → web search
+        return await self._gemini_search(query)
+
+    async def _handle_recent_result(self, team: str, sport: str, query: str) -> str:
+        """Find the most recent game result for a team."""
+        from app.integrations.sports import get_recent_team_result
+
+        if not team:
+            # No team specified — web search
+            return await self._gemini_search(query)
+
+        sports_to_check = self._resolve_sports(team, sport)
+        results = []
+
+        for s in sports_to_check:
+            try:
+                recent = await get_recent_team_result(team, s)
+                if recent:
+                    results.append(f"{team.upper()} {s.title()}: {recent}")
+            except Exception as exc:
+                logger.debug("Recent result failed for %s/%s: %s", team, s, exc)
+
+        if results:
+            return "\n\n".join(results)
+
+        # ESPN had nothing → web search
+        return await self._gemini_search(query)
+
+    async def _handle_schedule(self, team: str, sport: str, query: str) -> str:
+        """Get a team's schedule from ESPN."""
+        from app.integrations.sports import get_schedule
+
+        if not team:
+            return await self._gemini_search(query)
+
+        sports_to_check = self._resolve_sports(team, sport)
+
+        for s in sports_to_check:
+            try:
+                games = await get_schedule(team, s)
+                if games:
+                    lines = [f"{team.upper()} {s.title()} Schedule:\n"]
+                    for g in games[:15]:
+                        status = g["result"] if g["completed"] else g.get("status", "Upcoming")
+                        lines.append(f"  {g['shortName'] or g['name']}: {status} — {g['date'][:10]}")
+                    return "\n".join(lines)
+            except Exception as exc:
+                logger.debug("Schedule failed for %s/%s: %s", team, s, exc)
+
+        return await self._gemini_search(query)
+
+    async def _handle_standings(self, team: str, sport: str, query: str) -> str:
+        """Get standings from ESPN."""
+        from app.integrations.sports import get_standings
+
+        if not sport:
+            # Can't get standings without knowing the sport
+            return await self._gemini_search(query)
 
         try:
-            if action == "team":
-                info = await get_team_info(team, sport)
-                lines = [
-                    f"{info['name']} ({info['abbreviation']})",
-                    f"  Record: {info['record']}",
-                ]
-                if info.get("standing"):
-                    lines.append(f"  Standing: {info['standing']}")
-                if info.get("next_game"):
-                    ng = info["next_game"]
-                    lines.append(f"  Next game: {ng.get('shortName', ng.get('name', 'TBD'))} — {ng.get('date', 'TBD')}")
-                return "\n".join(lines)
-
-            elif action == "schedule":
-                season = params.get("season", "")
-                games = await get_schedule(team, sport, season)
-                if not games:
-                    return f"No schedule found for {team} ({sport})."
-                lines = [f"{team.upper()} {sport.title()} Schedule:\n"]
-                for g in games[:15]:
-                    status = g["result"] if g["completed"] else "Upcoming"
-                    lines.append(f"  {g['shortName'] or g['name']}: {status} — {g['date'][:10]}")
-                return "\n".join(lines)
-
-            elif action == "standings":
-                group = params.get("group", "")
-                standings = await get_standings(sport, group)
-                if not standings:
-                    return f"No standings data found for {sport}."
+            standings = await get_standings(sport)
+            if standings:
                 lines = [f"{sport.title()} Standings:\n"]
                 current_group = ""
                 for s in standings[:30]:
@@ -2169,28 +2278,102 @@ class SportsTool(BaseTool):
                         current_group = s["group"]
                         lines.append(f"\n  {current_group}:")
                     conf = f" (Conf: {s['conference']})" if s.get("conference") else ""
-                    lines.append(f"    {s['team']}: {s.get('overall', f'{s.get(\"wins\", \"?\")}-{s.get(\"losses\", \"?\")}')}{conf}")
+                    wins = s.get("wins", "?")
+                    losses = s.get("losses", "?")
+                    record = s.get("overall", f"{wins}-{losses}")
+                    lines.append(f"    {s['team']}: {record}{conf}")
                 return "\n".join(lines)
+        except Exception as exc:
+            logger.debug("Standings failed for %s: %s", sport, exc)
 
-            else:  # scores / scoreboard
-                groups = params.get("groups", "")
-                limit = params.get("limit", 10)
-                games = await get_scoreboard(sport, groups, limit)
-                if not games:
-                    return f"No games on the scoreboard right now for {sport}."
-                lines = [f"{sport.title()} Scoreboard:\n"]
-                for g in games:
-                    teams_str = " vs ".join(
-                        f"{t['name']} {t['score']}" for t in g.get("teams", [])
-                    )
-                    lines.append(f"  {teams_str} — {g['status']}")
-                return "\n".join(lines)
+        return await self._gemini_search(query)
 
-        except ValueError as e:
-            return str(e)
-        except Exception as e:
-            logger.exception("Sports tool error")
-            return f"Sports lookup failed: {e}"
+    # ── Helpers ──────────────────────────────────────────────────────
+
+    def _resolve_sports(self, team: str, sport: str) -> list[str]:
+        """Determine which sport(s) to check. Returns a list to try in order."""
+        from app.integrations.sports import detect_sport_for_team
+
+        if sport:
+            return [sport]
+
+        if team:
+            detected = detect_sport_for_team(team)
+            if detected == "both":
+                return ["basketball", "football"]
+            return [detected]
+
+        # No team or sport — try the seasonal default
+        detected = detect_sport_for_team("")
+        if detected == "both":
+            return ["basketball", "football"]
+        return [detected]
+
+    def _format_games(self, games: list[dict], sport: str) -> str:
+        """Format ESPN scoreboard games into readable text."""
+        lines = [f"{sport.title()} Games:\n"]
+        for g in games:
+            teams_str = " vs ".join(
+                f"{t['name']} {t['score']}" for t in g.get("teams", [])
+            )
+            status = g.get("detail") or g.get("status", "")
+            lines.append(f"  {teams_str} — {status}")
+        return "\n".join(lines)
+
+    async def _gemini_search(self, query: str) -> str:
+        """Use Gemini with Google Search grounding for factual sports data."""
+        from app.config import settings
+
+        logger.info("Sports → Gemini web search: %s", query[:80])
+
+        if not settings.GOOGLE_GEMINI_API_KEY:
+            return f"Cannot search for '{query}' — Gemini API key not configured."
+
+        import httpx
+
+        url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent"
+        payload = {
+            "contents": [{"parts": [{"text": (
+                f"Search the web and provide factual, current information: {query}\n\n"
+                "Return ONLY verified facts from search results. Include scores, dates, "
+                "and specific details. Do NOT guess or use training data — only use "
+                "what you find from the web search."
+            )}]}],
+            "tools": [{"google_search": {}}],
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=20.0) as client:
+                resp = await client.post(
+                    url,
+                    json=payload,
+                    params={"key": settings.GOOGLE_GEMINI_API_KEY},
+                )
+                resp.raise_for_status()
+                data = resp.json()
+
+            candidates = data.get("candidates", [])
+            if candidates:
+                parts = candidates[0].get("content", {}).get("parts", [])
+                texts = [p.get("text", "") for p in parts if p.get("text")]
+                if texts:
+                    return "[Verified via web search]\n" + "\n".join(texts)
+
+        except Exception as exc:
+            logger.warning("Gemini sports search failed: %s", exc)
+
+        # Last resort: try the generic web search tool
+        try:
+            registry = get_tool_registry()
+            search_tool = registry.get("web_search")
+            if search_tool:
+                result = await search_tool.execute({"query": query, "max_results": 3})
+                if result and "unavailable" not in result.lower():
+                    return f"[Via web search]\n{result}"
+        except Exception as exc:
+            logger.warning("Fallback web search failed: %s", exc)
+
+        return f"Could not find current information for: '{query}'"
 
 
 # ═════════════════════════════════════════════════════════════════════════
@@ -2274,22 +2457,54 @@ class NavigateTool(BaseTool):
         if not destination:
             return "Missing 'destination' parameter."
 
-        # Step 1: Get user's current location from Mac Mini Find My
+        # Step 1: Get user's current location
+        # Priority: DB preferences (iOS Shortcut) → Mac Mini Find My → fallback Orem, UT
         origin_str = ""
-        if mini_configured():
+
+        # Try user preferences first (populated by iOS Shortcut → /api/v1/auth/me/location)
+        user_id = (state or {}).get("user_id", "")
+        if user_id:
+            try:
+                from sqlalchemy import select
+                from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession as _AS
+                from sqlalchemy.orm import sessionmaker
+                from app.config import settings
+                from app.models.user import User
+
+                engine = create_async_engine(settings.DATABASE_URL)
+                async_session = sessionmaker(engine, class_=_AS, expire_on_commit=False)
+                async with async_session() as session:
+                    result = await session.execute(select(User).where(User.id == user_id))
+                    user = result.scalar_one_or_none()
+                    if user and user.preferences:
+                        loc_data = user.preferences.get("current_location")
+                        if loc_data and loc_data.get("latitude") and loc_data.get("longitude"):
+                            lat, lng = loc_data["latitude"], loc_data["longitude"]
+                            origin_str = f"{lat},{lng}"
+                            city = loc_data.get("city", "")
+                            logger.info(
+                                "NAVIGATE: Got location from iOS Shortcut (%.4f, %.4f) city=%s updated=%s",
+                                lat, lng, city, loc_data.get("updated_at", "?"),
+                            )
+                await engine.dispose()
+            except Exception as exc:
+                logger.debug("NAVIGATE: DB location check failed: %s", exc)
+
+        # Fallback: Mac Mini Find My
+        if not origin_str and mini_configured():
             loc = await get_location()
             if loc.get("found"):
                 lat, lng = loc["latitude"], loc["longitude"]
                 origin_str = f"{lat},{lng}"
                 logger.info(
-                    "NAVIGATE: Got location (%.4f, %.4f) source=%s updated=%s",
-                    lat, lng, loc.get("source", "?"), loc.get("updated_at", "?"),
+                    "NAVIGATE: Got location from Find My (%.4f, %.4f) source=%s",
+                    lat, lng, loc.get("source", "?"),
                 )
             else:
-                logger.warning("NAVIGATE: Location not found: %s", loc.get("error", "unknown"))
+                logger.warning("NAVIGATE: Find My location not found: %s", loc.get("error", "unknown"))
 
         if not origin_str:
-            # Fallback: Orem, UT (user's home area)
+            # Last resort: Orem, UT (user's home area)
             origin_str = "40.2969,-111.6946"
             logger.info("NAVIGATE: Using fallback location (Orem, UT)")
 
@@ -2506,6 +2721,36 @@ class MacMiniScreenshotTool(BaseTool):
 
 
 # ═════════════════════════════════════════════════════════════════════════
+# Research briefing
+# ═════════════════════════════════════════════════════════════════════════
+
+class ResearchBriefingTool(BaseTool):
+    """Access JARVIS's continuous research findings."""
+
+    name = "research_briefing"
+    description = (
+        "Retrieve JARVIS's own research findings from the continuous learning "
+        "daemon. Topics include: business ideas, tech news, Apple ecosystem, "
+        "Iron Man tech, graphene/nanotech, physics, AI/ML, cybersecurity, "
+        "space tech. Use when Mr. Stark asks 'what have you been learning?' "
+        "or wants a research briefing. "
+        "Params: topic? (str — filter to one topic name), days? (int, default 3)."
+    )
+
+    async def execute(
+        self,
+        params: dict[str, Any],
+        *,
+        state: Optional[AgentState] = None,
+    ) -> str:
+        from app.services.research_daemon import get_research_summary
+
+        topic = params.get("topic", "")
+        days = params.get("days", 3)
+        return await get_research_summary(topic=topic, days=days)
+
+
+# ═════════════════════════════════════════════════════════════════════════
 # Tool registry factory
 # ═════════════════════════════════════════════════════════════════════════
 
@@ -2573,6 +2818,8 @@ def get_tool_registry() -> dict[str, BaseTool]:
             MacMiniExecTool(),
             MacMiniClaudeCodeTool(),
             MacMiniScreenshotTool(),
+            # Research daemon
+            ResearchBriefingTool(),
         ]
         _registry = {t.name: t for t in tools}
     return _registry

@@ -1,13 +1,14 @@
 """
 Sports integration for JARVIS — ESPN public API.
 
-Provides BYU Cougars football (and other sports) scores, schedules,
-and standings via ESPN's free, keyless public endpoints.
+Provides scores, schedules, standings via ESPN's free, keyless endpoints.
+Includes smart fallbacks: scoreboard → team schedule → web search.
 """
 
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import httpx
@@ -21,8 +22,11 @@ _TIMEOUT = 10.0
 _TEAM_IDS = {
     "byu": 252,
     "byu cougars": 252,
+    "brigham young": 252,
     "utah": 254,
+    "utah utes": 254,
     "utah state": 328,
+    "utah state aggies": 328,
 }
 
 # Sport/league paths
@@ -40,6 +44,42 @@ _SPORT_PATHS = {
     "soccer": "soccer/usa.1",
     "mls": "soccer/usa.1",
 }
+
+# Which sport is currently "in season" (rough month ranges)
+_SPORT_SEASONS = {
+    "football": (8, 1),       # Aug–Jan
+    "basketball": (10, 4),    # Oct–Apr (March Madness into April)
+    "mlb": (3, 10),           # Mar–Oct
+    "nhl": (10, 6),           # Oct–Jun
+}
+
+
+def detect_sport_for_team(team: str, explicit_sport: str = "") -> str:
+    """If no sport specified, infer from current month which sport is in season.
+
+    For college teams like BYU, basketball and football are the main two.
+    Returns a single sport. For overlap months (Nov-Jan), returns "both"
+    so the caller can try both.
+    """
+    if explicit_sport:
+        return explicit_sport
+
+    month = datetime.now(tz=timezone.utc).month
+
+    # Overlap months: both football and basketball are active
+    if month in (11, 12, 1):
+        return "both"
+
+    # Basketball only: Feb–Apr (March Madness)
+    if month in (2, 3, 4):
+        return "basketball"
+
+    # Football only: Aug–Oct
+    if month in (8, 9, 10):
+        return "football"
+
+    # Off-season (May–Jul): default basketball (could be NBA playoffs)
+    return "basketball"
 
 
 async def get_team_info(team: str, sport: str = "football") -> dict[str, Any]:
@@ -105,13 +145,23 @@ async def get_schedule(team: str, sport: str = "football", season: str = "") -> 
                 away = c
 
         result = ""
-        if comp.get("status", {}).get("type", {}).get("completed"):
+        status_info = comp.get("status", {}).get("type", {})
+        completed = status_info.get("completed", False)
+        status_desc = status_info.get("description", "")
+
+        if completed:
             home_score = home.get("score", {})
             away_score = away.get("score", {})
             h_val = home_score.get("value", home_score) if isinstance(home_score, dict) else home_score
             a_val = away_score.get("value", away_score) if isinstance(away_score, dict) else away_score
+
+            home_team_id = home.get("id") or home.get("team", {}).get("id", "")
+            is_home = str(team_id) == str(home_team_id)
             winner = home.get("winner", False)
-            result = f"{'W' if winner else 'L'} {h_val}-{a_val}" if str(team_id) == str(home.get("id", "")) else f"{'W' if not winner else 'L'} {a_val}-{h_val}"
+            if is_home:
+                result = f"{'W' if winner else 'L'} {h_val}-{a_val}"
+            else:
+                result = f"{'W' if not winner else 'L'} {a_val}-{h_val}"
 
         games.append({
             "date": ev.get("date", ""),
@@ -120,19 +170,22 @@ async def get_schedule(team: str, sport: str = "football", season: str = "") -> 
             "home": home.get("team", {}).get("displayName", ""),
             "away": away.get("team", {}).get("displayName", ""),
             "result": result,
-            "completed": comp.get("status", {}).get("type", {}).get("completed", False),
+            "completed": completed,
+            "status": status_desc,
         })
 
     return games
 
 
-async def get_scoreboard(sport: str = "football", groups: str = "", limit: int = 10) -> list[dict[str, Any]]:
-    """Get today's scoreboard for a sport/league."""
+async def get_scoreboard(sport: str = "football", groups: str = "", limit: int = 25, dates: str = "") -> list[dict[str, Any]]:
+    """Get scoreboard for a sport/league. Optionally pass dates=YYYYMMDD."""
     sport_path = _SPORT_PATHS.get(sport.lower(), _SPORT_PATHS["football"])
 
     params: dict[str, Any] = {"limit": limit}
     if groups:
         params["groups"] = groups
+    if dates:
+        params["dates"] = dates
 
     async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
         resp = await client.get(f"{_BASE}/{sport_path}/scoreboard", params=params)
@@ -169,6 +222,51 @@ async def get_scoreboard(sport: str = "football", groups: str = "", limit: int =
     return games
 
 
+async def get_recent_team_result(team: str, sport: str = "basketball") -> str | None:
+    """Smart lookup: find the most recent game result for a team.
+
+    Checks scoreboard (today + yesterday) for the team, then falls back to
+    the team schedule for the last completed game.
+
+    Returns a human-readable string or None if nothing found.
+    """
+    team_lower = team.lower().strip()
+    team_id = _resolve_team(team)
+    sport_path = _SPORT_PATHS.get(sport.lower(), _SPORT_PATHS.get("basketball"))
+
+    # 1. Check today's scoreboard
+    now = datetime.now(tz=timezone.utc)
+    today_str = now.strftime("%Y%m%d")
+    yesterday_str = (now - timedelta(days=1)).strftime("%Y%m%d")
+
+    for date_str in [today_str, yesterday_str]:
+        try:
+            games = await get_scoreboard(sport=sport, dates=date_str, limit=50)
+            for g in games:
+                team_names = [t["name"].lower() for t in g.get("teams", [])]
+                team_abbrs = [t["abbreviation"].lower() for t in g.get("teams", [])]
+                if any(team_lower in n or "byu" in n for n in team_names) or any(team_lower in a for a in team_abbrs):
+                    teams = g["teams"]
+                    t1 = f"{teams[0]['name']} {teams[0]['score']}"
+                    t2 = f"{teams[1]['name']} {teams[1]['score']}"
+                    status = g.get("detail") or g.get("status", "")
+                    return f"{t1} vs {t2} — {status} (on {g.get('date', date_str)[:10]})"
+        except Exception as exc:
+            logger.debug("Scoreboard check failed for %s: %s", date_str, exc)
+
+    # 2. Fall back to team schedule — find most recent completed game
+    try:
+        schedule = await get_schedule(team, sport)
+        completed = [g for g in schedule if g["completed"]]
+        if completed:
+            last = completed[-1]
+            return f"{last['name']}: {last['result']} (on {last['date'][:10]})"
+    except Exception as exc:
+        logger.debug("Schedule fallback failed: %s", exc)
+
+    return None
+
+
 async def get_standings(sport: str = "football", group: str = "") -> list[dict[str, Any]]:
     """Get current standings for a sport/league."""
     sport_path = _SPORT_PATHS.get(sport.lower(), _SPORT_PATHS["football"])
@@ -186,12 +284,12 @@ async def get_standings(sport: str = "football", group: str = "") -> list[dict[s
     for group_data in data.get("children", []):
         group_name = group_data.get("name", "")
         for entry in group_data.get("standings", {}).get("entries", []):
-            team = entry.get("team", {})
+            team_data = entry.get("team", {})
             stats = {s["name"]: s.get("displayValue", s.get("value", "")) for s in entry.get("stats", [])}
             standings.append({
                 "group": group_name,
-                "team": team.get("displayName", ""),
-                "abbreviation": team.get("abbreviation", ""),
+                "team": team_data.get("displayName", ""),
+                "abbreviation": team_data.get("abbreviation", ""),
                 "wins": stats.get("wins", ""),
                 "losses": stats.get("losses", ""),
                 "overall": stats.get("overall", ""),

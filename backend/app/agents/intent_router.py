@@ -118,6 +118,10 @@ TOOL_CATEGORIES = {
         "description": "Mac Mini control, remote commands, SSH, shell, screenshot, Claude Code on the Mini, system admin",
         "tools": ["mac_mini_exec", "mac_mini_claude_code", "mac_mini_screenshot"],
     },
+    "research": {
+        "description": "Research briefing, what has JARVIS been learning, research findings, continuous learning updates",
+        "tools": ["research_briefing"],
+    },
 }
 
 _CATEGORY_LIST = "\n".join(
@@ -222,3 +226,108 @@ def get_tools_for_intent(tool_names: list[str], all_tools: list[dict]) -> list[d
         return all_tools
     name_set = set(tool_names)
     return [t for t in all_tools if t["name"] in name_set]
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Sports sub-intent classification (Cerebras)
+# ═══════════════════════════════════════════════════════════════════════════
+
+_SPORTS_ROUTER_PROMPT = """You are a sports query classifier. Given a user message about sports, extract structured intent.
+
+Output ONLY valid JSON with these fields:
+- "sub_intent": one of "live_scores", "recent_result", "schedule", "standings", "historical", "general"
+- "team": team name mentioned (e.g. "BYU", "Utah", "Lakers") or "" if none
+- "sport": sport/league (e.g. "basketball", "football", "nba", "nfl", "mlb") or "" if unclear
+
+Sub-intent definitions:
+- "live_scores": asking about a game happening right now or today
+- "recent_result": asking about a game that already happened (last night, yesterday, last game, how did they do)
+- "schedule": asking about upcoming games, when they play next
+- "standings": asking about rankings, standings, conference position
+- "historical": asking about past seasons, last year, records, history, "how did they do last season"
+- "general": any other sports question (trades, rumors, player stats, injuries, draft)
+
+Rules:
+- Output ONLY the JSON object, nothing else
+- "recent_result" = the user wants to know the outcome of a specific recent game
+- "historical" = anything about a past season or time period (not the current one)
+- "general" = anything that needs a web search to answer properly
+- When in doubt between "recent_result" and "historical", pick "historical" (safer — triggers web search)
+- If the user says "how did X do" without specifying a timeframe, use "recent_result"
+- If the user says "how did X do last year/season", use "historical"
+
+Examples:
+"Did BYU win?" → {"sub_intent": "recent_result", "team": "BYU", "sport": "basketball"}
+"BYU football schedule" → {"sub_intent": "schedule", "team": "BYU", "sport": "football"}
+"How did BYU do last year?" → {"sub_intent": "historical", "team": "BYU", "sport": ""}
+"What's the Big 12 standings?" → {"sub_intent": "standings", "team": "", "sport": "basketball"}
+"Is there a game on right now?" → {"sub_intent": "live_scores", "team": "", "sport": ""}
+"Who won the Super Bowl?" → {"sub_intent": "historical", "team": "", "sport": "nfl"}
+"What's BYU's record?" → {"sub_intent": "standings", "team": "BYU", "sport": ""}"""
+
+
+async def classify_sports_intent(message: str) -> dict[str, str]:
+    """Use Cerebras to classify a sports query into sub-intent + entities.
+
+    Returns: {"sub_intent": str, "team": str, "sport": str}
+    Falls back to {"sub_intent": "general", "team": "", "sport": ""} on failure.
+    """
+    client = _get_client()
+    fallback = {"sub_intent": "general", "team": "", "sport": ""}
+
+    if not client:
+        logger.debug("Cerebras not configured — sports intent defaults to general")
+        return fallback
+
+    import json as _json
+
+    models = ["qwen-3-235b-a22b-instruct-2507", "gpt-oss-120b"]
+
+    for model in models:
+        try:
+            response = await client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": _SPORTS_ROUTER_PROMPT},
+                    {"role": "user", "content": message},
+                ],
+                max_tokens=100,
+                temperature=0,
+            )
+
+            raw = response.choices[0].message.content.strip()
+
+            # Handle <think>...</think> tags from reasoning models
+            if "<think>" in raw:
+                think_end = raw.rfind("</think>")
+                if think_end != -1:
+                    raw = raw[think_end + 8:].strip()
+
+            # Extract JSON from response (might have markdown fences)
+            if "```" in raw:
+                raw = raw.split("```")[1]
+                if raw.startswith("json"):
+                    raw = raw[4:]
+                raw = raw.strip()
+
+            result = _json.loads(raw)
+            # Validate required fields
+            sub_intent = result.get("sub_intent", "general")
+            valid_intents = {"live_scores", "recent_result", "schedule", "standings", "historical", "general"}
+            if sub_intent not in valid_intents:
+                sub_intent = "general"
+
+            classified = {
+                "sub_intent": sub_intent,
+                "team": result.get("team", ""),
+                "sport": result.get("sport", ""),
+            }
+            logger.info("Sports sub-intent: %s (team=%s, sport=%s)", classified["sub_intent"], classified["team"], classified["sport"])
+            return classified
+
+        except Exception as exc:
+            logger.warning("Cerebras sports classification (%s) failed: %s", model, exc)
+            continue
+
+    logger.warning("All Cerebras models failed for sports classification — defaulting to general")
+    return fallback

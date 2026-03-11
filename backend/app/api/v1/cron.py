@@ -260,3 +260,108 @@ async def set_morning_config(
         await r.cache_set("jarvis:morning:enabled", str(payload["enabled"]).lower(), ttl=86400 * 365)
 
     return {"status": "updated"}
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Research daemon
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+@router.post("/research-cycle")
+async def research_cycle(
+    current_user: User = Depends(get_current_active_user_or_service),
+) -> dict[str, Any]:
+    """Execute one iteration of the JARVIS research daemon.
+
+    Picks the next topic in rotation, runs web searches, summarises via
+    Gemini, and stores findings in Redis with 7-day TTL.
+
+    Meant to be called by a Railway cron service (e.g. every 4 hours).
+    """
+    from app.services.research_daemon import run_research_cycle
+
+    logger.info("Research cycle triggered by user=%s", current_user.username)
+    result = await run_research_cycle()
+    return result
+
+
+@router.get("/research-findings")
+async def research_findings(
+    topic: str = "",
+    days: int = 3,
+    current_user: User = Depends(get_current_active_user_or_service),
+) -> dict[str, Any]:
+    """Return recent research findings, optionally filtered by topic."""
+    from app.services.research_daemon import get_all_topic_names, get_research_summary
+
+    summary = await get_research_summary(topic=topic, days=days)
+    topics = await get_all_topic_names()
+
+    return {
+        "summary": summary,
+        "available_topics": topics,
+        "filter": {"topic": topic or "(all)", "days": days},
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Heartbeat — proactive monitoring every 15 minutes
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+@router.post("/heartbeat")
+async def heartbeat_cron(
+    current_user: User = Depends(get_current_active_user_or_service),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Execute a single JARVIS heartbeat cycle.
+
+    Checks email, calendar, weather, reminders, and research findings.
+    Contacts the owner via iMessage (work hours), Twilio call (off hours),
+    or silently logs (nighttime DND).
+
+    Protected by SERVICE_API_KEY or JWT — meant to be called by Railway cron
+    every 15 minutes.
+    """
+    from app.services.heartbeat import run_heartbeat
+
+    logger.info("Heartbeat triggered by user=%s", current_user.username)
+    try:
+        result = await run_heartbeat(db)
+    except Exception as exc:
+        logger.exception("Heartbeat failed: %s", exc)
+        raise HTTPException(status_code=500, detail=f"Heartbeat error: {exc}")
+    return result
+
+
+@router.get("/heartbeat/status")
+async def heartbeat_status(
+    current_user: User = Depends(get_current_active_user_or_service),
+) -> dict[str, Any]:
+    """Return the latest heartbeat result and today's log."""
+    from datetime import datetime as _dt
+    from app.services.heartbeat import get_contact_method, _MTN
+    import json as _json
+
+    r = await get_redis_client()
+
+    # Current contact method
+    now = _dt.now(tz=_MTN)
+    method = get_contact_method(now)
+
+    # Last result
+    last_raw = await r.cache_get("jarvis:heartbeat:last_result")
+    last_result = _json.loads(last_raw) if last_raw else None
+
+    # Today's log
+    today = now.strftime("%Y-%m-%d")
+    log_raw = await r.cache_get(f"jarvis:heartbeat:log:{today}")
+    today_log = _json.loads(log_raw) if log_raw else []
+
+    return {
+        "current_time": now.strftime("%I:%M %p %Z"),
+        "current_contact_method": method,
+        "last_heartbeat": last_result,
+        "today_log": today_log,
+        "today_run_count": len(today_log),
+    }

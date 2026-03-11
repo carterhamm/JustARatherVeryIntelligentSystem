@@ -697,46 +697,24 @@ _TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "required": ["to", "text"],
         },
     },
-    # -- Sports (ESPN) -------------------------------------------------
+    # -- Sports (Cerebras-routed: ESPN + Gemini web search) ----------------
     {
         "name": "sports",
         "description": (
-            "Get sports scores, schedules, standings, and team info via ESPN. "
-            "Supports college football (BYU Cougars, etc.), NFL, NBA, MLB, NHL, college basketball."
+            "Answer any sports question. Just pass the user's question as 'query'. "
+            "The tool automatically classifies the intent and fetches real data "
+            "from ESPN or web search. Do NOT try to answer sports questions yourself — "
+            "ALWAYS use this tool and relay its response verbatim."
         ),
         "input_schema": {
             "type": "object",
             "properties": {
-                "action": {
+                "query": {
                     "type": "string",
-                    "enum": ["scores", "schedule", "standings", "team"],
-                    "description": "Sports action to perform.",
-                },
-                "team": {
-                    "type": "string",
-                    "description": "Team name (e.g. 'BYU', 'Utah'). Defaults to BYU.",
-                    "default": "BYU",
-                },
-                "sport": {
-                    "type": "string",
-                    "description": "Sport/league (e.g. 'football', 'basketball', 'nfl', 'nba', 'mlb').",
-                    "default": "football",
-                },
-                "season": {
-                    "type": "string",
-                    "description": "Season year (e.g. '2025'). Defaults to current.",
-                },
-                "groups": {
-                    "type": "string",
-                    "description": "Conference group ID for scoreboard filtering.",
-                },
-                "limit": {
-                    "type": "integer",
-                    "description": "Max results for scoreboard.",
-                    "default": 10,
+                    "description": "The user's sports question in natural language. Pass it exactly as they asked it.",
                 },
             },
-            "required": ["action"],
+            "required": ["query"],
         },
     },
     # -- Scripture Lookup -----------------------------------------------
@@ -860,6 +838,34 @@ _TOOL_DEFINITIONS: list[dict[str, Any]] = [
                     "type": "boolean",
                     "description": "Return smaller image (1024px wide). Default true.",
                     "default": True,
+                },
+            },
+            "required": [],
+        },
+    },
+    # -- Research Briefing -----------------------------------------------
+    {
+        "name": "research_briefing",
+        "description": (
+            "Retrieve JARVIS's own research findings from the continuous learning daemon. "
+            "Topics: business_ideas, tech_industry, apple_tech, iron_man_tech, "
+            "graphene_nanotech, physics, ai_ml, cybersecurity, space_tech. "
+            "Use when the user asks what JARVIS has been learning or wants a research update."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "topic": {
+                    "type": "string",
+                    "description": (
+                        "Filter to a specific topic (e.g. 'ai_ml', 'physics'). "
+                        "Omit or leave empty for all topics."
+                    ),
+                },
+                "days": {
+                    "type": "integer",
+                    "description": "How many days back to include findings.",
+                    "default": 3,
                 },
             },
             "required": [],
