@@ -29,9 +29,35 @@ _MTN = zoneinfo.ZoneInfo("America/Denver")
 @router.get("/weather")
 async def get_weather(
     current_user: User = Depends(get_current_active_user),
+    lat: float | None = None,
+    lon: float | None = None,
+    db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
-    """Return structured weather data for the user's location."""
+    """Return structured weather data for the user's location.
+
+    Accepts optional lat/lon query params from browser geolocation.
+    If provided, also updates the user's stored location.
+    """
     from app.integrations.weather import WeatherClient
+
+    # If browser sent geolocation, use it and persist
+    use_coords = lat is not None and lon is not None
+
+    if use_coords:
+        # Persist geolocation to user preferences for other services
+        try:
+            prefs = current_user.preferences or {}
+            loc = prefs.get("current_location", {})
+            loc["latitude"] = lat
+            loc["longitude"] = lon
+            loc["source"] = "browser_geolocation"
+            prefs["current_location"] = loc
+            current_user.preferences = prefs
+            from sqlalchemy.orm.attributes import flag_modified
+            flag_modified(current_user, "preferences")
+            await db.commit()
+        except Exception:
+            logger.debug("Could not persist geolocation", exc_info=True)
 
     # Determine location from user preferences or default
     prefs = current_user.preferences or {}
@@ -42,14 +68,23 @@ async def get_weather(
 
     try:
         async with WeatherClient() as client:
-            current = await client.get_current(city=location_str, units="imperial")
+            if use_coords:
+                current = await client.get_current(lat=lat, lon=lon, units="imperial")
+            else:
+                current = await client.get_current(city=location_str, units="imperial")
+
             if "error" in current:
                 return {"error": current["error"], "location": location_str}
 
             # Also get forecast
-            forecast_data = await client.get_forecast(
-                city=location_str, units="imperial", days=3,
-            )
+            if use_coords:
+                forecast_data = await client.get_forecast(
+                    lat=lat, lon=lon, units="imperial", days=3,
+                )
+            else:
+                forecast_data = await client.get_forecast(
+                    city=location_str, units="imperial", days=3,
+                )
             forecast = forecast_data.get("forecast", []) if "error" not in forecast_data else []
 
             return {

@@ -81,11 +81,31 @@ function WeatherWidget() {
   const [data, setData] = useState<WeatherData | null>(null);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(false);
+  const coordsRef = useRef<{ lat: number; lon: number } | null>(null);
+
+  // Request geolocation once on mount
+  useEffect(() => {
+    if ('geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          coordsRef.current = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+        },
+        () => { /* denied or unavailable — fall back to server-side location */ },
+        { enableHighAccuracy: false, timeout: 8000, maximumAge: 600_000 },
+      );
+    }
+  }, []);
 
   const fetchWeather = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await api.get<WeatherData>('/widgets/weather');
+      const params = new URLSearchParams();
+      if (coordsRef.current) {
+        params.set('lat', coordsRef.current.lat.toFixed(4));
+        params.set('lon', coordsRef.current.lon.toFixed(4));
+      }
+      const qs = params.toString();
+      const res = await api.get<WeatherData>(`/widgets/weather${qs ? `?${qs}` : ''}`);
       setData(res);
     } catch {
       setData({ error: 'Failed to fetch weather' });
@@ -95,9 +115,10 @@ function WeatherWidget() {
   }, []);
 
   useEffect(() => {
-    fetchWeather();
+    // Wait briefly for geolocation to resolve before first fetch
+    const timer = setTimeout(fetchWeather, 1500);
     const interval = setInterval(fetchWeather, 10 * 60 * 1000); // 10 min
-    return () => clearInterval(interval);
+    return () => { clearTimeout(timer); clearInterval(interval); };
   }, [fetchWeather]);
 
   if (loading && !data) {
@@ -111,9 +132,12 @@ function WeatherWidget() {
   }
 
   if (data?.error && !data.temperature) {
+    const is401 = data.error.includes('401') || data.error.includes('Unauthorized');
     return (
       <WidgetCard label="WEATHER" onRefresh={fetchWeather}>
-        <p className="text-[10px] text-gray-600 font-mono py-2">Unavailable</p>
+        <p className="text-[10px] text-gray-600 font-mono py-2">
+          {is401 ? 'API key activating — may take up to 2 hours' : 'Unavailable'}
+        </p>
       </WidgetCard>
     );
   }

@@ -168,7 +168,7 @@ async def route_intent(message: str) -> list[str]:
         logger.debug("Cerebras not configured — sending all tools")
         return []  # empty = send all tools (fallback)
 
-    models = ["qwen-3-235b-a22b-instruct-2507", "llama3.1-8b"]
+    models = ["llama3.1-8b", "qwen-3-235b-a22b-instruct-2507"]
 
     for model in models:
         try:
@@ -286,7 +286,7 @@ async def classify_sports_intent(message: str) -> dict[str, str]:
 
     import json as _json
 
-    models = ["qwen-3-235b-a22b-instruct-2507", "llama3.1-8b"]
+    models = ["llama3.1-8b", "qwen-3-235b-a22b-instruct-2507"]
 
     for model in models:
         try:
