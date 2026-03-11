@@ -79,6 +79,7 @@ class LookupResponse(BaseModel):
     exists: bool
     user_id: Optional[UUID] = None
     username: Optional[str] = None
+    full_name: Optional[str] = None
     totp_enabled: bool = False
 
 

@@ -287,6 +287,7 @@ class AuthService:
                 "exists": True,
                 "user_id": user.id,
                 "username": user.username,
+                "full_name": user.full_name,
                 "totp_enabled": bool(prefs.get("totp_enabled")),
             }
         return {"exists": False}

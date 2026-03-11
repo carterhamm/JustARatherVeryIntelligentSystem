@@ -18,6 +18,7 @@ interface LookupResponse {
   exists: boolean;
   user_id?: string;
   username?: string;
+  full_name?: string;
   totp_enabled?: boolean;
 }
 

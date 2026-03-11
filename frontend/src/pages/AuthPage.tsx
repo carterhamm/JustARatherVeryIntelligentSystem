@@ -144,6 +144,7 @@ export default function AuthPage() {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [existingUsername, setExistingUsername] = useState('');
+  const [existingFullName, setExistingFullName] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [setupToken, setSetupToken] = useState('');
@@ -162,6 +163,21 @@ export default function AuthPage() {
   const cardRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLDivElement>(null);
   const footerRef = useRef<HTMLDivElement>(null);
+  const passkeyAutoTriggered = useRef(false);
+
+  // Auto-trigger passkey popup when arriving at authenticate step
+  useEffect(() => {
+    if (step === 'authenticate' && !isLoading && !passkeyAutoTriggered.current) {
+      passkeyAutoTriggered.current = true;
+      const handler = pendingTotpCode ? handleAuthenticateWithTotp : handleAuthenticate;
+      // Small delay so the UI renders first
+      const t = setTimeout(handler, 300);
+      return () => clearTimeout(t);
+    }
+    if (step !== 'authenticate') {
+      passkeyAutoTriggered.current = false;
+    }
+  }, [step]);
 
   // GSAP boot-up sequence
   useEffect(() => {
@@ -224,6 +240,7 @@ export default function AuthPage() {
       const result = await lookup(trimmed);
       if (result.exists) {
         setExistingUsername(result.username || trimmed);
+        setExistingFullName(result.full_name || result.username || trimmed);
         setUserHasTotp(!!result.totp_enabled);
         if (result.totp_enabled) {
           // Skip TOTP step if we have a device trust token (backend validates it)
@@ -588,12 +605,9 @@ export default function AuthPage() {
           {step === 'authenticate' && (
             <div className="space-y-4">
               <div className="text-center">
-                <div className="inline-flex items-center justify-center w-12 h-12 rounded-full glass-cyan mb-3">
-                  <Fingerprint size={24} className="text-jarvis-blue" />
-                </div>
                 <p className="text-sm text-gray-300">
                   Welcome back,{' '}
-                  <span className="text-jarvis-gold font-semibold">{existingUsername}</span>
+                  <span className="text-jarvis-gold font-semibold">{existingFullName}</span>
                 </p>
                 <p className="text-xs text-gray-500 mt-1">Authenticate with your passkey</p>
               </div>
