@@ -198,7 +198,7 @@ export default function AuthPage() {
   // Particles
   const particles = useMemo(
     () =>
-      Array.from({ length: 40 }, (_, i) => ({
+      Array.from({ length: 20 }, (_, i) => ({
         id: i,
         left: `${(i * 17 + 3) % 100}%`,
         top: `${(i * 23 + 7) % 100}%`,
@@ -412,7 +412,7 @@ export default function AuthPage() {
             backgroundImage:
               'linear-gradient(rgba(0, 212, 255, 0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 212, 255, 0.5) 1px, transparent 1px)',
             backgroundSize: '60px 60px',
-            animation: 'gridDrift 20s linear infinite',
+            willChange: 'transform',
           }}
         />
         {/* Radial glow */}
@@ -471,7 +471,7 @@ export default function AuthPage() {
       })}
 
       {/* Auth Card */}
-      <div className="relative z-10 w-full max-w-xl mx-5">
+      <div className="relative z-10 w-full max-w-[507px] mx-5">
         {/* Header label */}
         <div ref={headerRef} className="text-center mb-5 opacity-0">
           <span className="hud-label text-[10px]">STARK INDUSTRIES — SECURE ACCESS TERMINAL</span>
@@ -480,7 +480,7 @@ export default function AuthPage() {
         {/* Main panel — HUD bezel frame */}
         <div ref={cardRef} className="opacity-0">
         <HudBezel>
-          <div className="px-8 py-8 max-w-sm mx-auto">
+          <div className="px-8 py-10 min-h-[460px] flex flex-col max-w-sm mx-auto">
           {/* Branding */}
           <div className="text-center mb-6">
             <div className="inline-flex items-center justify-center w-14 h-14 mb-3 rounded-2xl bg-gradient-to-br from-jarvis-blue/15 to-blue-500/10 border border-jarvis-blue/10">
@@ -821,7 +821,7 @@ export default function AuthPage() {
         </div>
 
         {/* Footer */}
-        <div ref={footerRef} className="text-center mt-4 opacity-0">
+        <div ref={footerRef} className="text-center mt-5 opacity-0">
           <div className="hud-divider mb-2">
             <div className="hud-divider-dot" />
           </div>

@@ -8,6 +8,8 @@ import { useUIStore } from '@/stores/uiStore';
 import { api } from '@/services/api';
 import clsx from 'clsx';
 
+const _PANEL_CLIP = 'polygon(10px 0, calc(50% - 70px) 0, calc(50% - 56px) 5px, calc(50% + 56px) 5px, calc(50% + 70px) 0, calc(100% - 10px) 0, 100% 10px, 100% calc(100% - 10px), calc(100% - 10px) 100%, 10px 100%, 0 calc(100% - 10px), 0 10px)';
+
 const MODEL_OPTIONS: { id: ModelProvider; label: string; desc: string; tag: string; color: string }[] = [
   { id: 'claude', label: 'Claude', desc: 'Nuanced reasoning', tag: 'UPLINK', color: '#ff8c00' },
   { id: 'gemini', label: 'Gemini', desc: 'Multimodal Flash', tag: 'UPLINK', color: '#4285F4' },
@@ -219,7 +221,20 @@ export default function SettingsPanel() {
             transition={{ type: 'spring', damping: 28, stiffness: 350 }}
             className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none"
           >
-            <div className="glass-heavy rounded-3xl w-full max-w-lg mx-4 pointer-events-auto overflow-hidden">
+            <div className="relative w-full max-w-lg mx-4 pointer-events-auto">
+              {/* Border layer */}
+              <div className="absolute -inset-px pointer-events-none" style={{
+                background: 'rgba(0, 212, 255, 0.12)',
+                clipPath: _PANEL_CLIP,
+              }} />
+              {/* Content */}
+              <div className="relative" style={{
+                background: 'rgba(6, 8, 20, 0.92)',
+                backdropFilter: 'blur(32px) saturate(1.4)',
+                WebkitBackdropFilter: 'blur(32px) saturate(1.4)',
+                clipPath: _PANEL_CLIP,
+                boxShadow: '0 0 40px rgba(0, 0, 0, 0.5)',
+              }}>
               {/* Header + Tabs */}
               <div className="flex items-center justify-between px-6 pt-4 pb-0">
                 <span className="hud-label text-[10px]">SETTINGS</span>
@@ -553,6 +568,7 @@ export default function SettingsPanel() {
                 <p className="text-[8px] text-gray-700 font-mono text-center tracking-wider">
                   Press TAB to cycle sections
                 </p>
+              </div>
               </div>
             </div>
           </motion.div>

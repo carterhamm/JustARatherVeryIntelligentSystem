@@ -5,6 +5,8 @@ import { useSettingsStore, type ModelProvider } from '@/stores/settingsStore';
 import { api } from '@/services/api';
 import clsx from 'clsx';
 
+const _PANEL_CLIP = 'polygon(10px 0, calc(50% - 60px) 0, calc(50% - 48px) 5px, calc(50% + 48px) 5px, calc(50% + 60px) 0, calc(100% - 10px) 0, 100% 10px, 100% calc(100% - 10px), calc(100% - 10px) 100%, 10px 100%, 0 calc(100% - 10px), 0 10px)';
+
 interface ProviderDef {
   id: ModelProvider;
   label: string;
@@ -67,7 +69,20 @@ export default function ModelPickerFloat() {
             transition={{ type: 'spring', damping: 25, stiffness: 350 }}
             className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none"
           >
-            <div className="glass-heavy rounded-3xl w-full max-w-xs mx-4 pointer-events-auto overflow-hidden">
+            <div className="relative w-full max-w-xs mx-4 pointer-events-auto">
+              {/* Border layer */}
+              <div className="absolute -inset-px pointer-events-none" style={{
+                background: 'rgba(0, 212, 255, 0.12)',
+                clipPath: _PANEL_CLIP,
+              }} />
+              {/* Content */}
+              <div className="relative" style={{
+                background: 'rgba(6, 8, 20, 0.92)',
+                backdropFilter: 'blur(32px) saturate(1.4)',
+                WebkitBackdropFilter: 'blur(32px) saturate(1.4)',
+                clipPath: _PANEL_CLIP,
+                boxShadow: '0 0 40px rgba(0, 0, 0, 0.5)',
+              }}>
               {/* Header */}
               <div className="flex items-center justify-between px-5 py-3.5">
                 <span className="hud-label text-[10px]">SELECT MODEL</span>
@@ -80,7 +95,7 @@ export default function ModelPickerFloat() {
               </div>
 
               {/* Provider list */}
-              <div className="px-3 pb-3 space-y-1">
+              <div className="px-3 pb-4 space-y-1">
                 {providers.map((p) => {
                   const isAvail = available.has(p.id);
                   const isSelected = modelPreference === p.id;
@@ -133,6 +148,7 @@ export default function ModelPickerFloat() {
                     </button>
                   );
                 })}
+              </div>
               </div>
             </div>
           </motion.div>

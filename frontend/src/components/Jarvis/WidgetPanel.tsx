@@ -406,43 +406,36 @@ function WidgetCard({
   onRefresh?: () => void;
 }) {
   return (
-    <div className="relative">
-      {/* Border layer — 1px larger, same clip, peeks through as border */}
-      <div className="absolute -inset-px" style={{
-        background: 'rgba(0, 212, 255, 0.08)',
-        clipPath: _WIDGET_CLIP,
-      }} />
-      {/* Content layer */}
-      <div className="relative px-4 py-3 holo-shimmer" style={{
-        background: 'rgba(8, 12, 24, 0.45)',
-        backdropFilter: 'blur(24px) saturate(1.3)',
-        WebkitBackdropFilter: 'blur(24px) saturate(1.3)',
-        clipPath: _WIDGET_CLIP,
-      }}>
-        {/* Corner accent marks */}
-        <svg className="absolute top-0 right-0 w-3 h-3 pointer-events-none" viewBox="0 0 12 12" fill="none">
-          <path d="M0 0 L12 0 L12 12" stroke="rgba(0,212,255,0.15)" strokeWidth="0.5" />
-        </svg>
-        <svg className="absolute bottom-0 left-0 w-3 h-3 pointer-events-none" viewBox="0 0 12 12" fill="none">
-          <path d="M12 12 L0 12 L0 0" stroke="rgba(0,212,255,0.15)" strokeWidth="0.5" />
-        </svg>
+    <div className="relative px-4 py-3" style={{
+      background: 'rgba(8, 12, 24, 0.45)',
+      backdropFilter: 'blur(24px) saturate(1.3)',
+      WebkitBackdropFilter: 'blur(24px) saturate(1.3)',
+      border: '1px solid rgba(0, 212, 255, 0.06)',
+      clipPath: _WIDGET_CLIP,
+    }}>
+      {/* Diagonal border accents at cut corners */}
+      <svg className="absolute top-0 right-0 w-3 h-3 pointer-events-none" viewBox="0 0 12 12" fill="none">
+        <line x1="0" y1="0" x2="12" y2="12" stroke="rgba(0,212,255,0.1)" strokeWidth="1" />
+      </svg>
+      <svg className="absolute bottom-0 left-0 w-3 h-3 pointer-events-none" viewBox="0 0 12 12" fill="none">
+        <line x1="0" y1="0" x2="12" y2="12" stroke="rgba(0,212,255,0.1)" strokeWidth="1" />
+      </svg>
 
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
-            <div className="w-1 h-1 bg-jarvis-blue/40 rotate-45" />
-            <span className="hud-label text-[8px]">{label}</span>
-          </div>
-          {onRefresh && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onRefresh(); }}
-              className="text-gray-700 hover:text-jarvis-blue transition-colors"
-            >
-              <RefreshCw size={9} />
-            </button>
-          )}
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          <div className="w-1 h-1 bg-jarvis-blue/40 rotate-45" />
+          <span className="hud-label text-[8px]">{label}</span>
         </div>
-        {children}
+        {onRefresh && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onRefresh(); }}
+            className="text-gray-700 hover:text-jarvis-blue transition-colors"
+          >
+            <RefreshCw size={9} />
+          </button>
+        )}
       </div>
+      {children}
     </div>
   );
 }
