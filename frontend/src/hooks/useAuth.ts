@@ -103,11 +103,24 @@ export function useAuth() {
     // Step 2: Authenticate with passkey in browser
     const credential = await authenticatePasskey(options);
 
-    // Step 3: Complete authentication on server
-    const response = await api.post<AuthResponse | TOTPRequiredResponse>('/auth/login/complete', {
-      identifier,
-      credential,
+    // Step 3: Complete authentication on server (include device trust if available)
+    const deviceTrust = localStorage.getItem('jarvis_device_trust');
+    const baseUrl = import.meta.env.VITE_API_URL || '/api/v1';
+    const token = useAuthStore.getState().token;
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    if (deviceTrust) headers['X-Device-Trust'] = deviceTrust;
+
+    const resp = await fetch(`${baseUrl}/auth/login/complete`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ identifier, credential }),
     });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ detail: 'Authentication failed.' }));
+      throw { response: { data: err } };
+    }
+    const response: AuthResponse | TOTPRequiredResponse = await resp.json();
 
     // Check if TOTP is required
     if ('needs_totp' in response && response.needs_totp) {
@@ -120,11 +133,15 @@ export function useAuth() {
   }, [storeLogin]);
 
   const verifyTOTPLogin = useCallback(async (totpToken: string, code: string) => {
-    const response = await api.post<AuthResponse>('/auth/login/totp-verify', {
+    const response = await api.post<AuthResponse & { device_trust_token?: string }>('/auth/login/totp-verify', {
       totp_token: totpToken,
       code,
     });
     storeLogin(response.user, response.access_token, response.refresh_token);
+    // Save device trust token so TOTP is skipped for 14 days on this device
+    if (response.device_trust_token) {
+      localStorage.setItem('jarvis_device_trust', response.device_trust_token);
+    }
     return response.user;
   }, [storeLogin]);
 

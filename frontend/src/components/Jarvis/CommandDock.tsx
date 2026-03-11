@@ -8,6 +8,7 @@ import {
   Download,
   Settings,
   Activity,
+  LayoutGrid,
 } from 'lucide-react';
 import { useUIStore } from '@/stores/uiStore';
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -172,15 +173,21 @@ export default function CommandDock() {
           onClick={() => dispatch('jarvis-diagnostics-toggle')}
         />
         <DockIcon
+          icon={LayoutGrid}
+          label="Widgets"
+          index={4}
+          onClick={() => dispatch('jarvis-widgets-toggle')}
+        />
+        <DockIcon
           icon={Brain}
           label="Knowledge"
-          index={4}
+          index={5}
           onClick={() => dispatch('jarvis-knowledge-toggle')}
         />
         <DockIcon
           icon={Download}
           label="Import"
-          index={5}
+          index={6}
           onClick={() => dispatch('jarvis-import-toggle')}
         />
 
@@ -190,7 +197,7 @@ export default function CommandDock() {
         <DockIcon
           icon={Settings}
           label="Settings"
-          index={6}
+          index={7}
           onClick={() => dispatch('jarvis-settings-toggle')}
         />
       </div>

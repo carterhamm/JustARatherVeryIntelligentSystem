@@ -76,6 +76,22 @@ def create_totp_pending_token(subject: str | UUID) -> str:
     return jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
 
 
+def create_device_trust_token(subject: str | UUID) -> str:
+    """Create a long-lived device trust token (14 days).
+
+    After successful TOTP verification, this token is returned to the client.
+    On subsequent logins from the same device, the client sends this token
+    to skip the TOTP step.
+    """
+    expire = datetime.now(timezone.utc) + timedelta(days=14)
+    payload: dict[str, Any] = {
+        "sub": str(subject),
+        "exp": expire,
+        "type": "device_trust",
+    }
+    return jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
+
+
 def decode_token(token: str) -> TokenPayload:
     """Decode and validate a JWT, returning the payload."""
     try:

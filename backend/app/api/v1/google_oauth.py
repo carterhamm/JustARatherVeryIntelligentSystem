@@ -104,7 +104,7 @@ async def get_auth_url(
     # Store state in Redis for CSRF protection
     try:
         from app.db.redis import get_redis_client
-        redis = get_redis_client()
+        redis = await get_redis_client()
         await redis.cache_set(
             f"google_oauth_state:{state}",
             str(current_user.id),
@@ -146,7 +146,7 @@ async def oauth_callback(
     user_id = state  # State contains the user ID
     try:
         from app.db.redis import get_redis_client
-        redis = get_redis_client()
+        redis = await get_redis_client()
         stored_user_id = await redis.cache_get(f"google_oauth_state:{state}")
         if stored_user_id:
             user_id = stored_user_id

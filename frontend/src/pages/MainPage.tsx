@@ -1,6 +1,7 @@
 import StatusBar from '@/components/Jarvis/StatusBar';
 import FloatingChat from '@/components/Jarvis/FloatingChat';
 import CommandDock from '@/components/Jarvis/CommandDock';
+import WidgetPanel from '@/components/Jarvis/WidgetPanel';
 import ModelPickerFloat from '@/components/Jarvis/ModelPickerFloat';
 import SessionsPanel from '@/components/Jarvis/SessionsPanel';
 import DiagnosticsPanel from '@/components/Jarvis/DiagnosticsPanel';
@@ -35,6 +36,7 @@ export default function MainPage() {
       <StatusBar />
       <FloatingChat />
       <CommandDock />
+      <WidgetPanel />
 
       {/* Panel overlays */}
       <ModelPickerFloat />

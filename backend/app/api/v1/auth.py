@@ -14,7 +14,7 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from app.config import settings
 from app.core.dependencies import get_current_active_user, get_current_active_user_or_service, get_db
-from app.core.security import create_access_token, create_refresh_token, create_totp_pending_token, hash_password, verify_password
+from app.core.security import create_access_token, create_device_trust_token, create_refresh_token, create_totp_pending_token, decode_token, hash_password, verify_password
 from app.models.user import User
 from app.schemas.auth import (
     AuthResponse,
@@ -147,12 +147,16 @@ async def passkey_login_begin(
 
 @router.post("/login/complete")
 async def passkey_login_complete(
-    payload: PasskeyLoginCompleteRequest, db: AsyncSession = Depends(get_db),
+    payload: PasskeyLoginCompleteRequest,
+    db: AsyncSession = Depends(get_db),
+    x_device_trust: str | None = Header(None),
 ) -> AuthResponse | dict:
     """Complete WebAuthn authentication, return tokens with user data.
 
     If TOTP 2FA is enabled, returns ``{"needs_totp": true, "totp_token": "..."}``
-    instead of tokens. The client must then call ``/login/totp-verify``.
+    instead of tokens — unless a valid device trust token is provided via
+    the ``X-Device-Trust`` header (issued after prior TOTP verification,
+    valid for 14 days).
     """
     auth_response = await AuthService.complete_authentication(
         db, identifier=payload.identifier, credential=payload.credential,
@@ -162,6 +166,15 @@ async def passkey_login_complete(
     if user:
         prefs = user.preferences or {}
         if prefs.get("totp_enabled"):
+            # Check for valid device trust token (skip TOTP if trusted)
+            if x_device_trust:
+                try:
+                    trust_data = decode_token(x_device_trust)
+                    if trust_data.type == "device_trust" and trust_data.sub == str(user.id):
+                        # Device is trusted — skip TOTP, return full auth
+                        return auth_response
+                except Exception:
+                    pass  # Invalid/expired trust token — require TOTP
             totp_token = create_totp_pending_token(user.id)
             return {"needs_totp": True, "totp_token": totp_token}
     return auth_response
@@ -368,17 +381,19 @@ async def totp_secret(
     return {"secret": prefs["totp_secret"], "enabled": True}
 
 
-@router.post("/login/totp-verify", response_model=AuthResponse)
+@router.post("/login/totp-verify")
 async def totp_login_verify(
     payload: TOTPLoginRequest,
     db: AsyncSession = Depends(get_db),
-) -> AuthResponse:
+) -> dict[str, Any]:
     """Complete login with TOTP code after initial auth returned needs_totp.
 
     The totp_token is a short-lived JWT containing the user_id, issued
     when the initial login detected TOTP was enabled.
+
+    On success, returns the standard auth response PLUS a ``device_trust_token``
+    (14-day JWT) so the client can skip TOTP on future logins from this device.
     """
-    from app.core.security import decode_token
     try:
         token_data = decode_token(payload.totp_token)
         if token_data.type != "totp_pending":
@@ -403,11 +418,16 @@ async def totp_login_verify(
     if not totp.verify(payload.code, valid_window=1):
         raise HTTPException(status_code=403, detail="Invalid TOTP code.")
 
-    return AuthResponse(
+    auth = AuthResponse(
         access_token=create_access_token(user.id),
         refresh_token=create_refresh_token(user.id),
         user=UserResponse.model_validate(user),
     )
+    # Include a device trust token so they don't have to TOTP again for 14 days
+    return {
+        **auth.model_dump(),
+        "device_trust_token": create_device_trust_token(user.id),
+    }
 
 
 # -- Location (iOS Shortcuts / service key) ---------------------------------
