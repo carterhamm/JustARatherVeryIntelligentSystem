@@ -69,10 +69,9 @@ export default function ModelPickerFloat() {
             transition={{ type: 'spring', damping: 25, stiffness: 350 }}
             className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none"
           >
-            <div className="relative w-full max-w-xs mx-4 pointer-events-auto">
-              {/* Border layer */}
-              <div className="absolute -inset-px pointer-events-none" style={{
-                background: 'rgba(0, 212, 255, 0.12)',
+            <div className="relative w-full max-w-[360px] mx-4 pointer-events-auto">
+              {/* Beam border layer */}
+              <div className="absolute -inset-px pointer-events-none hud-beam-border" style={{
                 clipPath: _PANEL_CLIP,
               }} />
               {/* Content */}

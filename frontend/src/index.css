@@ -663,6 +663,43 @@
   }
 
   /* ═══════════════════════════════════════════════════════════════
+     HUD BORDER BEAM — rotating conic gradient edge glow
+     ═══════════════════════════════════════════════════════════════ */
+
+  @property --beam-angle {
+    syntax: "<angle>";
+    initial-value: 0deg;
+    inherits: false;
+  }
+
+  @keyframes beamRotate {
+    to { --beam-angle: 360deg; }
+  }
+
+  .hud-beam-border {
+    background: conic-gradient(
+      from var(--beam-angle),
+      rgba(0, 212, 255, 0.06) 0%,
+      transparent 8%,
+      transparent 42%,
+      rgba(0, 212, 255, 0.5) 50%,
+      transparent 58%,
+      transparent 92%,
+      rgba(0, 212, 255, 0.06) 100%
+    );
+    animation: beamRotate 6s linear infinite;
+    will-change: background;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
+     FOCUS — replace native blue outline with JARVIS style
+     ═══════════════════════════════════════════════════════════════ */
+
+  *:focus {
+    outline: none;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
      NOISE TEXTURE — subtle CRT noise
      ═══════════════════════════════════════════════════════════════ */
 

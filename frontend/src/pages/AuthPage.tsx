@@ -487,6 +487,13 @@ export default function AuthPage() {
         );
       })}
 
+      {/* Error pill — floating at top */}
+      {error && (
+        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-50 px-5 py-2 rounded-full bg-hud-red/10 border border-hud-red/25 text-hud-red text-xs font-mono text-center max-w-md animate-[fadeIn_0.2s_ease-out]">
+          {error.replace(/\s*See:.*$/i, '')}
+        </div>
+      )}
+
       {/* Auth Card */}
       <div className="relative z-10 w-full max-w-[520px] mx-5">
         {/* Header label */}
@@ -550,13 +557,6 @@ export default function AuthPage() {
             <div className="mb-4 px-4 py-2.5 rounded-xl bg-hud-amber/10 border border-hud-amber/20 flex items-center gap-2">
               <AlertTriangle size={14} className="text-hud-amber flex-shrink-0" />
               <span className="text-xs text-hud-amber">Passkeys not supported in this browser.</span>
-            </div>
-          )}
-
-          {/* Error */}
-          {error && (
-            <div className="mb-4 px-4 py-2.5 rounded-xl bg-hud-red/10 border border-hud-red/20 text-hud-red text-xs text-center">
-              {error}
             </div>
           )}
 
@@ -633,7 +633,7 @@ export default function AuthPage() {
                   setStep('identify');
                   setError('');
                 }}
-                className="w-full text-center text-xs text-gray-500 hover:text-gray-300 transition-colors mt-2"
+                className="w-full text-center text-xs text-gray-500 hover:text-gray-300 transition-colors mt-1"
               >
                 Use a different account
               </button>

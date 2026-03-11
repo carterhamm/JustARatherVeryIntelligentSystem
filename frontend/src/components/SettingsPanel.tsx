@@ -222,9 +222,8 @@ export default function SettingsPanel() {
             className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none"
           >
             <div className="relative w-full max-w-lg mx-4 pointer-events-auto">
-              {/* Border layer */}
-              <div className="absolute -inset-px pointer-events-none" style={{
-                background: 'rgba(0, 212, 255, 0.12)',
+              {/* Beam border layer */}
+              <div className="absolute -inset-px pointer-events-none hud-beam-border" style={{
                 clipPath: _PANEL_CLIP,
               }} />
               {/* Content */}
@@ -308,20 +307,47 @@ export default function SettingsPanel() {
                     )}
 
                     {/* Preferences */}
-                    <div className="space-y-2">
-                      <ToggleRow
-                        icon={voiceEnabled ? Volume2 : VolumeX}
-                        label="Voice Responses"
-                        sublabel={modelPreference === 'stark_protocol' ? 'JARVIS Voice (Local)' : 'ElevenLabs TTS'}
-                        enabled={voiceEnabled}
-                        onToggle={() => setVoiceEnabled(!voiceEnabled)}
-                      />
-                      <ToggleRow
-                        icon={Clock}
-                        label="24-Hour Clock"
-                        enabled={use24HourTime}
-                        onToggle={() => setUse24HourTime(!use24HourTime)}
-                      />
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        onClick={() => setVoiceEnabled(!voiceEnabled)}
+                        className="glass-subtle rounded-xl px-3 py-3 text-left"
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          {voiceEnabled ? <Volume2 size={14} className="text-jarvis-gold" /> : <VolumeX size={14} className="text-gray-600" />}
+                          <div className={clsx('relative w-8 h-[18px] rounded-full transition-colors', {
+                            'bg-jarvis-blue/20 border border-jarvis-blue/30': voiceEnabled,
+                            'bg-gray-800 border border-gray-700': !voiceEnabled,
+                          })}>
+                            <div className={clsx('absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full transition-all', {
+                              'bg-jarvis-blue left-[14px]': voiceEnabled,
+                              'bg-gray-600 left-0.5': !voiceEnabled,
+                            })} />
+                          </div>
+                        </div>
+                        <span className="text-[11px] text-gray-300 block leading-tight">Voice Responses</span>
+                        <span className="text-[9px] text-gray-600 font-mono">
+                          {modelPreference === 'stark_protocol' ? 'Local TTS' : 'ElevenLabs'}
+                        </span>
+                      </button>
+                      <button
+                        onClick={() => setUse24HourTime(!use24HourTime)}
+                        className="glass-subtle rounded-xl px-3 py-3 text-left"
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <Clock size={14} className={use24HourTime ? 'text-jarvis-gold' : 'text-gray-600'} />
+                          <div className={clsx('relative w-8 h-[18px] rounded-full transition-colors', {
+                            'bg-jarvis-blue/20 border border-jarvis-blue/30': use24HourTime,
+                            'bg-gray-800 border border-gray-700': !use24HourTime,
+                          })}>
+                            <div className={clsx('absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full transition-all', {
+                              'bg-jarvis-blue left-[14px]': use24HourTime,
+                              'bg-gray-600 left-0.5': !use24HourTime,
+                            })} />
+                          </div>
+                        </div>
+                        <span className="text-[11px] text-gray-300 block leading-tight">24-Hour Clock</span>
+                        <span className="text-[9px] text-gray-600 font-mono">Time format</span>
+                      </button>
                     </div>
                   </div>
                 )}
