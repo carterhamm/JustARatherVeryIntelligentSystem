@@ -4,9 +4,12 @@ JARVIS is a single-owner system. Registration requires the Secure Handshake
 Token (SETUP_TOKEN) and is locked after the first user is created.
 """
 
+import logging
 from typing import Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
+
+logger = logging.getLogger(__name__)
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -171,10 +174,12 @@ async def passkey_login_complete(
                 try:
                     trust_data = decode_token(x_device_trust)
                     if trust_data.type == "device_trust" and trust_data.sub == str(user.id):
-                        # Device is trusted — skip TOTP, return full auth
+                        logger.info("Device trust valid for user %s — skipping TOTP", user.id)
                         return auth_response
-                except Exception:
-                    pass  # Invalid/expired trust token — require TOTP
+                    logger.warning("Device trust token mismatch: type=%s, sub=%s vs user=%s",
+                                   trust_data.type, trust_data.sub, user.id)
+                except Exception as exc:
+                    logger.info("Device trust token invalid/expired: %s", exc)
             totp_token = create_totp_pending_token(user.id)
             return {"needs_totp": True, "totp_token": totp_token}
     return auth_response

@@ -673,28 +673,44 @@ class WebSearchTool(BaseTool):
 
         import httpx
 
-        url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent"
-        payload = {
-            "contents": [{"parts": [{"text": f"Search the web and answer: {query}"}]}],
-            "tools": [{"google_search": {}}],
-        }
-        async with httpx.AsyncClient(timeout=20.0) as client:
-            resp = await client.post(
-                url,
-                json=payload,
-                params={"key": settings.GOOGLE_GEMINI_API_KEY},
-            )
-            resp.raise_for_status()
-            data = resp.json()
+        # Try multiple models in case one is down
+        models = ["gemini-2.5-flash-preview-05-20", "gemini-2.0-flash"]
+        last_exc = None
 
-        # Extract text from Gemini response
-        candidates = data.get("candidates", [])
-        if candidates:
-            parts = candidates[0].get("content", {}).get("parts", [])
-            texts = [p.get("text", "") for p in parts if p.get("text")]
-            if texts:
-                return f"Web search results for '{query}':\n\n" + "\n".join(texts)
+        for model in models:
+            try:
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+                payload = {
+                    "contents": [{"parts": [{"text": f"Search the web and answer: {query}"}]}],
+                    "tools": [{"google_search": {}}],
+                }
+                async with httpx.AsyncClient(timeout=20.0) as client:
+                    resp = await client.post(
+                        url,
+                        json=payload,
+                        params={"key": settings.GOOGLE_GEMINI_API_KEY},
+                    )
+                    if resp.status_code != 200:
+                        logger.warning("Gemini grounded search %s returned %s: %s", model, resp.status_code, resp.text[:300])
+                        last_exc = RuntimeError(f"HTTP {resp.status_code}")
+                        continue
+                    data = resp.json()
 
+                # Extract text from Gemini response
+                candidates = data.get("candidates", [])
+                if candidates:
+                    parts = candidates[0].get("content", {}).get("parts", [])
+                    texts = [p.get("text", "") for p in parts if p.get("text")]
+                    if texts:
+                        return f"Web search results for '{query}':\n\n" + "\n".join(texts)
+
+                logger.warning("Gemini grounded search %s returned empty candidates for: %s", model, query[:80])
+            except Exception as exc:
+                logger.warning("Gemini grounded search %s failed: %r", model, exc)
+                last_exc = exc
+
+        if last_exc:
+            raise last_exc
         return f"No results found for: '{query}'"
 
 
@@ -2331,36 +2347,43 @@ class SportsTool(BaseTool):
 
         import httpx
 
-        url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent"
-        payload = {
-            "contents": [{"parts": [{"text": (
-                f"Search the web and provide factual, current information: {query}\n\n"
-                "Return ONLY verified facts from search results. Include scores, dates, "
-                "and specific details. Do NOT guess or use training data — only use "
-                "what you find from the web search."
-            )}]}],
-            "tools": [{"google_search": {}}],
-        }
+        # Try multiple models for resilience
+        models = ["gemini-2.5-flash-preview-05-20", "gemini-2.0-flash"]
 
-        try:
-            async with httpx.AsyncClient(timeout=20.0) as client:
-                resp = await client.post(
-                    url,
-                    json=payload,
-                    params={"key": settings.GOOGLE_GEMINI_API_KEY},
-                )
-                resp.raise_for_status()
-                data = resp.json()
+        for model in models:
+            try:
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+                payload = {
+                    "contents": [{"parts": [{"text": (
+                        f"Search the web and provide factual, current information: {query}\n\n"
+                        "Return ONLY verified facts from search results. Include scores, dates, "
+                        "and specific details. Do NOT guess or use training data — only use "
+                        "what you find from the web search."
+                    )}]}],
+                    "tools": [{"google_search": {}}],
+                }
 
-            candidates = data.get("candidates", [])
-            if candidates:
-                parts = candidates[0].get("content", {}).get("parts", [])
-                texts = [p.get("text", "") for p in parts if p.get("text")]
-                if texts:
-                    return "[Verified via web search]\n" + "\n".join(texts)
+                async with httpx.AsyncClient(timeout=20.0) as client:
+                    resp = await client.post(
+                        url,
+                        json=payload,
+                        params={"key": settings.GOOGLE_GEMINI_API_KEY},
+                    )
+                    if resp.status_code != 200:
+                        logger.warning("Gemini sports search %s returned %s: %s", model, resp.status_code, resp.text[:300])
+                        continue
+                    data = resp.json()
 
-        except Exception as exc:
-            logger.warning("Gemini sports search failed: %s", exc)
+                candidates = data.get("candidates", [])
+                if candidates:
+                    parts = candidates[0].get("content", {}).get("parts", [])
+                    texts = [p.get("text", "") for p in parts if p.get("text")]
+                    if texts:
+                        return "[Verified via web search]\n" + "\n".join(texts)
+
+                logger.warning("Gemini sports search %s returned empty candidates", model)
+            except Exception as exc:
+                logger.warning("Gemini sports search %s failed: %r", model, exc)
 
         # Last resort: try the generic web search tool
         try:
@@ -2371,7 +2394,7 @@ class SportsTool(BaseTool):
                 if result and "unavailable" not in result.lower():
                     return f"[Via web search]\n{result}"
         except Exception as exc:
-            logger.warning("Fallback web search failed: %s", exc)
+            logger.warning("Fallback web search failed: %r", exc)
 
         return f"Could not find current information for: '{query}'"
 
