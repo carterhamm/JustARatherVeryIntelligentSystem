@@ -62,15 +62,23 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
   const isSystem = message.role === 'system';
 
   const timeDisplay = useMemo(() => {
+    if (!message.timestamp) return '';
     const date = new Date(message.timestamp);
+    if (isNaN(date.getTime())) return '';
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   }, [message.timestamp]);
 
-  // Strip any leaked tool tags like {{TOGGLE_VOICE:off}} from display
-  const displayContent = useMemo(
-    () => message.content.replace(/\{\{\w+:\w+\}\}/g, '').trim(),
-    [message.content],
-  );
+  // Strip leaked tool tags AND injected metadata (from iMessage daemon etc.)
+  const displayContent = useMemo(() => {
+    let text = message.content;
+    // Remove {{TOGGLE_VOICE:off}} style tags
+    text = text.replace(/\{\{\w+:\w+\}\}/g, '');
+    // Remove [Local time: ...] metadata injected by iMessage daemon
+    text = text.replace(/\[Local time:[^\]]*\]\s*/gi, '');
+    // Remove [Source: ...] metadata
+    text = text.replace(/\[Source:[^\]]*\]\s*/gi, '');
+    return text.trim();
+  }, [message.content]);
 
   if (isSystem) {
     return (

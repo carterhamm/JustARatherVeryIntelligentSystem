@@ -133,6 +133,9 @@ async def get_calendar(
         today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         today_end = today_start + timedelta(days=1)
 
+        # OAuth stores access token as "token", CalendarClient expects "access_token"
+        if "token" in google_tokens and "access_token" not in google_tokens:
+            google_tokens["access_token"] = google_tokens["token"]
         client = CalendarClient(credentials=google_tokens)
         events = await client.list_events(
             time_min=today_start.isoformat(),

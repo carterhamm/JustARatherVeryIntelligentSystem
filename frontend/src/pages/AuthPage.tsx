@@ -7,8 +7,7 @@ import gsap from 'gsap';
 import clsx from 'clsx';
 
 // ── HUD Bezel Frame ──────────────────────────────────────────────────
-// Techno-industrial bezel with double-stepped notched corners,
-// header recess, L-brackets, and accent tabs.
+// Clean beveled frame with top/side recesses and accent details.
 
 function HudBezel({ children }: { children: React.ReactNode }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -29,37 +28,39 @@ function HudBezel({ children }: { children: React.ReactNode }) {
 
   const { w, h } = dims;
 
-  // Double-stepped notch: step1 = small outer ledge, step2 = main notch
-  const S1H = 14, S1V = 5, S2H = 8, S2V = 16;
-  const NW = S1H + S2H; // 22px corner width
-  const NH = S1V + S2V; // 21px corner height
-  const BVL = 12;       // bottom corner bevel
+  const BVL = 14;       // corner bevel (all 4 corners)
   // Header recess (trapezoidal dip at top center)
-  const RH = 80, RD = 6, RA = 12;
+  const RH = 90, RD = 6, RA = 14;
+  // Side recesses (trapezoidal indent on left/right walls)
+  const SRH = 50, SRD = 6, SRA = 14;
 
   const bezelPath = w > 0 ? [
-    // Start after TL notch, go clockwise
-    `M ${NW} 0`,
+    // Start at TL bevel, clockwise
+    `M ${BVL} 0`,
     // Top edge → header recess
     `L ${w / 2 - RH} 0`,
     `L ${w / 2 - RH + RA} ${RD}`,
     `L ${w / 2 + RH - RA} ${RD}`,
     `L ${w / 2 + RH} 0`,
-    // Top edge → TR notch
-    `L ${w - NW} 0`,
-    // TR double-stepped notch
-    `L ${w - S1H} 0`, `L ${w - S1H} ${S1V}`,
-    `L ${w - S2H} ${S1V}`, `L ${w - S2H} ${NH}`,
-    `L ${w} ${NH}`,
-    // Right wall down → BR bevel
+    // Top edge → TR bevel
+    `L ${w - BVL} 0`,
+    `L ${w} ${BVL}`,
+    // Right wall → side recess
+    `L ${w} ${h / 2 - SRH}`,
+    `L ${w - SRD} ${h / 2 - SRH + SRA}`,
+    `L ${w - SRD} ${h / 2 + SRH - SRA}`,
+    `L ${w} ${h / 2 + SRH}`,
+    // Right wall → BR bevel
     `L ${w} ${h - BVL}`, `L ${w - BVL} ${h}`,
     // Bottom edge → BL bevel
     `L ${BVL} ${h}`, `L 0 ${h - BVL}`,
-    // Left wall up → TL notch
-    `L 0 ${NH}`,
-    // TL double-stepped notch
-    `L ${S2H} ${NH}`, `L ${S2H} ${S1V}`,
-    `L ${S1H} ${S1V}`, `L ${S1H} 0`,
+    // Left wall → side recess (going up)
+    `L 0 ${h / 2 + SRH}`,
+    `L ${SRD} ${h / 2 + SRH - SRA}`,
+    `L ${SRD} ${h / 2 - SRH + SRA}`,
+    `L 0 ${h / 2 - SRH}`,
+    // Left wall → TL bevel
+    `L 0 ${BVL}`,
     'Z',
   ].join(' ') : '';
 
@@ -85,57 +86,47 @@ function HudBezel({ children }: { children: React.ReactNode }) {
           {/* Main border */}
           <path d={bezelPath} fill="none" stroke="rgba(0, 212, 255, 0.4)" strokeWidth="1.5" />
 
-          {/* ── Corner L-brackets (layered outside main border) ── */}
-          <path d={`M ${NW + 10} -4 L -4 -4 L -4 ${NH + 10}`}
-                fill="none" stroke="rgba(0, 212, 255, 0.2)" strokeWidth="1" />
-          <path d={`M ${w - NW - 10} -4 L ${w + 4} -4 L ${w + 4} ${NH + 10}`}
-                fill="none" stroke="rgba(0, 212, 255, 0.2)" strokeWidth="1" />
-          <path d={`M -4 ${h - BVL - 10} L -4 ${h + 4} L ${BVL + 10} ${h + 4}`}
-                fill="none" stroke="rgba(0, 212, 255, 0.12)" strokeWidth="1" />
-          <path d={`M ${w + 4} ${h - BVL - 10} L ${w + 4} ${h + 4} L ${w - BVL - 10} ${h + 4}`}
-                fill="none" stroke="rgba(0, 212, 255, 0.12)" strokeWidth="1" />
-
-          {/* ── Corner bolts / dots ── */}
-          <circle cx={-3} cy={-3} r="1.5" fill="rgba(0, 212, 255, 0.25)" />
-          <circle cx={w + 3} cy={-3} r="1.5" fill="rgba(0, 212, 255, 0.25)" />
-          <circle cx={-3} cy={h + 3} r="1.5" fill="rgba(0, 212, 255, 0.15)" />
-          <circle cx={w + 3} cy={h + 3} r="1.5" fill="rgba(0, 212, 255, 0.15)" />
-
           {/* ── Accent tabs (sensor/button protrusions) ── */}
           {/* Right side */}
-          <rect x={w + 0.5} y={h * 0.3} width="3" height="16"
+          <rect x={w + 0.5} y={h * 0.2} width="3" height="16"
                 fill="rgba(0, 212, 255, 0.14)" rx="0.5" />
-          <rect x={w + 0.5} y={h * 0.55} width="3" height="12"
+          <rect x={w + 0.5} y={h * 0.72} width="3" height="12"
                 fill="rgba(0, 212, 255, 0.08)" rx="0.5" />
           {/* Left side */}
-          <rect x={-3.5} y={h * 0.42} width="3" height="14"
+          <rect x={-3.5} y={h * 0.25} width="3" height="14"
                 fill="rgba(0, 212, 255, 0.1)" rx="0.5" />
+          <rect x={-3.5} y={h * 0.68} width="3" height="10"
+                fill="rgba(0, 212, 255, 0.08)" rx="0.5" />
           {/* Bottom edge */}
           <rect x={w * 0.25} y={h + 0.5} width="16" height="2.5"
                 fill="rgba(0, 212, 255, 0.08)" rx="0.5" />
           <rect x={w * 0.65} y={h + 0.5} width="16" height="2.5"
                 fill="rgba(0, 212, 255, 0.08)" rx="0.5" />
           {/* Top edge (flanking the header recess) */}
-          <rect x={NW + 4} y={-3} width="10" height="2"
+          <rect x={BVL + 4} y={-3} width="10" height="2"
                 fill="rgba(0, 212, 255, 0.1)" rx="0.5" />
-          <rect x={w - NW - 14} y={-3} width="10" height="2"
+          <rect x={w - BVL - 14} y={-3} width="10" height="2"
                 fill="rgba(0, 212, 255, 0.1)" rx="0.5" />
 
-          {/* ── Header recess accent line ── */}
+          {/* ── Recess accent lines ── */}
           <line x1={w / 2 - RH + RA + 8} y1={RD}
                 x2={w / 2 + RH - RA - 8} y2={RD}
                 stroke="rgba(0, 212, 255, 0.1)" strokeWidth="0.5" />
+          <line x1={w - SRD} y1={h / 2 - SRH + SRA + 6}
+                x2={w - SRD} y2={h / 2 + SRH - SRA - 6}
+                stroke="rgba(0, 212, 255, 0.08)" strokeWidth="0.5" />
+          <line x1={SRD} y1={h / 2 - SRH + SRA + 6}
+                x2={SRD} y2={h / 2 + SRH - SRA - 6}
+                stroke="rgba(0, 212, 255, 0.08)" strokeWidth="0.5" />
 
           {/* ── Structural tick marks along edges ── */}
-          {/* Right side ticks */}
-          <line x1={w - 1} y1={NH + 20} x2={w + 2} y2={NH + 20}
+          <line x1={w - 1} y1={BVL + 16} x2={w + 2} y2={BVL + 16}
                 stroke="rgba(0, 212, 255, 0.08)" strokeWidth="0.5" />
-          <line x1={w - 1} y1={h - BVL - 20} x2={w + 2} y2={h - BVL - 20}
+          <line x1={w - 1} y1={h - BVL - 16} x2={w + 2} y2={h - BVL - 16}
                 stroke="rgba(0, 212, 255, 0.08)" strokeWidth="0.5" />
-          {/* Left side ticks */}
-          <line x1={-2} y1={NH + 20} x2={1} y2={NH + 20}
+          <line x1={-2} y1={BVL + 16} x2={1} y2={BVL + 16}
                 stroke="rgba(0, 212, 255, 0.08)" strokeWidth="0.5" />
-          <line x1={-2} y1={h - BVL - 20} x2={1} y2={h - BVL - 20}
+          <line x1={-2} y1={h - BVL - 16} x2={1} y2={h - BVL - 16}
                 stroke="rgba(0, 212, 255, 0.08)" strokeWidth="0.5" />
         </svg>
       )}
@@ -235,8 +226,14 @@ export default function AuthPage() {
         setExistingUsername(result.username || trimmed);
         setUserHasTotp(!!result.totp_enabled);
         if (result.totp_enabled) {
-          setTotpCode('');
-          setStep('totp');
+          // Skip TOTP step if we have a device trust token (backend validates it)
+          const deviceTrust = localStorage.getItem('jarvis_device_trust');
+          if (deviceTrust) {
+            setStep('authenticate');
+          } else {
+            setTotpCode('');
+            setStep('totp');
+          }
         } else {
           setStep('authenticate');
         }
@@ -474,7 +471,7 @@ export default function AuthPage() {
       })}
 
       {/* Auth Card */}
-      <div className="relative z-10 w-full max-w-md mx-5">
+      <div className="relative z-10 w-full max-w-2xl mx-5">
         {/* Header label */}
         <div ref={headerRef} className="text-center mb-5 opacity-0">
           <span className="hud-label text-[10px]">STARK INDUSTRIES — SECURE ACCESS TERMINAL</span>
@@ -602,7 +599,7 @@ export default function AuthPage() {
               </div>
 
               <button
-                onClick={userHasTotp ? handleAuthenticateWithTotp : handleAuthenticate}
+                onClick={pendingTotpCode ? handleAuthenticateWithTotp : handleAuthenticate}
                 disabled={isLoading}
                 className="jarvis-button w-full py-3 text-sm font-display font-semibold tracking-wider uppercase flex items-center justify-center gap-2"
                 style={{ opacity: isLoading ? 0.5 : 1 }}
