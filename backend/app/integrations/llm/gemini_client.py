@@ -296,6 +296,9 @@ class GeminiClient(BaseLLMClient):
                 return
 
             candidate = response.candidates[0]
+            if not hasattr(candidate, "content") or candidate.content is None:
+                yield {"type": "error", "error": "Gemini returned candidate with no content"}
+                return
             parts = candidate.content.parts or []
 
             # Separate text parts and function call parts

@@ -286,7 +286,7 @@ async def classify_sports_intent(message: str) -> dict[str, str]:
 
     import json as _json
 
-    models = ["llama3.1-8b", "gpt-oss-120b"]
+    models = ["qwen-3-235b-a22b-instruct-2507", "llama3.1-8b"]
 
     for model in models:
         try:

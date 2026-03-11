@@ -217,7 +217,7 @@ async def oauth_callback(
             status_code=500,
         )
 
-    return HTMLResponse(content=_success_page())
+    return HTMLResponse(content=_success_redirect_page())
 
 
 @router.get(
@@ -262,27 +262,28 @@ async def disconnect_google(
 
 # ── HTML response pages ──────────────────────────────────────────────────
 
-def _success_page() -> str:
+def _success_redirect_page() -> str:
     return """<!DOCTYPE html>
 <html>
 <head>
     <title>JARVIS — Google Connected</title>
+    <meta http-equiv="refresh" content="2;url=https://app.malibupoint.dev/" />
     <style>
         body { background: #0a0a0a; color: #00d4ff; font-family: -apple-system, BlinkMacSystemFont, sans-serif;
                display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
         .card { text-align: center; max-width: 500px; padding: 40px; }
         h1 { font-size: 24px; margin-bottom: 8px; }
         p { color: #8899aa; font-size: 16px; line-height: 1.5; }
-        .check { font-size: 64px; margin-bottom: 16px; }
+        .check { font-size: 64px; margin-bottom: 16px; color: #39ff14; }
     </style>
 </head>
 <body>
     <div class="card">
         <div class="check">&#10003;</div>
         <h1>Google Account Connected</h1>
-        <p>JARVIS now has access to your Gmail, Calendar, Drive, and Sheets.
-           You can close this window.</p>
+        <p>Redirecting back to JARVIS...</p>
     </div>
+    <script>setTimeout(function(){ window.location.href = 'https://app.malibupoint.dev/'; }, 1500);</script>
 </body>
 </html>"""
 

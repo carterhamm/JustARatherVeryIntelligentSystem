@@ -582,7 +582,14 @@ class ChatService:
 
         # Use agentic path (with tools) for Claude and Gemini
         if llm.provider in (LLMProvider.CLAUDE, LLMProvider.GEMINI) and hasattr(llm, 'agentic_stream'):
-            assistant_content = await self._agentic_chat(llm, history, model, user_id)
+            try:
+                assistant_content = await self._agentic_chat(llm, history, model, user_id)
+            except Exception as exc:
+                logger.exception("Agentic chat failed: %s", exc)
+                assistant_content = (
+                    "I experienced a system error processing your request. "
+                    "Please try again in a moment, sir."
+                )
         else:
             # Stark Protocol — local only, no tools (privacy)
             response = await llm.chat_completion(
@@ -662,16 +669,36 @@ class ChatService:
 
         # Collect text from the agentic stream
         collected: list[str] = []
-        async for event in llm.agentic_stream(
-            messages=history,
-            tools=tools,
-            tool_executor=execute_tool,
-            model=model,
-        ):
-            if event.get("type") == "text":
-                collected.append(event["content"])
+        errors: list[str] = []
+        try:
+            async for event in llm.agentic_stream(
+                messages=history,
+                tools=tools,
+                tool_executor=execute_tool,
+                model=model,
+            ):
+                if event.get("type") == "text":
+                    collected.append(event["content"])
+                elif event.get("type") == "error":
+                    errors.append(event.get("error", "Unknown error"))
+                    logger.error("Agentic stream error: %s", event.get("error"))
+        except Exception as exc:
+            logger.exception("Agentic stream crashed: %s", exc)
+            errors.append(str(exc))
 
-        return "".join(collected)
+        if collected:
+            return "".join(collected)
+
+        # If no text was collected, return error info so JARVIS can respond
+        if errors:
+            logger.error("Agentic chat produced no text. Errors: %s", errors)
+            return (
+                "I encountered a temporary issue with my backend systems. "
+                "The specific error was: " + "; ".join(errors) +
+                ". Please try again in a moment, sir."
+            )
+
+        return "I wasn't able to generate a response. Please try again, sir."
 
     # =====================================================================
     # Chat (streaming)
