@@ -19,7 +19,6 @@ import {
   Layers,
 } from 'lucide-react';
 import clsx from 'clsx';
-import arcReactorIcon from '@/assets/arc-reactor-icon.png';
 
 // ---------------------------------------------------------------------------
 // MapKit JS types (minimal declarations)
@@ -71,11 +70,6 @@ interface GeocodedContact extends Contact {
   lng: number;
 }
 
-interface NominatimResult {
-  lat: string;
-  lon: string;
-}
-
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -106,22 +100,28 @@ async function geocodeAddress(
   const key = address.trim().toLowerCase();
   if (cache[key]) return cache[key];
 
-  try {
-    const resp = await fetch(
-      `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json&limit=1`,
-      { headers: { 'User-Agent': 'JARVIS-Map/1.0' } },
-    );
-    const data: NominatimResult[] = await resp.json();
-    if (data.length > 0) {
-      const result = { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
-      cache[key] = result;
+  const mk = window.mapkit;
+  if (!mk) return null;
+
+  // Use MapKit JS Geocoder (no rate limiting, no CORS issues)
+  return new Promise((resolve) => {
+    const geocoder = new mk.Geocoder({ language: 'en' });
+    geocoder.lookup(address, (error: any, data: any) => {
+      if (error || !data?.results?.length) {
+        console.warn('[Map] Geocode failed:', address, error);
+        resolve(null);
+        return;
+      }
+      const result = data.results[0];
+      const coords = {
+        lat: result.coordinate.latitude,
+        lng: result.coordinate.longitude,
+      };
+      cache[key] = coords;
       saveGeocodeCache(cache);
-      return result;
-    }
-  } catch {
-    // geocode failed — skip
-  }
-  return null;
+      resolve(coords);
+    });
+  });
 }
 
 function getInitials(contact: Contact): string {
@@ -569,9 +569,6 @@ export default function MapPage() {
           padding: new mk.Padding(0, 0, 0, 0),
         });
 
-        // Apply dark tint CSS to the map container
-        mapContainerRef.current.style.filter = 'saturate(0.8) brightness(0.85)';
-
         mapRef.current = map;
         if (!cancelled) setMapReady(true);
       } catch (err) {
@@ -613,9 +610,9 @@ export default function MapPage() {
     };
   }, []);
 
-  // ---- Geocode contacts with addresses ----
+  // ---- Geocode contacts with addresses (waits for MapKit) ----
   useEffect(() => {
-    if (contacts.length === 0) return;
+    if (contacts.length === 0 || !mapReady) return;
     let cancelled = false;
 
     const withAddress = contacts.filter((c) => c.address?.trim() || (c.street && c.city));
@@ -639,18 +636,13 @@ export default function MapPage() {
           setGeocodeProgress({ done: i + 1, total: withAddress.length });
           setGeocodedContacts([...results]);
         }
-        // Nominatim rate limit: 1 req/sec (only if not cached)
-        const key = addrToGeocode.trim().toLowerCase();
-        if (!cache[key]) {
-          await new Promise((r) => setTimeout(r, 1100));
-        }
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [contacts]);
+  }, [contacts, mapReady]);
 
   // ---- Place annotations when geocoded contacts update ----
   useEffect(() => {
@@ -871,47 +863,40 @@ export default function MapPage() {
       {/* -- Top Bar -- */}
       <div className="absolute top-0 left-0 right-0 z-20 pointer-events-none">
         <div
-          className="flex items-center justify-between px-4 py-3 pointer-events-auto"
+          className="flex items-center justify-between px-3 h-11 pointer-events-auto"
           style={{
-            background:
-              'linear-gradient(180deg, rgba(10, 14, 23, 0.95) 0%, rgba(10, 14, 23, 0.7) 60%, transparent 100%)',
+            background: 'rgba(0, 0, 0, 0.6)',
+            borderBottom: '1px solid rgba(0, 212, 255, 0.08)',
+            backdropFilter: 'blur(16px)',
+            WebkitBackdropFilter: 'blur(16px)',
           }}
         >
           <button
             onClick={() => navigate('/')}
-            className="glass-capsule h-9 px-3 flex items-center gap-2 hover:bg-white/[0.04] transition-all"
+            className="h-7 px-2.5 flex items-center gap-1.5 rounded transition-colors hover:bg-white/[0.05]"
           >
-            <ArrowLeft size={14} className="text-jarvis-blue/60" />
-            <span className="text-[10px] font-mono tracking-wider text-jarvis-blue/60 hidden sm:inline">
-              MAIN
+            <ArrowLeft size={13} className="text-jarvis-blue/50" />
+            <span className="text-[9px] font-mono tracking-widest text-jarvis-blue/40 uppercase hidden sm:inline">
+              Back
             </span>
           </button>
 
-          <div className="flex items-center gap-3 boot-1">
-            <img
-              src={arcReactorIcon}
-              alt=""
-              className="w-5 h-5 object-contain"
-              style={{ filter: 'drop-shadow(0 0 4px rgba(0, 212, 255, 0.5))' }}
-            />
-            <h1
-              className="font-display text-sm sm:text-base font-bold tracking-[0.3em] text-jarvis-blue"
-              style={{ textShadow: '0 0 20px rgba(0, 212, 255, 0.3)' }}
+          <div className="flex items-center gap-2">
+            <span
+              className="text-[10px] font-mono font-semibold tracking-[0.25em] text-jarvis-blue/70 uppercase"
+              style={{ textShadow: '0 0 12px rgba(0, 212, 255, 0.2)' }}
             >
-              JARVIS MAP
-            </h1>
-            <span className="text-[8px] font-mono tracking-wider text-jarvis-blue/30 hidden sm:inline">
-              APPLE MAPS
+              Contact Atlas
             </span>
           </div>
 
           <button
             onClick={() => setSidebarOpen((p) => !p)}
-            className="glass-capsule h-9 px-3 flex items-center gap-2 hover:bg-white/[0.04] transition-all"
+            className="h-7 px-2.5 flex items-center gap-1.5 rounded transition-colors hover:bg-white/[0.05]"
           >
-            <Users size={14} className="text-jarvis-blue/60" />
-            <span className="text-[10px] font-mono tracking-wider text-jarvis-blue/60 hidden sm:inline">
-              {geocodedContacts.length} <span className="text-gray-600">PINNED</span>
+            <Users size={13} className="text-jarvis-blue/50" />
+            <span className="text-[9px] font-mono tracking-wider text-jarvis-blue/40 hidden sm:inline">
+              {geocodedContacts.length}
             </span>
           </button>
         </div>

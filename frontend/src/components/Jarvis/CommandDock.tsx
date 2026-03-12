@@ -10,7 +10,10 @@ import {
   Activity,
   LayoutGrid,
   Users,
+  MapPin,
+  Monitor,
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useUIStore } from '@/stores/uiStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import gsap from 'gsap';
@@ -109,6 +112,7 @@ export default function CommandDock() {
   const isThinking = useUIStore((s) => s.isThinking);
   const voiceEnabled = useSettingsStore((s) => s.voiceEnabled);
   const dockRef = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
 
   // GSAP stagger boot animation
   useEffect(() => {
@@ -202,9 +206,25 @@ export default function CommandDock() {
         <div className="w-5 h-px bg-white/[0.06] my-0.5" />
 
         <DockIcon
+          icon={MapPin}
+          label="Map"
+          index={8}
+          onClick={() => navigate('/map')}
+        />
+        <DockIcon
+          icon={Monitor}
+          label="Remote Desktop"
+          index={9}
+          onClick={() => window.open('/vnc/mac-mini', '_blank')}
+        />
+
+        {/* Divider */}
+        <div className="w-5 h-px bg-white/[0.06] my-0.5" />
+
+        <DockIcon
           icon={Settings}
           label="Settings"
-          index={8}
+          index={10}
           onClick={() => dispatch('jarvis-settings-toggle')}
         />
       </div>

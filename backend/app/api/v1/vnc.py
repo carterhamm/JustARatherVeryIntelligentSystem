@@ -99,8 +99,6 @@ loadNoVNC();
 </script>
 
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;400;500;600;700&family=Share+Tech+Mono&display=swap');
-
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
   :root {
@@ -113,14 +111,16 @@ loadNoVNC();
     --cyan-glow: rgba(0, 212, 255, 0.3);
     --orange: #FF6D00;
     --orange-dim: rgba(255, 109, 0, 0.2);
+    --gold: #D4A017;
+    --gold-bright: #F0C040;
     --green: #00E676;
     --red: #FF1744;
     --text-primary: #E0E6ED;
     --text-secondary: #8899AA;
     --text-dim: #4A5568;
     --border: rgba(0, 212, 255, 0.25);
-    --font-hud: 'Rajdhani', 'Segoe UI', sans-serif;
-    --font-mono: 'Share Tech Mono', 'Courier New', monospace;
+    --font-heading: -apple-system, 'Segoe UI', sans-serif;
+    --font-mono: 'SF Mono', 'Fira Code', 'Consolas', monospace;
   }
 
   html, body {
@@ -128,20 +128,7 @@ loadNoVNC();
     overflow: hidden;
     background: var(--bg-primary);
     color: var(--text-primary);
-    font-family: var(--font-hud);
-  }
-
-  /* Grid background pattern */
-  body::before {
-    content: '';
-    position: fixed;
-    inset: 0;
-    background-image:
-      linear-gradient(rgba(0, 212, 255, 0.03) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(0, 212, 255, 0.03) 1px, transparent 1px);
-    background-size: 40px 40px;
-    pointer-events: none;
-    z-index: 0;
+    font-family: var(--font-heading);
   }
 
   /* ═══════════════════════ STATUS BAR ═══════════════════════ */
@@ -371,7 +358,7 @@ loadNoVNC();
   .login-overlay {
     position: fixed;
     inset: 0;
-    background: var(--bg-primary);
+    background: #000000;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -384,76 +371,166 @@ loadNoVNC();
     pointer-events: none;
   }
 
+  /* Grid pattern overlay */
+  .login-grid {
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,212,255,0.5) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,212,255,0.5) 1px, transparent 1px);
+    background-size: 60px 60px;
+    opacity: 0.03;
+    pointer-events: none;
+    z-index: 201;
+  }
+
+  /* Radial cyan glow */
+  .login-radial {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    width: 800px;
+    height: 800px;
+    transform: translate(-50%, -50%);
+    background: radial-gradient(circle, rgba(0,212,255,0.08) 0%, rgba(0,212,255,0.02) 40%, transparent 70%);
+    pointer-events: none;
+    z-index: 202;
+  }
+
+  /* Corner brackets (SVG-style) */
+  .login-bracket {
+    position: fixed;
+    width: 40px;
+    height: 40px;
+    pointer-events: none;
+    z-index: 203;
+  }
+  .login-bracket svg { width: 100%; height: 100%; }
+  .login-bracket.tl { top: 20px; left: 20px; }
+  .login-bracket.tr { top: 20px; right: 20px; }
+  .login-bracket.bl { bottom: 20px; left: 20px; }
+  .login-bracket.br { bottom: 20px; right: 20px; }
+
+  /* Login panel */
   .login-panel {
-    width: 400px;
+    width: 420px;
     max-width: 90vw;
-    background: var(--bg-secondary);
-    border: 1px solid var(--border);
-    padding: 0;
     position: relative;
+    z-index: 210;
+    border-radius: 4px;
+    overflow: visible;
   }
 
-  /* Angular cut corners via clip-path */
-  .login-panel {
-    clip-path: polygon(
-      16px 0, calc(100% - 16px) 0,
-      100% 16px, 100% calc(100% - 16px),
-      calc(100% - 16px) 100%, 16px 100%,
-      0 calc(100% - 16px), 0 16px
-    );
-  }
-
-  .login-header {
-    padding: 24px 32px 16px;
-    border-bottom: 1px solid var(--border);
+  .login-panel-inner {
     position: relative;
+    background: linear-gradient(160deg, rgba(4,6,14,0.82), rgba(2,4,10,0.88));
+    border: 1px solid rgba(0,212,255,0.15);
+    border-radius: 4px;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    padding: 40px 36px 36px;
+    overflow: hidden;
   }
 
-  .login-header::after {
+  /* Traveling beam animation along panel border */
+  .login-panel-inner::before {
     content: '';
     position: absolute;
-    bottom: -1px;
-    left: 20%;
-    right: 20%;
-    height: 1px;
-    background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+    inset: -1px;
+    border-radius: 4px;
+    background: conic-gradient(
+      from var(--beam-angle, 0deg),
+      transparent 0%,
+      transparent 70%,
+      rgba(0,212,255,0.6) 78%,
+      rgba(0,212,255,0.9) 80%,
+      rgba(0,212,255,0.6) 82%,
+      transparent 90%,
+      transparent 100%
+    );
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    mask-composite: exclude;
+    padding: 1px;
+    animation: beam-travel 4s linear infinite;
+    pointer-events: none;
+    z-index: 1;
   }
 
-  .login-title {
-    font-family: var(--font-mono);
-    font-size: 14px;
-    letter-spacing: 3px;
-    text-transform: uppercase;
-    color: var(--cyan);
-    margin-bottom: 4px;
+  @property --beam-angle {
+    syntax: '<angle>';
+    initial-value: 0deg;
+    inherits: false;
   }
 
-  .login-subtitle {
-    font-family: var(--font-mono);
-    font-size: 11px;
-    letter-spacing: 1px;
-    color: var(--text-dim);
-    text-transform: uppercase;
+  @keyframes beam-travel {
+    from { --beam-angle: 0deg; }
+    to { --beam-angle: 360deg; }
   }
 
-  .arc-reactor {
+  /* Arc reactor icon container */
+  .arc-reactor-icon {
     display: flex;
     justify-content: center;
-    padding: 24px 0 8px;
+    margin-bottom: 20px;
+    position: relative;
+    z-index: 2;
   }
 
-  .arc-reactor-svg {
-    width: 64px; height: 64px;
+  .arc-reactor-icon-wrap {
+    width: 56px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, rgba(0,212,255,0.15), rgba(59,130,246,0.10));
+    border-radius: 12px;
+    clip-path: polygon(8px 0, calc(100% - 8px) 0, 100% 8px, 100% calc(100% - 8px), calc(100% - 8px) 100%, 8px 100%, 0 calc(100% - 8px), 0 8px);
+  }
+
+  .arc-reactor-icon-wrap img {
+    width: 48px;
+    height: 48px;
+    filter: drop-shadow(0 0 8px rgba(0,212,255,0.5));
     animation: pulse-glow 3s ease-in-out infinite;
   }
 
   @keyframes pulse-glow {
-    0%, 100% { filter: drop-shadow(0 0 6px var(--cyan-glow)); }
-    50% { filter: drop-shadow(0 0 16px var(--cyan-glow)); }
+    0%, 100% { filter: drop-shadow(0 0 6px rgba(0,212,255,0.4)); }
+    50% { filter: drop-shadow(0 0 16px rgba(0,212,255,0.7)); }
+  }
+
+  /* Title */
+  .login-title {
+    text-align: center;
+    font-family: var(--font-heading);
+    font-size: 26px;
+    font-weight: 600;
+    letter-spacing: 0.2em;
+    color: #00d4ff;
+    text-shadow: 0 0 20px rgba(0,212,255,0.4), 0 0 40px rgba(0,212,255,0.15);
+    margin-bottom: 6px;
+    position: relative;
+    z-index: 2;
+  }
+
+  /* Subtitle */
+  .login-subtitle {
+    text-align: center;
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: rgba(0,212,255,0.5);
+    margin-bottom: 32px;
+    position: relative;
+    z-index: 2;
   }
 
   .login-body {
-    padding: 20px 32px 32px;
+    position: relative;
+    z-index: 2;
   }
 
   .input-group {
@@ -476,8 +553,9 @@ loadNoVNC();
     font-size: 14px;
     letter-spacing: 1px;
     color: var(--cyan-bright);
-    background: rgba(0, 0, 0, 0.3);
-    border: 1px solid var(--border);
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 3px;
     padding: 10px 14px;
     outline: none;
     transition: all 0.2s ease;
@@ -489,30 +567,31 @@ loadNoVNC();
   }
 
   .input-field:focus {
-    border-color: var(--cyan);
-    box-shadow: 0 0 8px var(--cyan-glow), inset 0 0 8px rgba(0, 229, 255, 0.05);
+    border-color: rgba(0,212,255,0.4);
+    box-shadow: 0 0 8px rgba(0,212,255,0.15), inset 0 0 8px rgba(0,212,255,0.03);
   }
 
   .connect-btn {
     width: 100%;
-    font-family: var(--font-hud);
+    font-family: var(--font-mono);
     font-weight: 600;
-    font-size: 14px;
-    letter-spacing: 3px;
+    font-size: 12px;
+    letter-spacing: 0.15em;
     text-transform: uppercase;
-    color: var(--bg-primary);
-    background: linear-gradient(135deg, var(--cyan), var(--cyan-bright));
+    color: #000;
+    background: linear-gradient(135deg, var(--gold), var(--gold-bright));
     border: none;
-    padding: 12px;
+    border-radius: 3px;
+    padding: 13px;
     cursor: pointer;
     transition: all 0.25s ease;
-    clip-path: polygon(8px 0, calc(100% - 8px) 0, 100% 8px, 100% calc(100% - 8px), calc(100% - 8px) 100%, 8px 100%, 0 calc(100% - 8px), 0 8px);
     margin-top: 8px;
   }
 
   .connect-btn:hover {
-    box-shadow: 0 0 20px var(--cyan-glow), 0 0 40px rgba(0, 229, 255, 0.15);
+    box-shadow: 0 0 20px rgba(212,160,23,0.4), 0 0 40px rgba(212,160,23,0.15);
     transform: translateY(-1px);
+    background: linear-gradient(135deg, var(--gold-bright), #FFDA55);
   }
 
   .connect-btn:disabled {
@@ -536,11 +615,11 @@ loadNoVNC();
   .connecting-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(10, 14, 23, 0.92);
+    background: rgba(0, 0, 0, 0.92);
     display: none;
     align-items: center;
     justify-content: center;
-    z-index: 150;
+    z-index: 250;
     flex-direction: column;
     gap: 20px;
   }
@@ -724,6 +803,13 @@ loadNoVNC();
     <option value="none">None (1:1)</option>
   </select>
 
+  <span class="tb-label" style="margin-left:6px">Quality:</span>
+  <select class="tb-select" id="quality-select">
+    <option value="speed">Speed</option>
+    <option value="balanced" selected>Balanced</option>
+    <option value="quality">Quality</option>
+  </select>
+
   <div class="tb-divider"></div>
 
   <button class="tb-btn" id="btn-clipboard" title="Clipboard sync">Clipboard</button>
@@ -744,43 +830,60 @@ loadNoVNC();
 
 <!-- ═══════════════════════ LOGIN OVERLAY ═══════════════════════ -->
 <div class="login-overlay" id="login-overlay">
+  <!-- Grid pattern -->
+  <div class="login-grid"></div>
+  <!-- Radial glow -->
+  <div class="login-radial"></div>
+  <!-- Corner brackets -->
+  <div class="login-bracket tl">
+    <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M0 12 L0 0 L12 0" stroke="rgba(0,212,255,0.3)" stroke-width="1.5" fill="none"/>
+    </svg>
+  </div>
+  <div class="login-bracket tr">
+    <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M28 0 L40 0 L40 12" stroke="rgba(0,212,255,0.3)" stroke-width="1.5" fill="none"/>
+    </svg>
+  </div>
+  <div class="login-bracket bl">
+    <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M0 28 L0 40 L12 40" stroke="rgba(0,212,255,0.3)" stroke-width="1.5" fill="none"/>
+    </svg>
+  </div>
+  <div class="login-bracket br">
+    <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M28 40 L40 40 L40 28" stroke="rgba(0,212,255,0.3)" stroke-width="1.5" fill="none"/>
+    </svg>
+  </div>
+
   <div class="login-panel">
-    <div class="login-header">
-      <div class="login-title">Remote Access Terminal</div>
-      <div class="login-subtitle">Mac Mini // VNC Authentication</div>
-    </div>
-    <div class="arc-reactor">
-      <svg class="arc-reactor-svg" viewBox="0 0 64 64" fill="none">
-        <circle cx="32" cy="32" r="30" stroke="#00d4ff" stroke-width="1" opacity="0.3"/>
-        <circle cx="32" cy="32" r="24" stroke="#00d4ff" stroke-width="1" opacity="0.5"/>
-        <circle cx="32" cy="32" r="16" stroke="#00E5FF" stroke-width="1.5" opacity="0.7"/>
-        <circle cx="32" cy="32" r="8" stroke="#00E5FF" stroke-width="2" opacity="0.9"/>
-        <circle cx="32" cy="32" r="3" fill="#00E5FF"/>
-        <line x1="32" y1="2" x2="32" y2="8" stroke="#00d4ff" stroke-width="0.8" opacity="0.5"/>
-        <line x1="32" y1="56" x2="32" y2="62" stroke="#00d4ff" stroke-width="0.8" opacity="0.5"/>
-        <line x1="2" y1="32" x2="8" y2="32" stroke="#00d4ff" stroke-width="0.8" opacity="0.5"/>
-        <line x1="56" y1="32" x2="62" y2="32" stroke="#00d4ff" stroke-width="0.8" opacity="0.5"/>
-        <line x1="11" y1="11" x2="15" y2="15" stroke="#00d4ff" stroke-width="0.6" opacity="0.3"/>
-        <line x1="49" y1="49" x2="53" y2="53" stroke="#00d4ff" stroke-width="0.6" opacity="0.3"/>
-        <line x1="53" y1="11" x2="49" y2="15" stroke="#00d4ff" stroke-width="0.6" opacity="0.3"/>
-        <line x1="15" y1="49" x2="11" y2="53" stroke="#00d4ff" stroke-width="0.6" opacity="0.3"/>
-      </svg>
-    </div>
-    <div class="login-body">
-      <form id="vnc-login-form">
-        <div class="input-group">
-          <label class="input-label" for="vnc-username">Username</label>
-          <input class="input-field" type="text" id="vnc-username"
-                 value="carter.hammond" placeholder="macOS username" autocomplete="username" autofocus>
+    <div class="login-panel-inner">
+      <!-- Arc reactor icon -->
+      <div class="arc-reactor-icon">
+        <div class="arc-reactor-icon-wrap">
+          <img src="/assets/arc-reactor-icon-09Ti502R.png" alt="" width="48" height="48">
         </div>
-        <div class="input-group">
-          <label class="input-label" for="vnc-password">Password</label>
-          <input class="input-field" type="password" id="vnc-password"
-                 placeholder="Enter password" autocomplete="current-password">
-        </div>
-        <button class="connect-btn" type="submit" id="connect-btn">Establish Connection</button>
-        <div class="login-error" id="login-error"></div>
-      </form>
+      </div>
+      <!-- Title -->
+      <div class="login-title">J.A.R.V.I.S.</div>
+      <div class="login-subtitle">REMOTE ACCESS TERMINAL</div>
+      <!-- Form -->
+      <div class="login-body">
+        <form id="vnc-login-form">
+          <div class="input-group">
+            <label class="input-label" for="vnc-username">Username</label>
+            <input class="input-field" type="text" id="vnc-username"
+                   value="carter.hammond" placeholder="macOS username" autocomplete="username" autofocus>
+          </div>
+          <div class="input-group">
+            <label class="input-label" for="vnc-password">Password</label>
+            <input class="input-field" type="password" id="vnc-password"
+                   placeholder="Enter password" autocomplete="current-password">
+          </div>
+          <button class="connect-btn" type="submit" id="connect-btn">ESTABLISH CONNECTION</button>
+          <div class="login-error" id="login-error"></div>
+        </form>
+      </div>
     </div>
   </div>
 </div>
@@ -831,6 +934,7 @@ loadNoVNC();
   const statusText       = document.getElementById('status-text');
   const resolutionText   = document.getElementById('resolution-text');
   const scaleSelect      = document.getElementById('scale-select');
+  const qualitySelect    = document.getElementById('quality-select');
   const btnDisconnect    = document.getElementById('btn-disconnect');
   const btnFullscreen    = document.getElementById('btn-fullscreen');
   const btnClipboard     = document.getElementById('btn-clipboard');
@@ -862,6 +966,28 @@ loadNoVNC();
     statusText.textContent = text;
     statusText.className = 'status-text' + (connected ? ' connected' : text.toLowerCase().includes('error') ? ' error' : '');
   }
+
+  // ── Quality preset ────────────────────────────────────
+  function applyQuality() {
+    if (!rfb) return;
+    const mode = qualitySelect.value;
+    switch(mode) {
+      case 'speed':
+        rfb.qualityLevel = 2;
+        rfb.compressionLevel = 9;
+        break;
+      case 'balanced':
+        rfb.qualityLevel = 6;
+        rfb.compressionLevel = 2;
+        break;
+      case 'quality':
+        rfb.qualityLevel = 9;
+        rfb.compressionLevel = 0;
+        break;
+    }
+  }
+
+  qualitySelect.addEventListener('change', applyQuality);
 
   // ── Wait for noVNC module to load ─────────────────────
   function waitForNoVNC() {
@@ -932,6 +1058,8 @@ loadNoVNC();
       rfb.resizeSession = false;
       rfb.clipViewport = false;
       rfb.showDotCursor = true;
+      rfb.qualityLevel = 6;
+      rfb.compressionLevel = 2;
 
       rfb.addEventListener('connect', function(e) { clearConnectTimeout(); onConnect(e); });
       rfb.addEventListener('disconnect', function(e) { clearConnectTimeout(); onDisconnect(e); });
@@ -954,6 +1082,7 @@ loadNoVNC();
     showToast('Connection established', 'success');
     updateResolutionDisplay();
     applyScaling();
+    applyQuality();
   }
 
   function onDisconnect(e) {

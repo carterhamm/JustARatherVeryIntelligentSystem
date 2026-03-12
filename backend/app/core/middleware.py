@@ -119,10 +119,10 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
             "script-src 'self' 'unsafe-inline' https://esm.sh https://cdn.skypack.dev https://cdn.apple-mapkit.com; "
-            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
-            "img-src 'self' data: blob: https://*.apple-mapkit.com https://*.apple.com; "
-            "connect-src 'self' wss: ws: https://esm.sh https://cdn.skypack.dev https://cdn.apple-mapkit.com https://*.apple-mapkit.com https://*.apple.com https://nominatim.openstreetmap.org; "
-            "font-src 'self' data: https://fonts.gstatic.com; "
+            "style-src 'self' 'unsafe-inline'; "
+            "img-src 'self' data: blob: https://*.apple-mapkit.com https://*.apple.com https://*.ls.apple.com https://*.ssl.mzstatic.com; "
+            "connect-src 'self' wss: ws: https://esm.sh https://cdn.skypack.dev https://cdn.apple-mapkit.com https://*.apple-mapkit.com https://*.apple.com https://*.ls.apple.com; "
+            "font-src 'self' data:; "
             "frame-ancestors 'none'"
         )
 

@@ -3,10 +3,11 @@ import {
   Cloud, Sun, CloudRain, CloudSnow, CloudLightning, CloudDrizzle, Wind, Droplets,
   Calendar, Clock, ChevronRight, ExternalLink, RefreshCw,
   Thermometer, Eye, EyeOff, MapPin, Target, Check, Flame,
-  Heart, Activity, Moon, Mail, Bell, AlertTriangle,
+  Heart, Activity, Moon, Mail, Bell, AlertTriangle, WifiOff,
 } from 'lucide-react';
 import { api } from '@/services/api';
 import { useAuthStore } from '@/stores/authStore';
+import { useUIStore } from '@/stores/uiStore';
 import gsap from 'gsap';
 import clsx from 'clsx';
 
@@ -1066,9 +1067,28 @@ function renderWidget(type: string, urgencyLevel: UrgencyLevel, key: string) {
 
 // ── Main Panel ─────────────────────────────────────────────────────────
 
+function OfflineWidget() {
+  return (
+    <WidgetCard label="STATUS">
+      <div className="flex flex-col items-center justify-center py-6 gap-3">
+        <div className="w-10 h-10 rounded-full flex items-center justify-center"
+          style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+          <WifiOff size={18} className="text-gray-500" />
+        </div>
+        <div className="text-center">
+          <p className="text-[11px] font-mono text-gray-400 tracking-wider uppercase">Offline</p>
+          <p className="text-[9px] text-gray-600 mt-1">Waiting for connection...</p>
+        </div>
+      </div>
+    </WidgetCard>
+  );
+}
+
 export default function WidgetPanel() {
   const panelRef = useRef<HTMLDivElement>(null);
   const token = useAuthStore((s) => s.token);
+  const isOnline = useUIStore((s) => s.isOnline);
+  const wsConnected = useUIStore((s) => s.wsConnected);
   const [visible, setVisible] = useState(true);
   const [layout, setLayout] = useState<WidgetLayoutItem[] | null>(null);
   const [layoutReady, setLayoutReady] = useState(false);
@@ -1161,19 +1181,27 @@ export default function WidgetPanel() {
         WebkitMaskImage: 'linear-gradient(to bottom, transparent 0px, black 8px, black calc(100% - 8px), transparent 100%)',
       }}
     >
-      {visibleWidgets.map((w) => (
-          <div
-            key={w.type}
-            data-widget={w.type}
-            style={{
-              transition: 'transform 0.35s ease, opacity 0.35s ease',
-            }}
-          >
-            {renderWidget(w.type, 'low', w.type)}
-          </div>
-      ))}
-      {/* Always show Google Connect (only renders if not connected) */}
-      <GoogleConnectWidget />
+      {!isOnline || !wsConnected ? (
+        <div data-widget="offline">
+          <OfflineWidget />
+        </div>
+      ) : (
+        <>
+          {visibleWidgets.map((w) => (
+            <div
+              key={w.type}
+              data-widget={w.type}
+              style={{
+                transition: 'transform 0.35s ease, opacity 0.35s ease',
+              }}
+            >
+              {renderWidget(w.type, 'low', w.type)}
+            </div>
+          ))}
+          {/* Always show Google Connect (only renders if not connected) */}
+          <GoogleConnectWidget />
+        </>
+      )}
     </div>
   );
 }
