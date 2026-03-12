@@ -1,7 +1,5 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import maplibregl from 'maplibre-gl';
-import 'maplibre-gl/dist/maplibre-gl.css';
 import { api } from '@/services/api';
 import {
   ArrowLeft,
@@ -22,6 +20,24 @@ import {
 } from 'lucide-react';
 import clsx from 'clsx';
 import arcReactorIcon from '@/assets/arc-reactor-icon.png';
+
+// ---------------------------------------------------------------------------
+// MapKit JS types (minimal declarations)
+// ---------------------------------------------------------------------------
+
+declare global {
+  interface Window {
+    mapkit: any;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+// *.malibupoint.dev MapKit JS token (no expiry)
+const MAPKIT_TOKEN =
+  'eyJraWQiOiI1Uk1QOEJCTDVUIiwidHlwIjoiSldUIiwiYWxnIjoiRVMyNTYifQ.eyJpc3MiOiJIS004UDI5QjY4IiwiaWF0IjoxNzczMzUxNzU5LCJvcmlnaW4iOiIqLm1hbGlidXBvaW50LmRldiJ9.zVP2wOt9lp382ogCcxpfohh1TCFG9LEjSeovjuGa1LvQYAq4tQWGNM-T6-umj0K_EErdLs5-NrsRes2RXTf2ww';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -117,7 +133,6 @@ function getInitials(contact: Contact): string {
 function getPhotoDataUri(contact: Contact): string | null {
   if (!contact.photo) return null;
   const mime = contact.photo_content_type || 'image/jpeg';
-  // Check if it's already a data URI or URL
   if (contact.photo.startsWith('data:') || contact.photo.startsWith('http')) {
     return contact.photo;
   }
@@ -137,30 +152,69 @@ function getShortLocation(contact: Contact): string {
   if (contact.city) return contact.city;
   if (contact.state) return contact.state;
   if (contact.address) {
-    // Try to get last 2 parts of comma-separated address
     const parts = contact.address.split(',').map((s) => s.trim());
     return parts.slice(-2).join(', ');
   }
   return '';
 }
 
-function createMarkerElement(contact: Contact): HTMLDivElement {
+// ---------------------------------------------------------------------------
+// MapKit JS loader
+// ---------------------------------------------------------------------------
+
+let mapkitLoadPromise: Promise<any> | null = null;
+
+function loadMapKit(): Promise<any> {
+  if (mapkitLoadPromise) return mapkitLoadPromise;
+
+  mapkitLoadPromise = new Promise((resolve, reject) => {
+    if (window.mapkit?.Map) {
+      resolve(window.mapkit);
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.src = 'https://cdn.apple-mapkit.com/mk/5.x.x/mapkit.js';
+    script.crossOrigin = 'anonymous';
+    script.onload = () => {
+      try {
+        window.mapkit.init({
+          authorizationCallback: (done: (token: string) => void) => {
+            done(MAPKIT_TOKEN);
+          },
+        });
+        resolve(window.mapkit);
+      } catch (err) {
+        reject(err);
+      }
+    };
+    script.onerror = () => reject(new Error('Failed to load MapKit JS'));
+    document.head.appendChild(script);
+  });
+
+  return mapkitLoadPromise;
+}
+
+// ---------------------------------------------------------------------------
+// Create custom annotation element for a contact
+// ---------------------------------------------------------------------------
+
+function createAnnotationElement(contact: Contact): HTMLDivElement {
   const photo = getPhotoDataUri(contact);
   const initials = getInitials(contact);
   const el = document.createElement('div');
-  el.className = 'jarvis-contact-marker';
   el.style.cursor = 'pointer';
+  el.style.position = 'relative';
 
   if (photo) {
     el.innerHTML = `
-      <div class="jarvis-pin-photo" style="
+      <div style="
         width: 44px; height: 44px; border-radius: 50%;
         background: rgba(0, 20, 40, 0.9);
         border: 2px solid rgba(0, 212, 255, 0.6);
         box-shadow: 0 0 16px rgba(0, 212, 255, 0.3), 0 4px 12px rgba(0,0,0,0.5);
         overflow: hidden;
         transition: all 0.25s ease;
-        position: relative;
       ">
         <img src="${photo}" alt="" style="
           width: 100%; height: 100%; object-fit: cover;
@@ -193,53 +247,94 @@ function createMarkerElement(contact: Contact): HTMLDivElement {
     `;
   }
 
+  // Hover effects
+  el.addEventListener('mouseenter', () => {
+    const inner = el.firstElementChild as HTMLElement;
+    if (inner) {
+      inner.style.borderColor = 'rgba(0, 212, 255, 0.9)';
+      inner.style.boxShadow = '0 0 24px rgba(0, 212, 255, 0.5), 0 4px 16px rgba(0,0,0,0.5)';
+      inner.style.transform = 'scale(1.12)';
+    }
+  });
+  el.addEventListener('mouseleave', () => {
+    const inner = el.firstElementChild as HTMLElement;
+    if (inner) {
+      inner.style.borderColor = photo ? 'rgba(0, 212, 255, 0.6)' : 'rgba(0, 212, 255, 0.5)';
+      inner.style.boxShadow = photo
+        ? '0 0 16px rgba(0, 212, 255, 0.3), 0 4px 12px rgba(0,0,0,0.5)'
+        : '0 0 14px rgba(0, 212, 255, 0.25), 0 4px 12px rgba(0,0,0,0.5)';
+      inner.style.transform = 'scale(1)';
+    }
+  });
+
   return el;
 }
 
-function createPopupContent(contact: Contact): string {
-  const photo = getPhotoDataUri(contact);
-  const lines: string[] = [];
+// ---------------------------------------------------------------------------
+// Create callout (popup) element for MapKit annotation
+// ---------------------------------------------------------------------------
 
-  lines.push(`<div style="font-family:'JetBrains Mono','Fira Code',monospace;min-width:200px;max-width:280px;">`);
+function createCalloutElement(contact: Contact): HTMLDivElement {
+  const photo = getPhotoDataUri(contact);
+  const el = document.createElement('div');
+  el.style.cssText =
+    "font-family:'JetBrains Mono','Fira Code',monospace;min-width:200px;max-width:280px;padding:14px 16px;background:rgba(10,14,23,0.95);border:1px solid rgba(0,212,255,0.15);border-radius:6px;box-shadow:0 0 24px rgba(0,212,255,0.08),0 12px 40px rgba(0,0,0,0.6);color:#e0e0e0;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);";
+
+  const lines: string[] = [];
 
   // Header with photo
   lines.push(`<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">`);
   if (photo) {
-    lines.push(`<img src="${photo}" alt="" style="width:36px;height:36px;border-radius:50%;object-fit:cover;border:1.5px solid rgba(0,212,255,0.4);flex-shrink:0;" />`);
+    lines.push(
+      `<img src="${photo}" alt="" style="width:36px;height:36px;border-radius:50%;object-fit:cover;border:1.5px solid rgba(0,212,255,0.4);flex-shrink:0;" />`,
+    );
   } else {
-    lines.push(`<div style="width:36px;height:36px;border-radius:50%;background:rgba(0,20,40,0.8);border:1.5px solid rgba(0,212,255,0.3);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:#00d4ff;flex-shrink:0;">${getInitials(contact)}</div>`);
+    lines.push(
+      `<div style="width:36px;height:36px;border-radius:50%;background:rgba(0,20,40,0.8);border:1.5px solid rgba(0,212,255,0.3);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:#00d4ff;flex-shrink:0;">${getInitials(contact)}</div>`,
+    );
   }
   lines.push(`<div>`);
-  lines.push(`<div style="font-size:13px;font-weight:600;color:#00d4ff;letter-spacing:0.3px;line-height:1.3;">${contact.first_name} ${contact.last_name || ''}</div>`);
+  lines.push(
+    `<div style="font-size:13px;font-weight:600;color:#00d4ff;letter-spacing:0.3px;line-height:1.3;">${contact.first_name} ${contact.last_name || ''}</div>`,
+  );
   if (contact.title && contact.company) {
-    lines.push(`<div style="font-size:9px;color:#888;margin-top:1px;">${contact.title} at ${contact.company}</div>`);
+    lines.push(
+      `<div style="font-size:9px;color:#888;margin-top:1px;">${contact.title} at ${contact.company}</div>`,
+    );
   } else if (contact.company) {
     lines.push(`<div style="font-size:9px;color:#888;margin-top:1px;">${contact.company}</div>`);
   }
   lines.push(`</div></div>`);
 
   // Divider
-  lines.push(`<div style="height:1px;background:linear-gradient(90deg,transparent,rgba(0,212,255,0.15),transparent);margin:6px 0;"></div>`);
+  lines.push(
+    `<div style="height:1px;background:linear-gradient(90deg,transparent,rgba(0,212,255,0.15),transparent);margin:6px 0;"></div>`,
+  );
 
-  // Contact details
   if (contact.phone) {
-    lines.push(`<div style="display:flex;align-items:center;gap:6px;margin:4px 0;"><span style="color:rgba(0,212,255,0.4);font-size:9px;">TEL</span><span style="color:#ccc;font-size:10px;">${contact.phone}</span></div>`);
+    lines.push(
+      `<div style="display:flex;align-items:center;gap:6px;margin:4px 0;"><span style="color:rgba(0,212,255,0.4);font-size:9px;">TEL</span><span style="color:#ccc;font-size:10px;">${contact.phone}</span></div>`,
+    );
   }
   if (contact.email) {
-    lines.push(`<div style="display:flex;align-items:center;gap:6px;margin:4px 0;"><span style="color:rgba(0,212,255,0.4);font-size:9px;">EMAIL</span><span style="color:#ccc;font-size:10px;">${contact.email}</span></div>`);
+    lines.push(
+      `<div style="display:flex;align-items:center;gap:6px;margin:4px 0;"><span style="color:rgba(0,212,255,0.4);font-size:9px;">EMAIL</span><span style="color:#ccc;font-size:10px;">${contact.email}</span></div>`,
+    );
   }
-
   const addr = getDisplayAddress(contact);
   if (addr) {
-    lines.push(`<div style="display:flex;align-items:flex-start;gap:6px;margin:4px 0;"><span style="color:rgba(0,212,255,0.4);font-size:9px;margin-top:1px;">LOC</span><span style="color:#999;font-size:9px;line-height:1.4;">${addr}</span></div>`);
+    lines.push(
+      `<div style="display:flex;align-items:flex-start;gap:6px;margin:4px 0;"><span style="color:rgba(0,212,255,0.4);font-size:9px;margin-top:1px;">LOC</span><span style="color:#999;font-size:9px;line-height:1.4;">${addr}</span></div>`,
+    );
   }
-
   if (contact.birthday) {
-    lines.push(`<div style="display:flex;align-items:center;gap:6px;margin:4px 0;"><span style="color:rgba(0,212,255,0.4);font-size:9px;">BDAY</span><span style="color:#999;font-size:9px;">${contact.birthday}</span></div>`);
+    lines.push(
+      `<div style="display:flex;align-items:center;gap:6px;margin:4px 0;"><span style="color:rgba(0,212,255,0.4);font-size:9px;">BDAY</span><span style="color:#999;font-size:9px;">${contact.birthday}</span></div>`,
+    );
   }
 
-  lines.push('</div>');
-  return lines.join('');
+  el.innerHTML = lines.join('');
+  return el;
 }
 
 // ---------------------------------------------------------------------------
@@ -289,13 +384,11 @@ function ContactCard({
         isSelected && 'bg-jarvis-blue/[0.06]',
       )}
     >
-      {/* Main row — clickable to fly to contact */}
       <button
         onClick={onSelect}
         className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-white/[0.03] transition-colors"
         style={{ minHeight: '52px' }}
       >
-        {/* Avatar */}
         <div
           className={clsx(
             'w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden transition-all duration-200',
@@ -317,7 +410,6 @@ function ContactCard({
           )}
         </div>
 
-        {/* Name + location */}
         <div className="min-w-0 flex-1">
           <p className="text-[13px] font-medium text-gray-200 truncate leading-tight">
             {contact.first_name} {contact.last_name || ''}
@@ -327,7 +419,6 @@ function ContactCard({
           )}
         </div>
 
-        {/* Expand toggle */}
         <button
           onClick={(e) => {
             e.stopPropagation();
@@ -340,7 +431,6 @@ function ContactCard({
         </button>
       </button>
 
-      {/* Expandable detail section — progressive disclosure */}
       {isExpanded && (
         <div
           className="px-4 pb-3 pl-16 space-y-1.5 animate-fade-in"
@@ -420,7 +510,10 @@ function MapControls({
       </button>
       <button
         onClick={onToggleGrid}
-        className={clsx('glass-circle w-9 h-9 flex items-center justify-center', gridVisible && 'active')}
+        className={clsx(
+          'glass-circle w-9 h-9 flex items-center justify-center',
+          gridVisible && 'active',
+        )}
         title="Toggle HUD grid overlay"
         aria-label="Toggle grid"
       >
@@ -437,12 +530,14 @@ function MapControls({
 export default function MapPage() {
   const navigate = useNavigate();
   const mapContainerRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<maplibregl.Map | null>(null);
-  const markersRef = useRef<maplibregl.Marker[]>([]);
+  const mapRef = useRef<any>(null); // mapkit.Map
+  const annotationsRef = useRef<any[]>([]);
+  const calloutOverlayRef = useRef<HTMLDivElement | null>(null);
 
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [geocodedContacts, setGeocodedContacts] = useState<GeocodedContact[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [mapReady, setMapReady] = useState(false);
   const [geocodeProgress, setGeocodeProgress] = useState({ done: 0, total: 0 });
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -450,18 +545,60 @@ export default function MapPage() {
   const [expandedContactId, setExpandedContactId] = useState<string | null>(null);
   const [gridVisible, setGridVisible] = useState(false);
 
+  // ---- Load MapKit JS + initialize map ----
+  useEffect(() => {
+    if (!mapContainerRef.current) return;
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const mk = await loadMapKit();
+        if (cancelled || !mapContainerRef.current) return;
+
+        const map = new mk.Map(mapContainerRef.current, {
+          center: new mk.Coordinate(40.2969, -111.6946), // Orem, Utah
+          mapType: mk.Map.MapTypes.MutedStandard,
+          colorScheme: mk.Map.ColorSchemes.Dark,
+          showsCompass: mk.FeatureVisibility.Hidden,
+          showsZoomControl: true,
+          showsMapTypeControl: false,
+          isZoomEnabled: true,
+          isScrollEnabled: true,
+          isRotationEnabled: true,
+          padding: new mk.Padding(0, 0, 0, 0),
+        });
+
+        // Apply dark tint CSS to the map container
+        mapContainerRef.current.style.filter = 'saturate(0.8) brightness(0.85)';
+
+        mapRef.current = map;
+        if (!cancelled) setMapReady(true);
+      } catch (err) {
+        console.error('[MapKit] Init failed:', err);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      if (mapRef.current) {
+        mapRef.current.destroy();
+        mapRef.current = null;
+      }
+      annotationsRef.current = [];
+    };
+  }, []);
+
   // ---- Fetch contacts ----
   useEffect(() => {
     let cancelled = false;
     (async () => {
       setIsLoading(true);
       try {
-        // Fetch all contacts (with limit=200 to get more)
         const result = await api.get<Contact[]>('/contacts', { offset: 0, limit: 200 });
         if (!cancelled) setContacts(result);
       } catch {
         try {
-          // Fallback to search endpoint
           const result = await api.get<Contact[]>('/contacts/search', { q: '' });
           if (!cancelled) setContacts(result);
         } catch {
@@ -491,7 +628,9 @@ export default function MapPage() {
       for (let i = 0; i < withAddress.length; i++) {
         if (cancelled) return;
         const c = withAddress[i];
-        const addrToGeocode = c.address?.trim() || [c.street, c.city, c.state, c.postal_code].filter(Boolean).join(', ');
+        const addrToGeocode =
+          c.address?.trim() ||
+          [c.street, c.city, c.state, c.postal_code].filter(Boolean).join(', ');
         const coords = await geocodeAddress(addrToGeocode, cache);
         if (coords) {
           results.push({ ...c, lat: coords.lat, lng: coords.lng });
@@ -513,117 +652,172 @@ export default function MapPage() {
     };
   }, [contacts]);
 
-  // ---- Initialize map ----
-  useEffect(() => {
-    if (!mapContainerRef.current || mapRef.current) return;
-
-    const map = new maplibregl.Map({
-      container: mapContainerRef.current,
-      style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
-      center: [-111.6946, 40.2969], // Orem, Utah [lng, lat]
-      zoom: 5,
-      attributionControl: false,
-    });
-
-    // Add navigation control (zoom +/-)
-    map.addControl(
-      new maplibregl.NavigationControl({ showCompass: false }),
-      'bottom-right',
-    );
-
-    // Add attribution
-    map.addControl(
-      new maplibregl.AttributionControl({
-        compact: true,
-        customAttribution: '&copy; <a href="https://carto.com/" style="color:#00d4ff">CARTO</a> &copy; <a href="https://www.openstreetmap.org/" style="color:#00d4ff">OSM</a>',
-      }),
-      'bottom-left',
-    );
-
-    mapRef.current = map;
-
-    return () => {
-      map.remove();
-      mapRef.current = null;
-      markersRef.current = [];
-    };
-  }, []);
-
-  // ---- Place markers when geocoded contacts update ----
+  // ---- Place annotations when geocoded contacts update ----
   useEffect(() => {
     const map = mapRef.current;
-    if (!map) return;
+    const mk = window.mapkit;
+    if (!map || !mk || !mapReady) return;
 
-    // Remove existing markers
-    markersRef.current.forEach((m) => m.remove());
-    markersRef.current = [];
+    // Remove existing annotations
+    if (annotationsRef.current.length > 0) {
+      map.removeAnnotations(annotationsRef.current);
+      annotationsRef.current = [];
+    }
 
-    const newMarkers: maplibregl.Marker[] = [];
+    // Remove old callout overlay
+    if (calloutOverlayRef.current) {
+      calloutOverlayRef.current.remove();
+      calloutOverlayRef.current = null;
+    }
+
+    const newAnnotations: any[] = [];
 
     geocodedContacts.forEach((c) => {
-      const el = createMarkerElement(c);
+      const coord = new mk.Coordinate(c.lat, c.lng);
 
-      const popup = new maplibregl.Popup({
-        closeButton: true,
-        maxWidth: '280px',
-        className: 'jarvis-popup',
-        offset: [0, -8],
-      }).setHTML(createPopupContent(c));
-
-      const marker = new maplibregl.Marker({ element: el, anchor: 'center' })
-        .setLngLat([c.lng, c.lat])
-        .setPopup(popup)
-        .addTo(map);
-
-      el.addEventListener('click', () => {
-        setSelectedContactId(c.id);
+      const annotation = new mk.Annotation(coord, (coordinate: any) => {
+        return createAnnotationElement(c);
+      }, {
+        anchorOffset: new DOMPoint(0, -20),
+        calloutEnabled: false, // We handle callouts ourselves
+        data: { contactId: c.id },
       });
 
-      newMarkers.push(marker);
+      // Click handler — show custom callout
+      annotation.addEventListener('select', () => {
+        setSelectedContactId(c.id);
+
+        // Remove existing callout
+        if (calloutOverlayRef.current) {
+          calloutOverlayRef.current.remove();
+          calloutOverlayRef.current = null;
+        }
+
+        // Create callout overlay
+        const callout = createCalloutElement(c);
+        callout.style.position = 'absolute';
+        callout.style.zIndex = '1000';
+        callout.style.pointerEvents = 'auto';
+
+        // Add close button
+        const closeBtn = document.createElement('button');
+        closeBtn.innerHTML = '&times;';
+        closeBtn.style.cssText =
+          'position:absolute;top:4px;right:8px;background:none;border:none;color:rgba(0,212,255,0.4);font-size:18px;cursor:pointer;padding:4px;line-height:1;';
+        closeBtn.addEventListener('mouseenter', () => {
+          closeBtn.style.color = '#00d4ff';
+        });
+        closeBtn.addEventListener('mouseleave', () => {
+          closeBtn.style.color = 'rgba(0,212,255,0.4)';
+        });
+        closeBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          callout.remove();
+          calloutOverlayRef.current = null;
+          map.selectedAnnotation = null;
+        });
+        callout.appendChild(closeBtn);
+
+        // Position callout near the annotation
+        const mapContainer = mapContainerRef.current;
+        if (mapContainer) {
+          const point = map.convertCoordinateToPointOnPage(coord);
+          const rect = mapContainer.getBoundingClientRect();
+          callout.style.left = `${point.x - rect.left - 140}px`;
+          callout.style.top = `${point.y - rect.top - 180}px`;
+          mapContainer.appendChild(callout);
+          calloutOverlayRef.current = callout;
+        }
+      });
+
+      annotation.addEventListener('deselect', () => {
+        if (calloutOverlayRef.current) {
+          calloutOverlayRef.current.remove();
+          calloutOverlayRef.current = null;
+        }
+      });
+
+      newAnnotations.push(annotation);
     });
 
-    markersRef.current = newMarkers;
+    map.addAnnotations(newAnnotations);
+    annotationsRef.current = newAnnotations;
 
-    // Fit bounds if we have markers
+    // Fit bounds
     if (geocodedContacts.length > 0) {
-      const bounds = new maplibregl.LngLatBounds();
-      geocodedContacts.forEach((c) => bounds.extend([c.lng, c.lat]));
-      map.fitBounds(bounds, { padding: 60, maxZoom: 12 });
+      const region = regionFromContacts(geocodedContacts);
+      map.setRegionAnimated(region, true);
     }
-  }, [geocodedContacts]);
+  }, [geocodedContacts, mapReady]);
+
+  // Helper: compute region from contacts
+  function regionFromContacts(contacts: GeocodedContact[]) {
+    const mk = window.mapkit;
+    if (contacts.length === 0) {
+      return new mk.CoordinateRegion(
+        new mk.Coordinate(40.2969, -111.6946),
+        new mk.CoordinateSpan(5, 5),
+      );
+    }
+
+    let minLat = 90,
+      maxLat = -90,
+      minLng = 180,
+      maxLng = -180;
+    contacts.forEach((c) => {
+      if (c.lat < minLat) minLat = c.lat;
+      if (c.lat > maxLat) maxLat = c.lat;
+      if (c.lng < minLng) minLng = c.lng;
+      if (c.lng > maxLng) maxLng = c.lng;
+    });
+
+    const centerLat = (minLat + maxLat) / 2;
+    const centerLng = (minLng + maxLng) / 2;
+    const spanLat = Math.max(maxLat - minLat, 0.01) * 1.4; // 40% padding
+    const spanLng = Math.max(maxLng - minLng, 0.01) * 1.4;
+
+    return new mk.CoordinateRegion(
+      new mk.Coordinate(centerLat, centerLng),
+      new mk.CoordinateSpan(spanLat, spanLng),
+    );
+  }
 
   // ---- Fly to contact ----
-  const flyToContact = useCallback((contact: GeocodedContact) => {
-    const map = mapRef.current;
-    if (!map) return;
-    setSelectedContactId(contact.id);
-    map.flyTo({ center: [contact.lng, contact.lat], zoom: 14, duration: 1200 });
+  const flyToContact = useCallback(
+    (contact: GeocodedContact) => {
+      const map = mapRef.current;
+      const mk = window.mapkit;
+      if (!map || !mk) return;
 
-    // Open popup on the matching marker
-    markersRef.current.forEach((marker) => {
-      const lngLat = marker.getLngLat();
-      if (
-        Math.abs(lngLat.lat - contact.lat) < 0.0001 &&
-        Math.abs(lngLat.lng - contact.lng) < 0.0001
-      ) {
-        // Close any existing popups first, then toggle this one
-        markersRef.current.forEach((m) => {
-          const p = m.getPopup();
-          if (p && p.isOpen()) p.remove();
-        });
-        marker.togglePopup();
+      setSelectedContactId(contact.id);
+
+      // Animate to contact location
+      const region = new mk.CoordinateRegion(
+        new mk.Coordinate(contact.lat, contact.lng),
+        new mk.CoordinateSpan(0.02, 0.02),
+      );
+      map.setRegionAnimated(region, true);
+
+      // Select the matching annotation
+      const ann = annotationsRef.current.find((a) => a.data?.contactId === contact.id);
+      if (ann) {
+        map.selectedAnnotation = ann;
       }
-    });
-  }, []);
+    },
+    [],
+  );
 
   // ---- Reset view ----
   const resetView = useCallback(() => {
     const map = mapRef.current;
     if (!map || geocodedContacts.length === 0) return;
-    const bounds = new maplibregl.LngLatBounds();
-    geocodedContacts.forEach((c) => bounds.extend([c.lng, c.lat]));
-    map.fitBounds(bounds, { padding: 60, maxZoom: 12, duration: 800 });
+    const region = regionFromContacts(geocodedContacts);
+    map.setRegionAnimated(region, true);
     setSelectedContactId(null);
+    if (calloutOverlayRef.current) {
+      calloutOverlayRef.current.remove();
+      calloutOverlayRef.current = null;
+    }
   }, [geocodedContacts]);
 
   // ---- Filtered contacts for sidebar ----
@@ -650,15 +844,19 @@ export default function MapPage() {
     [contacts],
   );
 
-  const isGeocoding = geocodeProgress.total > 0 && geocodeProgress.done < geocodeProgress.total;
-  const geocodePercent = geocodeProgress.total > 0 ? Math.round((geocodeProgress.done / geocodeProgress.total) * 100) : 0;
+  const isGeocoding =
+    geocodeProgress.total > 0 && geocodeProgress.done < geocodeProgress.total;
+  const geocodePercent =
+    geocodeProgress.total > 0
+      ? Math.round((geocodeProgress.done / geocodeProgress.total) * 100)
+      : 0;
 
   return (
     <div className="h-screen w-screen overflow-hidden relative" style={{ background: '#0A0E17' }}>
       {/* ---- Map container ---- */}
       <div ref={mapContainerRef} className="absolute inset-0 z-0" />
 
-      {/* ---- HUD grid overlay (optional, toggleable) ---- */}
+      {/* ---- HUD grid overlay ---- */}
       {gridVisible && (
         <div
           className="absolute inset-0 z-[1] pointer-events-none"
@@ -675,10 +873,10 @@ export default function MapPage() {
         <div
           className="flex items-center justify-between px-4 py-3 pointer-events-auto"
           style={{
-            background: 'linear-gradient(180deg, rgba(10, 14, 23, 0.95) 0%, rgba(10, 14, 23, 0.7) 60%, transparent 100%)',
+            background:
+              'linear-gradient(180deg, rgba(10, 14, 23, 0.95) 0%, rgba(10, 14, 23, 0.7) 60%, transparent 100%)',
           }}
         >
-          {/* Back — glass capsule style */}
           <button
             onClick={() => navigate('/')}
             className="glass-capsule h-9 px-3 flex items-center gap-2 hover:bg-white/[0.04] transition-all"
@@ -689,7 +887,6 @@ export default function MapPage() {
             </span>
           </button>
 
-          {/* Title — centered */}
           <div className="flex items-center gap-3 boot-1">
             <img
               src={arcReactorIcon}
@@ -703,9 +900,11 @@ export default function MapPage() {
             >
               JARVIS MAP
             </h1>
+            <span className="text-[8px] font-mono tracking-wider text-jarvis-blue/30 hidden sm:inline">
+              APPLE MAPS
+            </span>
           </div>
 
-          {/* Toggle sidebar */}
           <button
             onClick={() => setSidebarOpen((p) => !p)}
             className="glass-capsule h-9 px-3 flex items-center gap-2 hover:bg-white/[0.04] transition-all"
@@ -734,7 +933,10 @@ export default function MapPage() {
             <span className="text-[9px] font-mono text-jarvis-blue/60 tracking-wider">
               GEOCODING
             </span>
-            <div className="w-20 h-[3px] rounded-full overflow-hidden" style={{ background: 'rgba(0, 212, 255, 0.08)' }}>
+            <div
+              className="w-20 h-[3px] rounded-full overflow-hidden"
+              style={{ background: 'rgba(0, 212, 255, 0.08)' }}
+            >
               <div
                 className="h-full rounded-full transition-all duration-500"
                 style={{
@@ -792,7 +994,6 @@ export default function MapPage() {
           transform: sidebarOpen ? 'translateX(0)' : 'translateX(100%)',
         }}
       >
-        {/* Sidebar header */}
         <div className="flex items-center justify-between px-4 pt-[52px] pb-3">
           <div className="flex items-center gap-2">
             <MapPin size={13} className="text-jarvis-blue/60" />
@@ -807,13 +1008,14 @@ export default function MapPage() {
           </button>
         </div>
 
-        {/* Glow line divider */}
         <div className="glow-line-h mx-4" />
 
-        {/* Search */}
         <div className="px-4 py-3">
           <div className="relative">
-            <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-jarvis-blue/30" />
+            <Search
+              size={12}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-jarvis-blue/30"
+            />
             <input
               type="text"
               value={searchQuery}
@@ -833,7 +1035,6 @@ export default function MapPage() {
           </div>
         </div>
 
-        {/* Stats */}
         <div className="px-4 pb-2 flex items-center gap-2">
           <span className="text-[8px] font-mono tracking-wider text-jarvis-blue/30">
             {geocodedContacts.length} MAPPED
@@ -850,7 +1051,6 @@ export default function MapPage() {
 
         <div className="glow-line-h mx-4 mb-1" />
 
-        {/* Contact list */}
         <div className="flex-1 overflow-y-auto">
           {isLoading ? (
             <SidebarSkeleton />
@@ -895,12 +1095,9 @@ export default function MapPage() {
             </div>
           )}
 
-          {/* Unmapped contacts */}
           {contactsWithoutAddress.length > 0 && !searchQuery && !isLoading && (
             <div className="px-4 py-4 border-t border-white/[0.04]">
-              <p className="hud-label mb-2">
-                {contactsWithoutAddress.length} UNMAPPED
-              </p>
+              <p className="hud-label mb-2">{contactsWithoutAddress.length} UNMAPPED</p>
               <div className="flex flex-wrap gap-1">
                 {contactsWithoutAddress.slice(0, 15).map((c) => {
                   const photo = getPhotoDataUri(c);
@@ -912,7 +1109,11 @@ export default function MapPage() {
                       title={`${c.first_name} ${c.last_name || ''} — no address`}
                     >
                       {photo ? (
-                        <img src={photo} alt="" className="w-3.5 h-3.5 rounded-full object-cover" />
+                        <img
+                          src={photo}
+                          alt=""
+                          className="w-3.5 h-3.5 rounded-full object-cover"
+                        />
                       ) : null}
                       <span className="text-[9px] font-mono text-gray-600">
                         {c.first_name} {c.last_name?.[0] || ''}
@@ -930,98 +1131,33 @@ export default function MapPage() {
           )}
         </div>
 
-        {/* Sidebar footer */}
         <div className="px-4 py-2 border-t border-white/[0.04]">
           <div className="flex items-center justify-between">
             <span className="text-[7px] font-mono tracking-[0.15em] text-jarvis-blue/15">
               STARK.INDUSTRIES//ATLAS
             </span>
-            <span className="text-[7px] font-mono tracking-[0.15em] text-gray-800">
-              v2.0
-            </span>
+            <span className="text-[7px] font-mono tracking-[0.15em] text-gray-800">v3.0</span>
           </div>
         </div>
       </div>
 
-      {/* -- Inline styles for MapLibre overrides -- */}
+      {/* -- MapKit JS overrides -- */}
       <style>{`
-        /* Popup container */
-        .jarvis-popup .maplibregl-popup-content {
-          background: rgba(10, 14, 23, 0.95) !important;
-          border: 1px solid rgba(0, 212, 255, 0.15) !important;
-          border-radius: 6px !important;
-          box-shadow: 0 0 24px rgba(0, 212, 255, 0.08), 0 12px 40px rgba(0, 0, 0, 0.6) !important;
-          color: #e0e0e0 !important;
-          padding: 14px 16px !important;
-          backdrop-filter: blur(20px);
-          -webkit-backdrop-filter: blur(20px);
-        }
-        .jarvis-popup .maplibregl-popup-tip {
-          border-top-color: rgba(10, 14, 23, 0.95) !important;
-        }
-        .jarvis-popup .maplibregl-popup-close-button {
-          color: rgba(0, 212, 255, 0.4) !important;
-          font-size: 18px !important;
-          padding: 4px 8px !important;
-          right: 2px !important;
-          top: 2px !important;
-        }
-        .jarvis-popup .maplibregl-popup-close-button:hover {
-          color: #00d4ff !important;
-          background: transparent !important;
+        /* Hide Apple Maps logo/attribution styling to blend with dark theme */
+        .mk-map-view .mk-controls-container {
+          opacity: 0.4;
         }
 
-        /* Navigation controls */
-        .maplibregl-ctrl-group {
+        /* Apple Maps zoom control dark theme */
+        .mk-map-view .mk-zoom-in,
+        .mk-map-view .mk-zoom-out {
           background: rgba(10, 14, 23, 0.9) !important;
           border: 1px solid rgba(0, 212, 255, 0.12) !important;
-          box-shadow: none !important;
-          border-radius: 4px !important;
+          color: #00d4ff !important;
         }
-        .maplibregl-ctrl-group button {
-          width: 34px !important;
-          height: 34px !important;
-          border: none !important;
-          border-bottom: 1px solid rgba(0, 212, 255, 0.08) !important;
-        }
-        .maplibregl-ctrl-group button:last-child {
-          border-bottom: none !important;
-        }
-        .maplibregl-ctrl-group button .maplibregl-ctrl-icon {
-          filter: invert(0.7) sepia(1) saturate(3) hue-rotate(160deg) !important;
-          opacity: 0.6 !important;
-        }
-        .maplibregl-ctrl-group button:hover .maplibregl-ctrl-icon {
-          opacity: 1 !important;
-        }
-        .maplibregl-ctrl-group button:hover {
+        .mk-map-view .mk-zoom-in:hover,
+        .mk-map-view .mk-zoom-out:hover {
           background: rgba(0, 212, 255, 0.08) !important;
-        }
-
-        /* Attribution */
-        .maplibregl-ctrl-attrib {
-          background: rgba(10, 14, 23, 0.6) !important;
-          color: #444 !important;
-          font-size: 8px !important;
-          font-family: 'JetBrains Mono', monospace !important;
-        }
-        .maplibregl-ctrl-attrib a {
-          color: rgba(0, 212, 255, 0.4) !important;
-        }
-
-        /* Marker base */
-        .jarvis-contact-marker {
-          background: none !important;
-          border: none !important;
-          position: relative;
-        }
-
-        /* Marker hover effect */
-        .jarvis-contact-marker:hover .jarvis-pin-photo,
-        .jarvis-contact-marker:hover > div:first-child {
-          border-color: rgba(0, 212, 255, 0.9) !important;
-          box-shadow: 0 0 24px rgba(0, 212, 255, 0.5), 0 4px 16px rgba(0,0,0,0.5) !important;
-          transform: scale(1.12) !important;
         }
       `}</style>
     </div>

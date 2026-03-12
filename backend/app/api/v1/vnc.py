@@ -69,18 +69,33 @@ VNC_PAGE_HTML = r"""<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>J.A.R.V.I.S. // Remote Desktop</title>
 
-<!-- noVNC core library from CDN (use importmap for relative module resolution) -->
-<script type="importmap">
-{
-  "imports": {
-    "@novnc/": "https://cdn.jsdelivr.net/npm/@novnc/novnc@1.5.0/"
-  }
-}
-</script>
+<!-- noVNC — try multiple CDN sources with fallback -->
 <script type="module">
-import RFB from 'https://cdn.jsdelivr.net/npm/@novnc/novnc@1.5.0/+esm';
-window.RFB = RFB;
-window.dispatchEvent(new Event('novnc-loaded'));
+async function loadNoVNC() {
+  const sources = [
+    'https://esm.sh/@novnc/novnc@1.5.0/core/rfb.js',
+    'https://esm.sh/@novnc/novnc@1.4.0/core/rfb.js',
+    'https://cdn.skypack.dev/@novnc/novnc@1.5.0/core/rfb.js',
+  ];
+  for (const src of sources) {
+    try {
+      const mod = await import(src);
+      const RFB = mod.default || mod.RFB;
+      if (RFB) {
+        console.log('[noVNC] Loaded from:', src);
+        window.RFB = RFB;
+        window.dispatchEvent(new Event('novnc-loaded'));
+        return;
+      }
+    } catch (err) {
+      console.warn('[noVNC] Failed:', src, err.message);
+    }
+  }
+  window.dispatchEvent(new CustomEvent('novnc-error', {
+    detail: 'All noVNC CDN sources failed. Check browser console.'
+  }));
+}
+loadNoVNC();
 </script>
 
 <style>
@@ -846,10 +861,18 @@ window.dispatchEvent(new Event('novnc-loaded'));
   function waitForNoVNC() {
     return new Promise((resolve, reject) => {
       if (window.RFB) { resolve(window.RFB); return; }
-      const timeout = setTimeout(() => reject(new Error('noVNC library failed to load from CDN')), 10000);
+
+      const timeout = setTimeout(() => reject(new Error('noVNC library timed out (15s). Check browser console for CDN errors.')), 15000);
+
       window.addEventListener('novnc-loaded', () => {
         clearTimeout(timeout);
-        resolve(window.RFB);
+        if (window.RFB) resolve(window.RFB);
+        else reject(new Error('noVNC loaded event fired but RFB class not found'));
+      }, { once: true });
+
+      window.addEventListener('novnc-error', (e) => {
+        clearTimeout(timeout);
+        reject(new Error(e.detail || 'noVNC library failed to load'));
       }, { once: true });
     });
   }
@@ -858,14 +881,40 @@ window.dispatchEvent(new Event('novnc-loaded'));
   async function connect(password) {
     loginOverlay.classList.add('hidden');
     connectingOverlay.classList.add('active');
+    setStatus(false, 'Loading VNC library...');
+
+    let RFB;
+    try {
+      RFB = await waitForNoVNC();
+    } catch (err) {
+      connectingOverlay.classList.remove('active');
+      loginOverlay.classList.remove('hidden');
+      loginError.textContent = err.message;
+      setStatus(false, 'Library Error');
+      return;
+    }
+
     setStatus(false, 'Connecting...');
 
-    const RFB = await waitForNoVNC();
+    // Connection timeout — if no VNC event fires in 20s, abort
+    let connectTimeout = setTimeout(() => {
+      if (rfb) {
+        try { rfb.disconnect(); } catch(e) {}
+      }
+      connectingOverlay.classList.remove('active');
+      loginOverlay.classList.remove('hidden');
+      loginError.textContent = 'Connection timed out (20s). WebSocket to ' + WEBSOCKIFY_URL + ' may be unreachable.';
+      setStatus(false, 'Timeout');
+      rfb = null;
+    }, 20000);
+
+    function clearConnectTimeout() {
+      if (connectTimeout) { clearTimeout(connectTimeout); connectTimeout = null; }
+    }
 
     try {
       rfb = new RFB(vncContainer, WEBSOCKIFY_URL, {
         credentials: { password: password },
-        wsProtocols: ['binary'],
       });
 
       rfb.scaleViewport = true;
@@ -873,16 +922,17 @@ window.dispatchEvent(new Event('novnc-loaded'));
       rfb.clipViewport = false;
       rfb.showDotCursor = true;
 
-      rfb.addEventListener('connect', onConnect);
-      rfb.addEventListener('disconnect', onDisconnect);
-      rfb.addEventListener('credentialsrequired', onCredentialsRequired);
+      rfb.addEventListener('connect', function(e) { clearConnectTimeout(); onConnect(e); });
+      rfb.addEventListener('disconnect', function(e) { clearConnectTimeout(); onDisconnect(e); });
+      rfb.addEventListener('credentialsrequired', function(e) { clearConnectTimeout(); onCredentialsRequired(e); });
       rfb.addEventListener('desktopname', onDesktopName);
       rfb.addEventListener('clipboard', onClipboard);
 
     } catch (err) {
+      clearConnectTimeout();
       connectingOverlay.classList.remove('active');
       loginOverlay.classList.remove('hidden');
-      loginError.textContent = 'Connection failed: ' + err.message;
+      loginError.textContent = 'RFB init failed: ' + err.message;
       setStatus(false, 'Error');
     }
   }
