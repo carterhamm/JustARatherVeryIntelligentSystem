@@ -69,9 +69,16 @@ VNC_PAGE_HTML = r"""<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>J.A.R.V.I.S. // Remote Desktop</title>
 
-<!-- noVNC core library from CDN -->
-<script type="module" crossorigin>
-import RFB from 'https://cdn.jsdelivr.net/npm/@novnc/novnc@1.5.0/core/rfb.js';
+<!-- noVNC core library from CDN (use importmap for relative module resolution) -->
+<script type="importmap">
+{
+  "imports": {
+    "@novnc/": "https://cdn.jsdelivr.net/npm/@novnc/novnc@1.5.0/"
+  }
+}
+</script>
+<script type="module">
+import RFB from 'https://cdn.jsdelivr.net/npm/@novnc/novnc@1.5.0/+esm';
 window.RFB = RFB;
 window.dispatchEvent(new Event('novnc-loaded'));
 </script>
@@ -837,9 +844,13 @@ window.dispatchEvent(new Event('novnc-loaded'));
 
   // ── Wait for noVNC module to load ─────────────────────
   function waitForNoVNC() {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       if (window.RFB) { resolve(window.RFB); return; }
-      window.addEventListener('novnc-loaded', () => resolve(window.RFB), { once: true });
+      const timeout = setTimeout(() => reject(new Error('noVNC library failed to load from CDN')), 10000);
+      window.addEventListener('novnc-loaded', () => {
+        clearTimeout(timeout);
+        resolve(window.RFB);
+      }, { once: true });
     });
   }
 
