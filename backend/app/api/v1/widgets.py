@@ -406,16 +406,21 @@ async def get_email_widget(
 ) -> dict[str, Any]:
     """Return important emails from the past week, filtered by LLM scoring.
 
-    Results are cached in Redis for 15 minutes to avoid hammering Gmail.
+    Fetches from both Gmail (if Google OAuth connected) and iCloud Mail
+    (if app-specific password stored), merges results, then scores.
+    Results are cached in Redis for 15 minutes.
     """
     prefs = current_user.preferences or {}
     google_tokens = prefs.get("google_tokens")
+    icloud_prefs = prefs.get("icloud_mail", {})
+    has_gmail = bool(google_tokens)
+    has_icloud = icloud_prefs.get("connected", False)
 
-    if not google_tokens:
+    if not has_gmail and not has_icloud:
         return {"connected": False, "important": [], "total_checked": 0}
 
-    # Normalise token key
-    if "token" in google_tokens and "access_token" not in google_tokens:
+    # Normalise Google token key
+    if has_gmail and "token" in google_tokens and "access_token" not in google_tokens:
         google_tokens["access_token"] = google_tokens["token"]
 
     # Check Redis cache first
@@ -432,13 +437,49 @@ async def get_email_widget(
         redis = None
 
     try:
-        from app.integrations.google_workspace import gmail_important_recent
+        emails: list[dict[str, Any]] = []
+        total_checked = 0
+        sources: list[str] = []
 
-        emails = await gmail_important_recent(google_tokens, max_results=15)
-        total_checked = len(emails)
+        # --- Gmail ---
+        if has_gmail:
+            try:
+                from app.integrations.google_workspace import gmail_important_recent
+
+                gmail_emails = await gmail_important_recent(google_tokens, max_results=15)
+                # Tag source so UI can distinguish
+                for e in gmail_emails:
+                    e.setdefault("source", "gmail")
+                emails.extend(gmail_emails)
+                total_checked += len(gmail_emails)
+                sources.append("gmail")
+            except Exception as gmail_exc:
+                logger.warning("Gmail fetch failed in email widget: %s", gmail_exc)
+
+        # --- iCloud Mail ---
+        if has_icloud:
+            try:
+                from app.core.encryption import decrypt_message
+                from app.integrations.icloud_mail import icloud_fetch_recent
+
+                apple_id = decrypt_message(icloud_prefs["apple_id"], current_user.id)
+                app_pass = decrypt_message(icloud_prefs["app_password"], current_user.id)
+                icloud_emails = await icloud_fetch_recent(
+                    apple_id, app_pass, max_results=15,
+                )
+                emails.extend(icloud_emails)
+                total_checked += len(icloud_emails)
+                sources.append("icloud")
+            except Exception as icloud_exc:
+                logger.warning("iCloud email fetch failed in email widget: %s", icloud_exc)
 
         if not emails:
-            result = {"connected": True, "important": [], "total_checked": 0}
+            result = {
+                "connected": True,
+                "important": [],
+                "total_checked": 0,
+                "sources": sources,
+            }
             await _cache_email_result(redis, cache_key, result)
             return result
 
@@ -446,7 +487,12 @@ async def get_email_widget(
         emails = [e for e in emails if not _is_automated_sender(e.get("from", ""))]
 
         if not emails:
-            result = {"connected": True, "important": [], "total_checked": total_checked}
+            result = {
+                "connected": True,
+                "important": [],
+                "total_checked": total_checked,
+                "sources": sources,
+            }
             await _cache_email_result(redis, cache_key, result)
             return result
 
@@ -459,6 +505,7 @@ async def get_email_widget(
                     "from": e["from"],
                     "date": e["date"],
                     "snippet": e["snippet"],
+                    "source": e.get("source", "gmail"),
                 }
                 for e in scored
                 if e.get("score", 0) >= 8
@@ -472,6 +519,7 @@ async def get_email_widget(
                     "from": e["from"],
                     "date": e["date"],
                     "snippet": e["snippet"],
+                    "source": e.get("source", "gmail"),
                 }
                 for e in filtered
             ]
@@ -480,6 +528,7 @@ async def get_email_widget(
             "connected": True,
             "important": important,
             "total_checked": total_checked,
+            "sources": sources,
         }
         await _cache_email_result(redis, cache_key, result)
         return result
@@ -497,6 +546,82 @@ async def _cache_email_result(redis, cache_key: str, result: dict) -> None:
         await redis.cache_set(cache_key, json.dumps(result), ttl=900)
     except Exception:
         logger.debug("Failed to cache email widget result")
+
+
+# ── iCloud Email ───────────────────────────────────────────────────────
+
+@router.post("/icloud/connect")
+async def connect_icloud(
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+    apple_id: str = "",
+    app_password: str = "",
+) -> dict[str, Any]:
+    """Store iCloud Mail credentials (Apple ID + App-Specific Password).
+
+    The app-specific password must be generated at:
+    appleid.apple.com > Sign-In & Security > App-Specific Passwords
+    """
+    if not apple_id or not app_password:
+        return {"error": "Both apple_id and app_password are required"}
+
+    # Test the connection first
+    try:
+        from app.integrations.icloud_mail import icloud_fetch_recent
+
+        await icloud_fetch_recent(apple_id, app_password, max_results=1, days=1)
+    except Exception as exc:
+        return {"error": f"Failed to connect to iCloud Mail: {exc}"}
+
+    # Store encrypted in user preferences
+    from app.core.encryption import encrypt_message
+    from sqlalchemy.orm.attributes import flag_modified
+
+    prefs = current_user.preferences or {}
+    prefs["icloud_mail"] = {
+        "apple_id": encrypt_message(apple_id, current_user.id),
+        "app_password": encrypt_message(app_password, current_user.id),
+        "connected": True,
+    }
+    current_user.preferences = prefs
+    flag_modified(current_user, "preferences")
+    await db.commit()
+
+    return {"connected": True, "apple_id": apple_id}
+
+
+@router.delete("/icloud/disconnect")
+async def disconnect_icloud(
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Remove stored iCloud Mail credentials."""
+    from sqlalchemy.orm.attributes import flag_modified
+
+    prefs = current_user.preferences or {}
+    if "icloud_mail" in prefs:
+        del prefs["icloud_mail"]
+        current_user.preferences = prefs
+        flag_modified(current_user, "preferences")
+        await db.commit()
+    return {"disconnected": True}
+
+
+@router.get("/icloud/status")
+async def icloud_status(
+    current_user: User = Depends(get_current_active_user),
+) -> dict[str, Any]:
+    """Check whether iCloud Mail is connected for the current user."""
+    prefs = current_user.preferences or {}
+    icloud_prefs = prefs.get("icloud_mail", {})
+    connected = icloud_prefs.get("connected", False)
+
+    if connected:
+        from app.core.encryption import decrypt_message
+
+        apple_id = decrypt_message(icloud_prefs.get("apple_id", ""), current_user.id)
+        return {"connected": True, "apple_id": apple_id}
+    return {"connected": False}
 
 
 # ── Reminders Widget ───────────────────────────────────────────────────
@@ -723,30 +848,48 @@ async def _score_health(user: User, db: AsyncSession) -> WidgetConfig:
 
 
 async def _score_email(user: User) -> WidgetConfig:
-    """Score email urgency based on unread count."""
+    """Score email urgency based on unread count (Gmail + iCloud)."""
     prefs = user.preferences or {}
     google_tokens = prefs.get("google_tokens")
+    icloud_prefs = prefs.get("icloud_mail", {})
+    has_gmail = bool(google_tokens)
+    has_icloud = icloud_prefs.get("connected", False)
 
-    if not google_tokens:
+    if not has_gmail and not has_icloud:
         return WidgetConfig(type="email", urgency=0.0, visible=False, data_hint="not_connected")
 
-    try:
-        from app.integrations.google_workspace import gmail_unread_count
+    unread = 0
 
-        if "token" in google_tokens and "access_token" not in google_tokens:
-            google_tokens["access_token"] = google_tokens["token"]
+    # Gmail unread count
+    if has_gmail:
+        try:
+            from app.integrations.google_workspace import gmail_unread_count
 
-        result = await gmail_unread_count(google_tokens)
-        unread = result.get("unread_count", 0)
+            if "token" in google_tokens and "access_token" not in google_tokens:
+                google_tokens["access_token"] = google_tokens["token"]
 
-        if unread > 10:
-            return WidgetConfig(type="email", urgency=7.0, visible=True, data_hint="high_unread")
-        elif unread > 0:
-            return WidgetConfig(type="email", urgency=4.5, visible=True, data_hint="has_unread")
-        else:
-            return WidgetConfig(type="email", urgency=1.5, visible=True)
-    except Exception:
-        logger.debug("Email scoring failed", exc_info=True)
+            result = await gmail_unread_count(google_tokens)
+            unread += result.get("unread_count", 0)
+        except Exception:
+            logger.debug("Gmail unread count failed in layout scoring", exc_info=True)
+
+    # iCloud unread count
+    if has_icloud:
+        try:
+            from app.core.encryption import decrypt_message
+            from app.integrations.icloud_mail import icloud_unread_count
+
+            apple_id = decrypt_message(icloud_prefs["apple_id"], user.id)
+            app_pass = decrypt_message(icloud_prefs["app_password"], user.id)
+            unread += await icloud_unread_count(apple_id, app_pass)
+        except Exception:
+            logger.debug("iCloud unread count failed in layout scoring", exc_info=True)
+
+    if unread > 10:
+        return WidgetConfig(type="email", urgency=7.0, visible=True, data_hint="high_unread")
+    elif unread > 0:
+        return WidgetConfig(type="email", urgency=4.5, visible=True, data_hint="has_unread")
+    else:
         return WidgetConfig(type="email", urgency=1.5, visible=True)
 
 
