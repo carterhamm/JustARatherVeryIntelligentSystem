@@ -156,12 +156,12 @@ function SearchSection({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={handleKeyDown}
-          className="flex-1 jarvis-input rounded-lg px-3 py-2 text-sm"
+          className="flex-1 jarvis-input hud-clip-sm px-3 py-2 text-sm"
         />
         <button
           onClick={handleSearch}
           disabled={!query.trim() || isSearching}
-          className="jarvis-button rounded-xl px-4 py-2 text-sm font-medium flex-shrink-0 flex items-center gap-1.5"
+          className="jarvis-button hud-clip-sm px-4 py-2 text-sm font-medium flex-shrink-0 flex items-center gap-1.5"
         >
           {isSearching ? <Loader size={14} className="animate-spin" /> : <Search size={14} />}
         </button>
@@ -182,7 +182,7 @@ function SearchSection({
             <button
               key={entity.id}
               onClick={() => onSelectEntity(entity)}
-              className="w-full text-left glass-panel rounded-lg px-3 py-2.5 hover:bg-white/[0.03] transition-all group"
+              className="w-full text-left glass-panel hud-clip-sm px-3 py-2.5 hover:bg-white/[0.03] transition-all group"
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0 flex-1">
@@ -259,7 +259,7 @@ function EntityDetail({
       ) : (
         <>
           {/* Entity header */}
-          <div className="glass-panel rounded-lg px-4 py-3 space-y-2">
+          <div className="glass-panel hud-clip-sm px-4 py-3 space-y-2">
             <div className="flex items-start justify-between gap-2">
               <h3 className="text-base font-display font-semibold text-gray-200">
                 {detail.name}
@@ -275,7 +275,7 @@ function EntityDetail({
               <h4 className="text-xs text-gray-500 uppercase tracking-wider font-medium">
                 Properties
               </h4>
-              <div className="glass-panel rounded-lg divide-y divide-jarvis-blue/10">
+              <div className="glass-panel hud-clip-sm divide-y divide-jarvis-blue/10">
                 {Object.entries(detail.properties).map(([key, value]) => (
                   <div key={key} className="px-3 py-2 flex items-center justify-between">
                     <span className="text-xs text-gray-500">{key}</span>
@@ -304,7 +304,7 @@ function EntityDetail({
                         type: rel.entity_type,
                       })
                     }
-                    className="w-full text-left glass-panel rounded-lg px-3 py-2 hover:bg-white/[0.03] transition-all group"
+                    className="w-full text-left glass-panel hud-clip-sm px-3 py-2 hover:bg-white/[0.03] transition-all group"
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2 min-w-0">
@@ -340,7 +340,7 @@ function EntityDetail({
               </h4>
               <div className="space-y-1.5">
                 {detail.sources.map((source) => (
-                  <div key={source.id} className="glass-panel rounded-lg px-3 py-2">
+                  <div key={source.id} className="glass-panel hud-clip-sm px-3 py-2">
                     <div className="flex items-center justify-between">
                       <span className="text-xs text-gray-300">{source.name}</span>
                       <span className="text-[10px] text-gray-600 capitalize">{source.type}</span>
@@ -407,7 +407,7 @@ function SourcesSection() {
       ) : (
         <div className="space-y-1.5">
           {sources.map((source) => (
-            <div key={source.id} className="glass-panel rounded-lg px-3 py-2.5">
+            <div key={source.id} className="glass-panel hud-clip-sm px-3 py-2.5">
               <div className="flex items-center justify-between">
                 <div className="min-w-0 flex-1">
                   <p className="text-sm text-gray-300 truncate">{source.name}</p>
@@ -510,7 +510,7 @@ export default function KnowledgePanel() {
             animate={{ x: 0 }}
             exit={{ x: '100%' }}
             transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-            className="fixed right-5 top-5 bottom-5 w-full max-w-md z-50 glass-heavy rounded-3xl flex flex-col overflow-hidden"
+            className="fixed right-5 top-5 bottom-5 w-full max-w-md z-50 glass-heavy hud-clip flex flex-col overflow-hidden"
           >
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-jarvis-blue/10">
@@ -520,7 +520,7 @@ export default function KnowledgePanel() {
               </h2>
               <button
                 onClick={handleClose}
-                className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-500 hover:text-jarvis-blue hover:bg-white/[0.03] transition-all"
+                className="w-8 h-8 hud-clip-sm flex items-center justify-center text-gray-500 hover:text-jarvis-blue hover:bg-white/[0.03] transition-all"
                 aria-label="Close knowledge panel"
               >
                 <X size={16} />

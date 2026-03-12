@@ -77,14 +77,37 @@ function HudBezel({ children }: { children: React.ReactNode }) {
               <stop offset="0%" stopColor="rgba(8, 14, 30, 0.92)" />
               <stop offset="100%" stopColor="rgba(4, 8, 20, 0.96)" />
             </linearGradient>
+            <linearGradient id="beamGlow" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stopColor="transparent" />
+              <stop offset="40%" stopColor="rgba(0, 212, 255, 0.8)" />
+              <stop offset="60%" stopColor="rgba(0, 212, 255, 0.8)" />
+              <stop offset="100%" stopColor="transparent" />
+            </linearGradient>
           </defs>
 
           {/* Background fill */}
           <path d={bezelPath} fill="url(#bezelFill)" />
           {/* Inner glow stroke */}
           <path d={bezelPath} fill="none" stroke="rgba(0, 212, 255, 0.05)" strokeWidth="8" />
-          {/* Main border */}
-          <path d={bezelPath} fill="none" stroke="rgba(0, 212, 255, 0.4)" strokeWidth="1.5" />
+          {/* Static border (faint) */}
+          <path d={bezelPath} fill="none" stroke="rgba(0, 212, 255, 0.15)" strokeWidth="1.5" />
+          {/* Beam animation — traveling highlight along border */}
+          <path
+            d={bezelPath}
+            fill="none"
+            stroke="rgba(0, 212, 255, 0.6)"
+            strokeWidth="2"
+            strokeDasharray={`${Math.round((w + h) * 0.15)} ${Math.round((w + h) * 2.5)}`}
+            strokeLinecap="round"
+          >
+            <animate
+              attributeName="stroke-dashoffset"
+              from="0"
+              to={`-${Math.round((w + h) * 2.7)}`}
+              dur="6s"
+              repeatCount="indefinite"
+            />
+          </path>
 
           {/* ── Accent tabs (sensor/button protrusions) ── */}
           {/* Right side */}
@@ -507,7 +530,7 @@ export default function AuthPage() {
           <div className="px-8 py-8 max-w-sm mx-auto">
           {/* Branding */}
           <div className="text-center mb-6">
-            <div className="inline-flex items-center justify-center w-14 h-14 mb-3 rounded-2xl bg-gradient-to-br from-jarvis-blue/15 to-blue-500/10 border border-jarvis-blue/10">
+            <div className="inline-flex items-center justify-center w-14 h-14 mb-3 hud-clip-sm bg-gradient-to-br from-jarvis-blue/15 to-blue-500/10 border border-jarvis-blue/10">
               <Shield size={24} className="text-jarvis-blue" />
             </div>
             <h1 className="text-xl font-display font-bold tracking-[0.2em] text-jarvis-blue glow-text">
@@ -554,7 +577,7 @@ export default function AuthPage() {
 
           {/* WebAuthn warning */}
           {!webauthnSupported && (
-            <div className="mb-4 px-4 py-2.5 rounded-xl bg-hud-amber/10 border border-hud-amber/20 flex items-center gap-2">
+            <div className="mb-4 px-4 py-2.5 hud-clip-sm bg-hud-amber/10 border border-hud-amber/20 flex items-center gap-2">
               <AlertTriangle size={14} className="text-hud-amber flex-shrink-0" />
               <span className="text-xs text-hud-amber">Passkeys not supported in this browser.</span>
             </div>
@@ -782,7 +805,7 @@ export default function AuthPage() {
                     onClick={handleVerifySht}
                     disabled={!setupToken.trim() || shtChecking || shtVerified}
                     className={clsx(
-                      'w-11 h-11 flex items-center justify-center rounded-xl border transition-all flex-shrink-0',
+                      'w-11 h-11 flex items-center justify-center hud-clip-sm border transition-all flex-shrink-0',
                       shtVerified
                         ? 'bg-hud-green/15 border-hud-green/30'
                         : 'glass-subtle border-white/[0.06] hover:border-jarvis-blue/20',

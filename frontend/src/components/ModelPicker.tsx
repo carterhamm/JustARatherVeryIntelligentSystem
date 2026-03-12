@@ -45,7 +45,7 @@ function ModelButton({
     <button
       onClick={onSelect}
       className={clsx(
-        'w-full text-left px-4 py-2.5 transition-all rounded-xl border',
+        'w-full text-left px-4 py-2.5 transition-all hud-clip-sm border',
         isSelected
           ? `bg-white/[0.04] ${model.activeColor}`
           : 'bg-transparent border-white/[0.04] text-gray-400 hover:bg-white/[0.03]',

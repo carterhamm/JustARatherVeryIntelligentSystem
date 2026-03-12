@@ -122,7 +122,7 @@ export default function SessionsPanel() {
             animate={{ opacity: 1, x: 0, scale: 1 }}
             exit={{ opacity: 0, x: -40, scale: 0.97 }}
             transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-            className="fixed left-5 top-20 bottom-24 z-50 w-80 glass-heavy rounded-3xl flex flex-col overflow-hidden"
+            className="fixed left-5 top-20 bottom-24 z-50 w-80 glass-heavy hud-clip flex flex-col overflow-hidden"
           >
             {/* Header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.05]">
@@ -166,10 +166,10 @@ export default function SessionsPanel() {
                       key={conv.id}
                       onClick={() => handleSelect(conv)}
                       className={clsx(
-                        'w-full text-left px-4 py-3 rounded-xl group transition-all relative',
+                        'w-full text-left px-4 py-3 hud-clip-sm group transition-all relative',
                         {
                           'glass-cyan': currentConversation?.id === conv.id,
-                          'hover:bg-white/[0.03] rounded-xl': currentConversation?.id !== conv.id,
+                          'hover:bg-white/[0.03]': currentConversation?.id !== conv.id,
                         },
                       )}
                     >
@@ -198,7 +198,7 @@ export default function SessionsPanel() {
                         <button
                           onClick={(e) => handleDelete(e, conv.id)}
                           className={clsx(
-                            'flex-shrink-0 p-1 rounded-lg transition-all',
+                            'flex-shrink-0 p-1 hud-clip-sm transition-all',
                             {
                               'opacity-0 group-hover:opacity-100 text-gray-700 hover:text-hud-red hover:bg-hud-red/10':
                                 deletingId !== conv.id,

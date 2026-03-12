@@ -21,7 +21,7 @@ function CodeBlock({ language, children }: { language: string; children: string 
   };
 
   return (
-    <div className="relative group my-2.5 rounded-xl overflow-hidden border border-white/[0.06]">
+    <div className="relative group my-2.5 hud-clip-md overflow-hidden border border-white/[0.06]">
       <div className="flex items-center justify-between px-4 py-1.5 bg-black/40 border-b border-white/[0.04]">
         <span className="text-[9px] font-mono text-jarvis-blue/60 uppercase tracking-wider">
           {language || 'code'}
@@ -109,7 +109,7 @@ export default function HoloMessage({ message }: HoloMessageProps) {
   if (isSystem) {
     return (
       <div className="flex justify-center my-2 animate-fade-in">
-        <div className="glass-subtle rounded-xl px-4 py-2 max-w-lg border-hud-red/10">
+        <div className="glass-subtle hud-clip-sm px-4 py-2 max-w-lg border-hud-red/10">
           <p className="text-[11px] text-center text-gray-400 font-mono">{displayContent}</p>
         </div>
       </div>
@@ -146,7 +146,7 @@ export default function HoloMessage({ message }: HoloMessageProps) {
 
         {/* Message bubble */}
         <div
-          className={clsx('rounded-2xl text-sm leading-relaxed', {
+          className={clsx('hud-clip-md text-sm leading-relaxed', {
             'glass-gold text-white/90 px-5 py-3.5': isUser,
             'glass-cyan text-gray-200': !isUser,
             'px-4 py-3 w-16': !isUser && message.isStreaming && !message.content,

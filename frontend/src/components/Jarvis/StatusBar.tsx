@@ -219,7 +219,7 @@ export default function StatusBar() {
             {wsConnected ? 'ONLINE' : 'OFFLINE'}
           </span>
           {/* Hover tooltip */}
-          <div className="absolute top-full right-0 mt-2 px-3 py-1.5 glass rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+          <div className="absolute top-full right-0 mt-2 px-3 py-1.5 glass hud-clip-sm whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
             <span className="text-[9px] font-mono text-gray-300">
               {wsConnected ? 'Connected to Stark Industries Secure Server' : 'Disconnected from Stark Industries Secure Server'}
             </span>

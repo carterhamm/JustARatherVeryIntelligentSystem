@@ -86,7 +86,7 @@ function DockIcon({ icon: Icon, label, active, accent, onClick, index }: DockIco
 
       {/* Tooltip — to the right */}
       {hovered && (
-        <div className="absolute left-full top-1/2 -translate-y-1/2 ml-3 px-2.5 py-1 glass rounded-lg whitespace-nowrap z-50 pointer-events-none animate-fade-in">
+        <div className="absolute left-full top-1/2 -translate-y-1/2 ml-3 px-2.5 py-1 glass hud-clip-sm whitespace-nowrap z-50 pointer-events-none animate-fade-in">
           <span className="text-[9px] font-mono text-gray-300 uppercase tracking-wider">
             {label}
           </span>

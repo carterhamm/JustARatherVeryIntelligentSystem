@@ -83,7 +83,7 @@ export default function Sidebar() {
       {!sidebarOpen && (
         <button
           onClick={toggleSidebar}
-          className="fixed top-4 left-4 z-30 jarvis-button rounded-xl w-10 h-10 flex items-center justify-center"
+          className="fixed top-4 left-4 z-30 jarvis-button w-10 h-10 flex items-center justify-center"
           aria-label="Open sidebar"
         >
           <PanelLeftOpen size={18} />
@@ -124,7 +124,7 @@ export default function Sidebar() {
           <button
             onClick={handleNewConversation}
             disabled={isCreating}
-            className="w-full jarvis-button rounded-xl py-2.5 px-4 text-sm font-medium flex items-center justify-center gap-2 tracking-wide"
+            className="w-full jarvis-button py-2.5 px-4 text-sm font-medium flex items-center justify-center gap-2 tracking-wide"
           >
             <Plus size={16} />
             New Conversation
@@ -146,7 +146,7 @@ export default function Sidebar() {
                   key={conv.id}
                   onClick={() => handleSelectConversation(conv)}
                   className={clsx(
-                    'w-full text-left rounded-xl px-3 py-2.5 group transition-all relative',
+                    'w-full text-left hud-clip-sm px-3 py-2.5 group transition-all relative',
                     {
                       'bg-jarvis-blue/10 border border-jarvis-blue/20':
                         currentConversation?.id === conv.id,
@@ -181,7 +181,7 @@ export default function Sidebar() {
                     <button
                       onClick={(e) => handleDeleteConversation(e, conv.id)}
                       className={clsx(
-                        'flex-shrink-0 p-1 rounded-lg transition-all',
+                        'flex-shrink-0 p-1 hud-clip-sm transition-all',
                         {
                           'opacity-0 group-hover:opacity-100 text-gray-600 hover:text-red-400 hover:bg-red-500/10':
                             deletingId !== conv.id,
@@ -207,14 +207,14 @@ export default function Sidebar() {
         <div className="px-3 pb-2 space-y-1.5">
           <button
             onClick={() => window.dispatchEvent(new CustomEvent('jarvis-knowledge-toggle'))}
-            className="w-full jarvis-button rounded-xl py-2 px-4 text-sm font-medium flex items-center gap-2 tracking-wide"
+            className="w-full jarvis-button py-2 px-4 text-sm font-medium flex items-center gap-2 tracking-wide"
           >
             <Brain size={16} />
             Knowledge
           </button>
           <button
             onClick={() => window.dispatchEvent(new CustomEvent('jarvis-import-toggle'))}
-            className="w-full jarvis-button rounded-xl py-2 px-4 text-sm font-medium flex items-center gap-2 tracking-wide"
+            className="w-full jarvis-button py-2 px-4 text-sm font-medium flex items-center gap-2 tracking-wide"
           >
             <Upload size={16} />
             Import Data

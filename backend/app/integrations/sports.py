@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import httpx
 
@@ -17,6 +18,15 @@ logger = logging.getLogger(__name__)
 
 _BASE = "https://site.api.espn.com/apis/site/v2/sports"
 _TIMEOUT = 10.0
+
+# User's local timezone — used for "today" calculations so we don't
+# accidentally query the wrong ESPN date when UTC is a day ahead.
+_USER_TZ = ZoneInfo("America/Denver")  # Mountain Time
+
+
+def _local_now() -> datetime:
+    """Current time in the user's timezone (Mountain Time)."""
+    return datetime.now(tz=_USER_TZ)
 
 # ESPN team IDs for quick reference
 _TEAM_IDS = {
@@ -64,7 +74,7 @@ def detect_sport_for_team(team: str, explicit_sport: str = "") -> str:
     if explicit_sport:
         return explicit_sport
 
-    month = datetime.now(tz=timezone.utc).month
+    month = _local_now().month
 
     # Overlap months: both football and basketball are active
     if month in (11, 12, 1):
@@ -234,8 +244,8 @@ async def get_recent_team_result(team: str, sport: str = "basketball") -> str | 
     team_id = _resolve_team(team)
     sport_path = _SPORT_PATHS.get(sport.lower(), _SPORT_PATHS.get("basketball"))
 
-    # 1. Check today's scoreboard
-    now = datetime.now(tz=timezone.utc)
+    # 1. Check today's scoreboard (use local time so "today" matches user's day)
+    now = _local_now()
     today_str = now.strftime("%Y%m%d")
     yesterday_str = (now - timedelta(days=1)).strftime("%Y%m%d")
 
@@ -265,6 +275,55 @@ async def get_recent_team_result(team: str, sport: str = "basketball") -> str | 
         logger.debug("Schedule fallback failed: %s", exc)
 
     return None
+
+
+async def get_team_games_today(team: str, sport: str = "basketball") -> list[dict[str, Any]]:
+    """Find today's game(s) for a specific team using scoreboard + schedule.
+
+    Checks today's scoreboard first, then falls back to the full schedule
+    and filters for games matching today's local date. Returns a list of
+    game dicts (may be empty).
+    """
+    team_lower = team.lower().strip()
+    today = _local_now()
+    today_str = today.strftime("%Y%m%d")
+    today_iso = today.strftime("%Y-%m-%d")
+
+    # 1. Check today's scoreboard (most reliable for live/today games)
+    try:
+        games = await get_scoreboard(sport=sport, dates=today_str, limit=50)
+        for g in games:
+            team_names = [t["name"].lower() for t in g.get("teams", [])]
+            team_abbrs = [t.get("abbreviation", "").lower() for t in g.get("teams", [])]
+            if any(team_lower in n for n in team_names) or any(team_lower in a for a in team_abbrs):
+                return [g]
+    except Exception as exc:
+        logger.debug("Scoreboard check for %s on %s failed: %s", team, today_str, exc)
+
+    # 2. Fall back to team schedule and filter for today's date
+    #    ESPN dates are in UTC — convert to local time for accurate day comparison
+    try:
+        schedule = await get_schedule(team, sport)
+        today_games = []
+        for g in schedule:
+            raw_date = g.get("date", "")
+            if raw_date:
+                try:
+                    game_dt = datetime.fromisoformat(raw_date.replace("Z", "+00:00"))
+                    game_local = game_dt.astimezone(_USER_TZ)
+                    game_date = game_local.strftime("%Y-%m-%d")
+                except (ValueError, TypeError):
+                    game_date = raw_date[:10]
+            else:
+                game_date = ""
+            if game_date == today_iso:
+                today_games.append(g)
+        if today_games:
+            return today_games
+    except Exception as exc:
+        logger.debug("Schedule check for %s on %s failed: %s", team, today_str, exc)
+
+    return []
 
 
 async def get_standings(sport: str = "football", group: str = "") -> list[dict[str, Any]]:

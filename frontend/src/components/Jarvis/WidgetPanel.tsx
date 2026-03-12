@@ -323,7 +323,7 @@ function GoogleConnectWidget() {
         className="flex items-center justify-between py-1 group"
       >
         <div className="flex items-center gap-2.5">
-          <div className="w-6 h-6 rounded-lg flex items-center justify-center bg-white/[0.04] border border-white/[0.06]">
+          <div className="w-6 h-6 hud-clip-sm flex items-center justify-center bg-white/[0.04] border border-white/[0.06]">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
               <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/>
               <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
@@ -410,15 +410,15 @@ function WidgetCard({
       background: 'rgba(8, 12, 24, 0.45)',
       backdropFilter: 'blur(24px) saturate(1.3)',
       WebkitBackdropFilter: 'blur(24px) saturate(1.3)',
-      border: '1px solid rgba(0, 212, 255, 0.06)',
+      border: '1px solid rgba(0, 212, 255, 0.18)',
       clipPath: _WIDGET_CLIP,
     }}>
       {/* Diagonal border accents at cut corners */}
       <svg className="absolute top-0 right-0 w-3 h-3 pointer-events-none" viewBox="0 0 12 12" fill="none">
-        <line x1="0" y1="0" x2="12" y2="12" stroke="rgba(0,212,255,0.1)" strokeWidth="1" />
+        <line x1="0" y1="0" x2="12" y2="12" stroke="rgba(0,212,255,0.2)" strokeWidth="1" />
       </svg>
       <svg className="absolute bottom-0 left-0 w-3 h-3 pointer-events-none" viewBox="0 0 12 12" fill="none">
-        <line x1="0" y1="0" x2="12" y2="12" stroke="rgba(0,212,255,0.1)" strokeWidth="1" />
+        <line x1="0" y1="0" x2="12" y2="12" stroke="rgba(0,212,255,0.2)" strokeWidth="1" />
       </svg>
 
       <div className="flex items-center justify-between mb-2">

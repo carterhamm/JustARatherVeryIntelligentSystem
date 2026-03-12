@@ -156,7 +156,7 @@ export default function ChatPanel() {
         <div className="flex items-center gap-2 flex-shrink-0">
           {/* Connection status */}
           <div
-            className={clsx('flex items-center gap-1.5 px-2 py-1 rounded-lg text-[11px]', {
+            className={clsx('flex items-center gap-1.5 px-2 py-1 hud-clip-sm text-[11px]', {
               'text-green-400': wsConnected,
               'text-gray-500': !wsConnected,
             })}
@@ -169,7 +169,7 @@ export default function ChatPanel() {
           <button
             onClick={toggleSettings}
             className={clsx(
-              'w-8 h-8 rounded-lg flex items-center justify-center transition-all',
+              'w-8 h-8 hud-clip-sm flex items-center justify-center transition-all',
               {
                 'text-jarvis-blue bg-jarvis-blue/10': settingsOpen,
                 'text-gray-500 hover:text-jarvis-blue hover:bg-white/[0.03]': !settingsOpen,

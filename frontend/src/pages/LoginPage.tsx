@@ -81,7 +81,7 @@ export default function LoginPage() {
 
       {/* Login Card */}
       <div className="relative z-10 w-full max-w-md mx-4">
-        <div className="glass-panel rounded-2xl p-8 shadow-jarvis-lg">
+        <div className="glass-panel hud-clip-md p-8 shadow-jarvis-lg">
           {/* JARVIS Branding */}
           <div className="text-center mb-8">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-br from-jarvis-blue/20 to-jarvis-cyan/10 border border-jarvis-blue/30 mb-4">
@@ -97,7 +97,7 @@ export default function LoginPage() {
 
           {/* Error Display */}
           {error && (
-            <div className="mb-6 px-4 py-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm text-center">
+            <div className="mb-6 px-4 py-3 hud-clip-sm bg-red-500/10 border border-red-500/30 text-red-400 text-sm text-center">
               {error}
             </div>
           )}
@@ -114,7 +114,7 @@ export default function LoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="stark@avengers.com"
-                className="w-full jarvis-input rounded-xl px-4 py-3 text-sm"
+                className="w-full jarvis-input hud-clip-sm px-4 py-3 text-sm"
                 autoComplete="email"
                 autoFocus
                 disabled={isLoading}
@@ -132,7 +132,7 @@ export default function LoginPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter your password"
-                  className="w-full jarvis-input rounded-xl px-4 py-3 pr-11 text-sm"
+                  className="w-full jarvis-input hud-clip-sm px-4 py-3 pr-11 text-sm"
                   autoComplete="current-password"
                   disabled={isLoading}
                 />
@@ -150,7 +150,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full jarvis-button jarvis-button-gold rounded-xl py-3 text-sm font-semibold tracking-wider uppercase flex items-center justify-center gap-2"
+              className="w-full jarvis-button jarvis-button-gold hud-clip-sm py-3 text-sm font-semibold tracking-wider uppercase flex items-center justify-center gap-2"
             >
               {isLoading ? (
                 <>

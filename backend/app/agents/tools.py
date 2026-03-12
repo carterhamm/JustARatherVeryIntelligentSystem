@@ -2170,8 +2170,18 @@ class SportsTool(BaseTool):
 
         # ── Step 2: Route to data source based on sub-intent ──
 
-        # Historical or general → ALWAYS web search (never trust ESPN for past data)
-        if sub_intent in ("historical", "general"):
+        # Historical → ALWAYS web search (never trust ESPN for past data)
+        if sub_intent == "historical":
+            return await self._gemini_search(query)
+
+        # General fallback but with a team mentioned → try ESPN first
+        if sub_intent == "general" and team:
+            result = await self._handle_live_scores(team, sport, query)
+            if result and "could not find" not in result.lower():
+                return result
+            return await self._gemini_search(query)
+
+        if sub_intent == "general":
             return await self._gemini_search(query)
 
         # Live scores → ESPN scoreboard
@@ -2196,18 +2206,33 @@ class SportsTool(BaseTool):
     # ── ESPN handlers ────────────────────────────────────────────────
 
     async def _handle_live_scores(self, team: str, sport: str, query: str) -> str:
-        """Check ESPN scoreboard for live/today's games."""
-        from app.integrations.sports import get_scoreboard
+        """Check ESPN scoreboard for live/today's games.
 
+        Explicitly passes today's date (in user's local timezone) to avoid
+        UTC date mismatches. Falls back to team schedule before web search.
+        """
+        from app.integrations.sports import get_scoreboard, get_team_games_today, _local_now
+
+        today_str = _local_now().strftime("%Y%m%d")
         sports_to_check = self._resolve_sports(team, sport)
 
+        # If a specific team is mentioned, use the combined lookup first
+        if team:
+            for s in sports_to_check:
+                try:
+                    today_games = await get_team_games_today(team, s)
+                    if today_games:
+                        return self._format_games(today_games, s)
+                except Exception as exc:
+                    logger.debug("Team today-game lookup failed for %s/%s: %s", team, s, exc)
+
+        # No specific team, or team lookup found nothing — try full scoreboard
         for s in sports_to_check:
             try:
-                games = await get_scoreboard(sport=s, limit=50)
+                games = await get_scoreboard(sport=s, dates=today_str, limit=50)
                 if not games:
                     continue
 
-                # If a specific team is mentioned, filter for it
                 if team:
                     team_lower = team.lower()
                     matching = [
@@ -2254,23 +2279,56 @@ class SportsTool(BaseTool):
         return await self._gemini_search(query)
 
     async def _handle_schedule(self, team: str, sport: str, query: str) -> str:
-        """Get a team's schedule from ESPN."""
-        from app.integrations.sports import get_schedule
+        """Get a team's schedule from ESPN.
+
+        Prioritises upcoming and today's games. Completed games are shown
+        at the end so the LLM can focus on what matters.
+        """
+        from app.integrations.sports import get_schedule, _local_now
 
         if not team:
             return await self._gemini_search(query)
 
+        today_iso = _local_now().strftime("%Y-%m-%d")
         sports_to_check = self._resolve_sports(team, sport)
 
         for s in sports_to_check:
             try:
                 games = await get_schedule(team, s)
-                if games:
-                    lines = [f"{team.upper()} {s.title()} Schedule:\n"]
-                    for g in games[:15]:
-                        status = g["result"] if g["completed"] else g.get("status", "Upcoming")
-                        lines.append(f"  {g['shortName'] or g['name']}: {status} — {g['date'][:10]}")
-                    return "\n".join(lines)
+                if not games:
+                    continue
+
+                # Split into today / upcoming / completed
+                today_games = []
+                upcoming = []
+                completed = []
+                for g in games:
+                    game_date = g.get("date", "")[:10]
+                    if g["completed"]:
+                        completed.append(g)
+                    elif game_date == today_iso:
+                        today_games.append(g)
+                    else:
+                        upcoming.append(g)
+
+                lines = [f"{team.upper()} {s.title()} Schedule:\n"]
+
+                if today_games:
+                    lines.append("  TODAY:")
+                    for g in today_games:
+                        lines.append(f"    {g['shortName'] or g['name']} — {g.get('status', 'Scheduled')} — {g['date'][:16]}")
+
+                if upcoming:
+                    lines.append("\n  UPCOMING:")
+                    for g in upcoming[:10]:
+                        lines.append(f"    {g['shortName'] or g['name']} — {g['date'][:10]}")
+
+                if completed:
+                    lines.append(f"\n  RECENT RESULTS (last 5 of {len(completed)}):")
+                    for g in completed[-5:]:
+                        lines.append(f"    {g['shortName'] or g['name']}: {g['result']} — {g['date'][:10]}")
+
+                return "\n".join(lines)
             except Exception as exc:
                 logger.debug("Schedule failed for %s/%s: %s", team, s, exc)
 
@@ -2326,14 +2384,32 @@ class SportsTool(BaseTool):
         return [detected]
 
     def _format_games(self, games: list[dict], sport: str) -> str:
-        """Format ESPN scoreboard games into readable text."""
+        """Format ESPN games into readable text.
+
+        Handles both scoreboard dicts (with 'teams' list) and schedule
+        dicts (with 'home'/'away' strings).
+        """
         lines = [f"{sport.title()} Games:\n"]
         for g in games:
-            teams_str = " vs ".join(
-                f"{t['name']} {t['score']}" for t in g.get("teams", [])
-            )
+            if g.get("teams"):
+                # Scoreboard format
+                teams_str = " vs ".join(
+                    f"{t['name']} {t['score']}" for t in g["teams"]
+                )
+            elif g.get("home") or g.get("away"):
+                # Schedule format
+                teams_str = g.get("shortName") or f"{g.get('away', '?')} @ {g.get('home', '?')}"
+            else:
+                teams_str = g.get("name", "Unknown game")
+
             status = g.get("detail") or g.get("status", "")
-            lines.append(f"  {teams_str} — {status}")
+            date_str = g.get("date", "")[:16]
+            line_parts = [f"  {teams_str}"]
+            if status:
+                line_parts.append(status)
+            if date_str:
+                line_parts.append(date_str)
+            lines.append(" — ".join(line_parts))
         return "\n".join(lines)
 
     async def _gemini_search(self, query: str) -> str:

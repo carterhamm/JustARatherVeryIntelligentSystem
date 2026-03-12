@@ -80,19 +80,19 @@ function TextImportSection() {
         placeholder="Title (optional)"
         value={title}
         onChange={(e) => setTitle(e.target.value)}
-        className="w-full jarvis-input rounded-lg px-3 py-2 text-sm"
+        className="w-full jarvis-input hud-clip-sm px-3 py-2 text-sm"
       />
       <textarea
         placeholder="Paste text content here..."
         value={content}
         onChange={(e) => setContent(e.target.value)}
         rows={4}
-        className="w-full jarvis-input rounded-lg px-3 py-2 text-sm resize-none"
+        className="w-full jarvis-input hud-clip-sm px-3 py-2 text-sm resize-none"
       />
       <button
         onClick={handleSubmit}
         disabled={!content.trim() || status === 'importing'}
-        className="jarvis-button-gold jarvis-button rounded-xl px-4 py-2 text-sm font-medium flex items-center gap-2"
+        className="jarvis-button-gold jarvis-button hud-clip-sm px-4 py-2 text-sm font-medium flex items-center gap-2"
       >
         <Upload size={14} />
         Import Text
@@ -184,7 +184,7 @@ function FileUploadSection() {
         onDrop={handleDrop}
         onClick={() => fileInputRef.current?.click()}
         className={clsx(
-          'border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all',
+          'border-2 border-dashed hud-clip-sm p-6 text-center cursor-pointer transition-all',
           {
             'border-jarvis-blue/50 bg-jarvis-blue/5': isDragging,
             'border-jarvis-blue/20 hover:border-jarvis-blue/40 hover:bg-white/[0.02]': !isDragging,
@@ -251,12 +251,12 @@ function UrlImportSection() {
           placeholder="https://example.com/article"
           value={url}
           onChange={(e) => setUrl(e.target.value)}
-          className="flex-1 jarvis-input rounded-lg px-3 py-2 text-sm"
+          className="flex-1 jarvis-input hud-clip-sm px-3 py-2 text-sm"
         />
         <button
           onClick={handleSubmit}
           disabled={!url.trim() || status === 'importing'}
-          className="jarvis-button-gold jarvis-button rounded-xl px-4 py-2 text-sm font-medium flex-shrink-0"
+          className="jarvis-button-gold jarvis-button hud-clip-sm px-4 py-2 text-sm font-medium flex-shrink-0"
         >
           Import
         </button>
@@ -299,12 +299,12 @@ function IMessageSection() {
         placeholder="Path to chat.db"
         value={dbPath}
         onChange={(e) => setDbPath(e.target.value)}
-        className="w-full jarvis-input rounded-lg px-3 py-2 text-sm font-mono text-xs"
+        className="w-full jarvis-input hud-clip-sm px-3 py-2 text-sm font-mono text-xs"
       />
       <button
         onClick={handleImport}
         disabled={status === 'importing'}
-        className="jarvis-button-gold jarvis-button rounded-xl px-4 py-2 text-sm font-medium flex items-center gap-2"
+        className="jarvis-button-gold jarvis-button hud-clip-sm px-4 py-2 text-sm font-medium flex items-center gap-2"
       >
         <MessageSquare size={14} />
         Import iMessage
@@ -345,7 +345,7 @@ function GmailSection() {
       <button
         onClick={handleSync}
         disabled={status === 'importing'}
-        className="jarvis-button-gold jarvis-button rounded-xl px-4 py-2 text-sm font-medium flex items-center gap-2"
+        className="jarvis-button-gold jarvis-button hud-clip-sm px-4 py-2 text-sm font-medium flex items-center gap-2"
       >
         <Mail size={14} />
         Sync Gmail
@@ -400,7 +400,7 @@ function FacebookSection() {
       <button
         onClick={() => fileInputRef.current?.click()}
         disabled={status === 'importing'}
-        className="jarvis-button-gold jarvis-button rounded-xl px-4 py-2 text-sm font-medium flex items-center gap-2"
+        className="jarvis-button-gold jarvis-button hud-clip-sm px-4 py-2 text-sm font-medium flex items-center gap-2"
       >
         <Upload size={14} />
         Upload Facebook Export
@@ -458,7 +458,7 @@ export default function DataImportPanel() {
             animate={{ x: 0 }}
             exit={{ x: '-100%' }}
             transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-            className="fixed left-5 top-5 bottom-5 w-full max-w-md z-50 glass-heavy rounded-3xl flex flex-col overflow-hidden"
+            className="fixed left-5 top-5 bottom-5 w-full max-w-md z-50 glass-heavy hud-clip flex flex-col overflow-hidden"
           >
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-jarvis-blue/10">
@@ -468,7 +468,7 @@ export default function DataImportPanel() {
               </h2>
               <button
                 onClick={handleClose}
-                className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-500 hover:text-jarvis-blue hover:bg-white/[0.03] transition-all"
+                className="w-8 h-8 hud-clip-sm flex items-center justify-center text-gray-500 hover:text-jarvis-blue hover:bg-white/[0.03] transition-all"
                 aria-label="Close data import"
               >
                 <X size={16} />

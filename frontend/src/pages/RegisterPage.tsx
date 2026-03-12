@@ -90,7 +90,7 @@ export default function RegisterPage() {
 
       {/* Register Card */}
       <div className="relative z-10 w-full max-w-md mx-4">
-        <div className="glass-panel rounded-2xl p-8 shadow-jarvis-lg">
+        <div className="glass-panel hud-clip-md p-8 shadow-jarvis-lg">
           {/* JARVIS Branding */}
           <div className="text-center mb-8">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-br from-jarvis-blue/20 to-jarvis-cyan/10 border border-jarvis-blue/30 mb-4">
@@ -106,7 +106,7 @@ export default function RegisterPage() {
 
           {/* Error Display */}
           {error && (
-            <div className="mb-6 px-4 py-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm text-center">
+            <div className="mb-6 px-4 py-3 hud-clip-sm bg-red-500/10 border border-red-500/30 text-red-400 text-sm text-center">
               {error}
             </div>
           )}
@@ -123,7 +123,7 @@ export default function RegisterPage() {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 placeholder="tonystark"
-                className="w-full jarvis-input rounded-xl px-4 py-3 text-sm"
+                className="w-full jarvis-input hud-clip-sm px-4 py-3 text-sm"
                 autoComplete="username"
                 autoFocus
                 disabled={isLoading}
@@ -140,7 +140,7 @@ export default function RegisterPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="stark@avengers.com"
-                className="w-full jarvis-input rounded-xl px-4 py-3 text-sm"
+                className="w-full jarvis-input hud-clip-sm px-4 py-3 text-sm"
                 autoComplete="email"
                 disabled={isLoading}
               />
@@ -157,7 +157,7 @@ export default function RegisterPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Min. 8 characters"
-                  className="w-full jarvis-input rounded-xl px-4 py-3 pr-11 text-sm"
+                  className="w-full jarvis-input hud-clip-sm px-4 py-3 pr-11 text-sm"
                   autoComplete="new-password"
                   disabled={isLoading}
                 />
@@ -182,7 +182,7 @@ export default function RegisterPage() {
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder="Repeat your password"
-                className="w-full jarvis-input rounded-xl px-4 py-3 text-sm"
+                className="w-full jarvis-input hud-clip-sm px-4 py-3 text-sm"
                 autoComplete="new-password"
                 disabled={isLoading}
               />
@@ -191,7 +191,7 @@ export default function RegisterPage() {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full jarvis-button jarvis-button-gold rounded-xl py-3 text-sm font-semibold tracking-wider uppercase flex items-center justify-center gap-2 mt-2"
+              className="w-full jarvis-button jarvis-button-gold hud-clip-sm py-3 text-sm font-semibold tracking-wider uppercase flex items-center justify-center gap-2 mt-2"
             >
               {isLoading ? (
                 <>

@@ -131,7 +131,7 @@ export default function FloatingChat() {
               const latestError = item.errors[item.errors.length - 1];
               return (
                 <div key={latestError.id} className="flex justify-center my-3">
-                  <div className="glass-subtle rounded-xl px-4 py-2 max-w-lg border border-hud-red/10">
+                  <div className="glass-subtle hud-clip-sm px-4 py-2 max-w-lg border border-hud-red/10">
                     <p className="text-[10px] text-center text-red-400 font-mono">
                       {count > 1
                         ? `${latestError.content} (+${count - 1} more)`

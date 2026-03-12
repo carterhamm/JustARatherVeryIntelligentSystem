@@ -101,7 +101,7 @@ export default function DiagnosticsPanel() {
             animate={{ opacity: 1, x: 0, scale: 1 }}
             exit={{ opacity: 0, x: 40, scale: 0.97 }}
             transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-            className="fixed right-5 top-20 bottom-24 z-50 w-72 glass-heavy rounded-3xl flex flex-col overflow-hidden"
+            className="fixed right-5 top-20 bottom-24 z-50 w-72 glass-heavy hud-clip flex flex-col overflow-hidden"
           >
             {/* Header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.05]">
@@ -142,7 +142,7 @@ export default function DiagnosticsPanel() {
               </div>
 
               {/* Active Model */}
-              <div className="glass-subtle rounded-2xl p-4">
+              <div className="glass-subtle hud-clip-md p-4">
                 <span className="hud-label text-[8px] block mb-2">ACTIVE MODEL</span>
                 <div className="flex items-center gap-2">
                   <div
@@ -166,7 +166,7 @@ export default function DiagnosticsPanel() {
               </div>
 
               {/* Connection */}
-              <div className="glass-subtle rounded-2xl p-4">
+              <div className="glass-subtle hud-clip-md p-4">
                 <span className="hud-label text-[8px] block mb-2">CONNECTION</span>
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
@@ -195,7 +195,7 @@ export default function DiagnosticsPanel() {
               </div>
 
               {/* Session Telemetry */}
-              <div className="glass-subtle rounded-2xl p-4">
+              <div className="glass-subtle hud-clip-md p-4">
                 <span className="hud-label text-[8px] block mb-2">SESSION</span>
                 <div className="space-y-2">
                   <div className="flex justify-between">
@@ -230,7 +230,7 @@ export default function DiagnosticsPanel() {
               </div>
 
               {/* System */}
-              <div className="glass-subtle rounded-2xl p-4">
+              <div className="glass-subtle hud-clip-md p-4">
                 <span className="hud-label text-[8px] block mb-2">SYSTEM</span>
                 <div className="space-y-1.5">
                   <div className="flex justify-between">

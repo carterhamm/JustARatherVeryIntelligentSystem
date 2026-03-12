@@ -40,7 +40,7 @@ function ToggleRow({
   onToggle: () => void;
 }) {
   return (
-    <div className="glass-subtle rounded-xl px-4 py-3 flex items-center justify-between">
+    <div className="glass-subtle hud-clip-sm px-4 py-3 flex items-center justify-between">
       <div className="flex items-center gap-2.5">
         <Icon size={14} className={enabled ? 'text-jarvis-gold' : 'text-gray-600'} />
         <div>
@@ -68,7 +68,7 @@ function ToggleRow({
 
 function InfoCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="glass-subtle rounded-xl px-3 py-2.5">
+    <div className="glass-subtle hud-clip-sm px-3 py-2.5">
       <span className="hud-label text-[7px] block mb-0.5">{label}</span>
       <p className="text-[11px] text-gray-300">{value}</p>
     </div>
@@ -226,6 +226,11 @@ export default function SettingsPanel() {
               <div className="absolute -inset-px pointer-events-none hud-beam-border" style={{
                 clipPath: _PANEL_CLIP,
               }} />
+              {/* Static border layer (faint) */}
+              <div className="absolute -inset-px pointer-events-none" style={{
+                background: 'rgba(0, 212, 255, 0.08)',
+                clipPath: _PANEL_CLIP,
+              }} />
               {/* Content */}
               <div className="relative" style={{
                 background: 'rgba(6, 8, 20, 0.92)',
@@ -255,7 +260,7 @@ export default function SettingsPanel() {
                       key={tab.id}
                       onClick={() => setActiveTab(tab.id)}
                       className={clsx(
-                        'flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-[10px] font-mono uppercase tracking-wider transition-all',
+                        'flex-1 flex items-center justify-center gap-1.5 px-3 py-2 hud-clip-sm text-[10px] font-mono uppercase tracking-wider transition-all',
                         isActive
                           ? 'bg-jarvis-blue/10 border border-jarvis-blue/20 text-jarvis-blue'
                           : 'border border-transparent text-gray-600 hover:text-gray-400 hover:bg-white/[0.02]',
@@ -276,7 +281,7 @@ export default function SettingsPanel() {
                   <div className="space-y-4">
                     {/* Profile */}
                     {user && (
-                      <div className="glass-subtle rounded-2xl p-4">
+                      <div className="glass-subtle hud-clip-md p-4">
                         <div className="flex items-center gap-3">
                           <div
                             className="w-10 h-10 flex items-center justify-center rounded-full flex-shrink-0"
@@ -297,7 +302,7 @@ export default function SettingsPanel() {
                           </div>
                           <button
                             onClick={logout}
-                            className="flex items-center gap-1.5 px-3 py-1.5 text-[9px] font-mono font-medium text-hud-red uppercase tracking-wider rounded-lg border border-hud-red/20 bg-hud-red/5 hover:bg-hud-red/10 transition-all flex-shrink-0"
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-[9px] font-mono font-medium text-hud-red uppercase tracking-wider hud-clip-sm border border-hud-red/20 bg-hud-red/5 hover:bg-hud-red/10 transition-all flex-shrink-0"
                           >
                             <LogOut size={10} />
                             Sign Out
@@ -310,7 +315,7 @@ export default function SettingsPanel() {
                     <div className="grid grid-cols-2 gap-2">
                       <button
                         onClick={() => setVoiceEnabled(!voiceEnabled)}
-                        className="glass-subtle rounded-xl px-3 py-3 text-left"
+                        className="glass-subtle hud-clip-sm px-3 py-3 text-left"
                       >
                         <div className="flex items-center justify-between mb-2">
                           {voiceEnabled ? <Volume2 size={14} className="text-jarvis-gold" /> : <VolumeX size={14} className="text-gray-600" />}
@@ -331,7 +336,7 @@ export default function SettingsPanel() {
                       </button>
                       <button
                         onClick={() => setUse24HourTime(!use24HourTime)}
-                        className="glass-subtle rounded-xl px-3 py-3 text-left"
+                        className="glass-subtle hud-clip-sm px-3 py-3 text-left"
                       >
                         <div className="flex items-center justify-between mb-2">
                           <Clock size={14} className={use24HourTime ? 'text-jarvis-gold' : 'text-gray-600'} />
@@ -364,7 +369,7 @@ export default function SettingsPanel() {
                           disabled={!isAvail}
                           onClick={() => isAvail && setModelPreference(m.id)}
                           className={clsx(
-                            'w-full text-left px-4 py-3 rounded-xl transition-all flex items-center justify-between',
+                            'w-full text-left px-4 py-3 hud-clip-sm transition-all flex items-center justify-between',
                             isSelected
                               ? 'glass-subtle border border-white/[0.08]'
                               : 'border border-transparent hover:bg-white/[0.03]',
@@ -396,9 +401,9 @@ export default function SettingsPanel() {
                 {activeTab === 'connections' && (
                   <div className="space-y-2">
                     {/* Google */}
-                    <div className="glass-subtle rounded-xl px-4 py-3 flex items-center justify-between">
+                    <div className="glass-subtle hud-clip-sm px-4 py-3 flex items-center justify-between">
                       <div className="flex items-center gap-2.5">
-                        <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-white/[0.04] border border-white/[0.06]">
+                        <div className="w-8 h-8 hud-clip-sm flex items-center justify-center bg-white/[0.04] border border-white/[0.06]">
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
                             <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/>
                             <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
@@ -421,7 +426,7 @@ export default function SettingsPanel() {
                       ) : (
                         <a
                           href="/connect/google"
-                          className="flex items-center gap-1 px-3 py-1.5 text-[9px] font-mono font-medium text-jarvis-blue uppercase tracking-wider rounded-lg border border-jarvis-blue/20 bg-jarvis-blue/5 hover:bg-jarvis-blue/10 transition-all"
+                          className="flex items-center gap-1 px-3 py-1.5 text-[9px] font-mono font-medium text-jarvis-blue uppercase tracking-wider hud-clip-sm border border-jarvis-blue/20 bg-jarvis-blue/5 hover:bg-jarvis-blue/10 transition-all"
                         >
                           Connect <ExternalLink size={8} />
                         </a>
@@ -429,9 +434,9 @@ export default function SettingsPanel() {
                     </div>
 
                     {/* Placeholder for future connections */}
-                    <div className="glass-subtle rounded-xl px-4 py-3 flex items-center justify-between opacity-40">
+                    <div className="glass-subtle hud-clip-sm px-4 py-3 flex items-center justify-between opacity-40">
                       <div className="flex items-center gap-2.5">
-                        <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-white/[0.04] border border-white/[0.06]">
+                        <div className="w-8 h-8 hud-clip-sm flex items-center justify-center bg-white/[0.04] border border-white/[0.06]">
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
                             <path d="M23.643 4.937c-.835.37-1.732.62-2.675.733.962-.576 1.7-1.49 2.048-2.578-.9.534-1.897.922-2.958 1.13-.85-.904-2.06-1.47-3.4-1.47-2.572 0-4.658 2.086-4.658 4.66 0 .364.042.718.12 1.06-3.873-.195-7.304-2.05-9.602-4.868-.4.69-.63 1.49-.63 2.342 0 1.616.823 3.043 2.072 3.878-.764-.025-1.482-.234-2.11-.583v.06c0 2.257 1.605 4.14 3.737 4.568-.392.106-.803.162-1.227.162-.3 0-.593-.028-.877-.082.593 1.85 2.313 3.198 4.352 3.234-1.595 1.25-3.604 1.995-5.786 1.995-.376 0-.747-.022-1.112-.065 2.062 1.323 4.51 2.093 7.14 2.093 8.57 0 13.255-7.098 13.255-13.254 0-.2-.005-.402-.014-.602.91-.658 1.7-1.477 2.323-2.41z" fill="#666"/>
                           </svg>
@@ -452,7 +457,7 @@ export default function SettingsPanel() {
                     {totpStep === 'idle' && !totpEnabled && (
                       <button
                         onClick={handleTOTPSetup}
-                        className="w-full glass-subtle rounded-xl px-4 py-3 flex items-center justify-between hover:border-jarvis-blue/20 transition-all border border-transparent"
+                        className="w-full glass-subtle hud-clip-sm px-4 py-3 flex items-center justify-between hover:border-jarvis-blue/20 transition-all border border-transparent"
                       >
                         <div className="flex items-center gap-2.5">
                           <Shield size={14} className="text-gray-600" />
@@ -466,7 +471,7 @@ export default function SettingsPanel() {
                     )}
 
                     {totpStep === 'idle' && totpEnabled && (
-                      <div className="glass-subtle rounded-xl px-4 py-3 flex items-center justify-between">
+                      <div className="glass-subtle hud-clip-sm px-4 py-3 flex items-center justify-between">
                         <div className="flex items-center gap-2.5">
                           <Shield size={14} className="text-hud-green" />
                           <div>
@@ -484,21 +489,21 @@ export default function SettingsPanel() {
                     )}
 
                     {totpStep === 'loading' && (
-                      <div className="glass-subtle rounded-xl px-4 py-8 flex items-center justify-center">
+                      <div className="glass-subtle hud-clip-sm px-4 py-8 flex items-center justify-center">
                         <Loader2 size={16} className="animate-spin text-jarvis-blue" />
                       </div>
                     )}
 
                     {totpStep === 'setup' && (
-                      <div className="glass-subtle rounded-xl px-4 py-4 space-y-3">
+                      <div className="glass-subtle hud-clip-sm px-4 py-4 space-y-3">
                         <p className="text-xs text-gray-300 text-center">Scan with your authenticator app</p>
                         <div className="flex justify-center">
-                          <div className="bg-white rounded-xl p-3">
+                          <div className="bg-white hud-clip-sm p-3">
                             <QRCodeSVG value={totpUri} size={140} level="M" />
                           </div>
                         </div>
                         <p className="text-[10px] text-gray-500 text-center">Or enter manually:</p>
-                        <div className="bg-black/40 rounded-lg px-3 py-2 font-mono text-[10px] text-jarvis-blue break-all select-all text-center">
+                        <div className="bg-black/40 hud-clip-sm px-3 py-2 font-mono text-[10px] text-jarvis-blue break-all select-all text-center">
                           {totpSecret}
                         </div>
                         <div className="flex items-end gap-2">
@@ -518,7 +523,7 @@ export default function SettingsPanel() {
                           <button
                             onClick={handleTOTPConfirm}
                             disabled={totpCode.length !== 6 || totpLoading}
-                            className="px-4 py-2 text-[10px] font-mono text-jarvis-blue rounded-xl border border-jarvis-blue/20 bg-jarvis-blue/5 hover:bg-jarvis-blue/10 transition-all disabled:opacity-40"
+                            className="px-4 py-2 text-[10px] font-mono text-jarvis-blue hud-clip-sm border border-jarvis-blue/20 bg-jarvis-blue/5 hover:bg-jarvis-blue/10 transition-all disabled:opacity-40"
                           >
                             {totpLoading ? '...' : 'CONFIRM'}
                           </button>
@@ -536,7 +541,7 @@ export default function SettingsPanel() {
                     )}
 
                     {totpStep === 'disabling' && (
-                      <div className="glass-subtle rounded-xl px-4 py-4 space-y-3">
+                      <div className="glass-subtle hud-clip-sm px-4 py-4 space-y-3">
                         <p className="text-xs text-gray-300">Enter a code to disable 2FA:</p>
                         <div className="flex items-end gap-2">
                           <input
@@ -552,7 +557,7 @@ export default function SettingsPanel() {
                           <button
                             onClick={handleTOTPDisable}
                             disabled={totpCode.length !== 6 || totpLoading}
-                            className="px-4 py-2 text-[10px] font-mono text-hud-red rounded-xl border border-hud-red/20 bg-hud-red/5 hover:bg-hud-red/10 transition-all disabled:opacity-40"
+                            className="px-4 py-2 text-[10px] font-mono text-hud-red hud-clip-sm border border-hud-red/20 bg-hud-red/5 hover:bg-hud-red/10 transition-all disabled:opacity-40"
                           >
                             {totpLoading ? '...' : 'DISABLE'}
                           </button>

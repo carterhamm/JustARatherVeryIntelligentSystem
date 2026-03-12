@@ -168,7 +168,7 @@ async def route_intent(message: str) -> list[str]:
         logger.debug("Cerebras not configured — sending all tools")
         return []  # empty = send all tools (fallback)
 
-    models = ["llama3.1-8b", "qwen-3-235b-a22b-instruct-2507"]
+    models = ["qwen-3-235b-a22b-instruct-2507", "llama3.1-8b"]
 
     for model in models:
         try:
@@ -245,15 +245,17 @@ Output ONLY valid JSON with these fields:
 - "sport": sport/league (e.g. "basketball", "football", "nba", "nfl", "mlb") or "" if unclear
 
 Sub-intent definitions:
-- "live_scores": asking about a game happening right now or today
+- "live_scores": asking about a game happening right now, today, or tonight. Includes "when is the game today", "what time is the game", "is there a game today/tonight", "score"
 - "recent_result": asking about a game that already happened (last night, yesterday, last game, how did they do)
-- "schedule": asking about upcoming games, when they play next
+- "schedule": asking about upcoming games, when they play next (future, not today). "When's the next game" = schedule. "What's the schedule" = schedule
 - "standings": asking about rankings, standings, conference position
 - "historical": asking about past seasons, last year, records, history, "how did they do last season"
 - "general": any other sports question (trades, rumors, player stats, injuries, draft)
 
 Rules:
 - Output ONLY the JSON object, nothing else
+- "live_scores" = anything about TODAY's or TONIGHT's game (time, score, opponent, channel)
+- "schedule" = asking about FUTURE games beyond today
 - "recent_result" = the user wants to know the outcome of a specific recent game
 - "historical" = anything about a past season or time period (not the current one)
 - "general" = anything that needs a web search to answer properly
@@ -263,7 +265,11 @@ Rules:
 
 Examples:
 "Did BYU win?" → {"sub_intent": "recent_result", "team": "BYU", "sport": "basketball"}
+"When's the BYU game today?" → {"sub_intent": "live_scores", "team": "BYU", "sport": ""}
+"What time does BYU play tonight?" → {"sub_intent": "live_scores", "team": "BYU", "sport": ""}
+"Is there a BYU game today?" → {"sub_intent": "live_scores", "team": "BYU", "sport": ""}
 "BYU football schedule" → {"sub_intent": "schedule", "team": "BYU", "sport": "football"}
+"When's BYU's next game?" → {"sub_intent": "schedule", "team": "BYU", "sport": ""}
 "How did BYU do last year?" → {"sub_intent": "historical", "team": "BYU", "sport": ""}
 "What's the Big 12 standings?" → {"sub_intent": "standings", "team": "", "sport": "basketball"}
 "Is there a game on right now?" → {"sub_intent": "live_scores", "team": "", "sport": ""}
@@ -286,7 +292,7 @@ async def classify_sports_intent(message: str) -> dict[str, str]:
 
     import json as _json
 
-    models = ["llama3.1-8b", "qwen-3-235b-a22b-instruct-2507"]
+    models = ["qwen-3-235b-a22b-instruct-2507", "llama3.1-8b"]
 
     for model in models:
         try:

@@ -74,6 +74,11 @@ export default function ModelPickerFloat() {
               <div className="absolute -inset-px pointer-events-none hud-beam-border" style={{
                 clipPath: _PANEL_CLIP,
               }} />
+              {/* Static border layer (faint) */}
+              <div className="absolute -inset-px pointer-events-none" style={{
+                background: 'rgba(0, 212, 255, 0.08)',
+                clipPath: _PANEL_CLIP,
+              }} />
               {/* Content */}
               <div className="relative" style={{
                 background: 'rgba(6, 8, 20, 0.92)',
@@ -109,7 +114,7 @@ export default function ModelPickerFloat() {
                         }
                       }}
                       className={clsx(
-                        'w-full text-left px-4 py-3 rounded-xl transition-all flex items-center justify-between',
+                        'w-full text-left px-4 py-3 hud-clip-sm transition-all flex items-center justify-between',
                         isSelected
                           ? 'bg-white/[0.06] border border-white/[0.08]'
                           : 'border border-transparent hover:bg-white/[0.03]',
