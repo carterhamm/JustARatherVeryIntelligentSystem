@@ -1,10 +1,11 @@
-import { useState, FormEvent, useMemo, useRef, useEffect } from 'react';
+import { useState, FormEvent, useMemo, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { isWebAuthnAvailable } from '@/utils/webauthn';
 import { Loader2, Fingerprint, User, Mail, ArrowRight, AlertTriangle, Check, Key, Lock } from 'lucide-react';
 import gsap from 'gsap';
 import clsx from 'clsx';
+import arcReactorIcon from '@/assets/arc-reactor-icon.png';
 
 // ── HUD Bezel Frame ──────────────────────────────────────────────────
 // Clean beveled frame with top/side recesses and accent details.
@@ -160,13 +161,14 @@ function HudBezel({ children }: { children: React.ReactNode }) {
 }
 
 // Diagonal accent marks for cut-corner buttons (matches widget style)
-function BtnAccents({ color = 'rgba(0,212,255,0.25)' }: { color?: string }) {
+// Buttons use 6px clip, so accents are 6px SVGs at the cut corners
+function BtnAccents({ color = 'rgba(0,212,255,0.2)' }: { color?: string }) {
   return (
     <>
-      <svg className="absolute top-0 right-0 w-[6px] h-[6px] pointer-events-none" viewBox="0 0 6 6" fill="none">
+      <svg className="absolute top-0 right-0 w-1.5 h-1.5 pointer-events-none" viewBox="0 0 6 6" fill="none">
         <line x1="0" y1="0" x2="6" y2="6" stroke={color} strokeWidth="1" />
       </svg>
-      <svg className="absolute bottom-0 left-0 w-[6px] h-[6px] pointer-events-none" viewBox="0 0 6 6" fill="none">
+      <svg className="absolute bottom-0 left-0 w-1.5 h-1.5 pointer-events-none" viewBox="0 0 6 6" fill="none">
         <line x1="0" y1="0" x2="6" y2="6" stroke={color} strokeWidth="1" />
       </svg>
     </>
@@ -202,6 +204,50 @@ export default function AuthPage() {
   const headerRef = useRef<HTMLDivElement>(null);
   const footerRef = useRef<HTMLDivElement>(null);
   const passkeyAutoTriggered = useRef(false);
+  const totpAutoSubmitted = useRef(false);
+
+  // Navigate back one step
+  const goBack = useCallback(() => {
+    setError('');
+    if (step === 'totp') {
+      setTotpCode('');
+      setTotpToken('');
+      setPendingTotpCode('');
+      setStep('identify');
+    } else if (step === 'authenticate') {
+      setStep('identify');
+    } else if (step === 'register') {
+      setStep('identify');
+    }
+  }, [step]);
+
+  // Push browser history state on step change (enables two-finger swipe back)
+  useEffect(() => {
+    if (step !== 'identify') {
+      window.history.pushState({ authStep: step }, '');
+    }
+  }, [step]);
+
+  // Listen for popstate (browser back / two-finger trackpad swipe)
+  useEffect(() => {
+    const onPop = () => {
+      if (step !== 'identify') goBack();
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, [step, goBack]);
+
+  // Escape key goes back
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && step !== 'identify') {
+        e.preventDefault();
+        goBack();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [step, goBack]);
 
   // Auto-trigger passkey popup when arriving at authenticate step
   useEffect(() => {
@@ -216,6 +262,22 @@ export default function AuthPage() {
       passkeyAutoTriggered.current = false;
     }
   }, [step]);
+
+  // Auto-submit TOTP when 6 digits are entered
+  useEffect(() => {
+    if (totpCode.length === 6 && !isLoading && !totpAutoSubmitted.current) {
+      totpAutoSubmitted.current = true;
+      // Small delay so the user sees the last digit appear
+      const t = setTimeout(() => {
+        const fakeEvent = { preventDefault: () => {} } as FormEvent;
+        handleTOTPVerify(fakeEvent);
+      }, 150);
+      return () => clearTimeout(t);
+    }
+    if (totpCode.length < 6) {
+      totpAutoSubmitted.current = false;
+    }
+  }, [totpCode, isLoading]);
 
   // GSAP boot-up sequence
   useEffect(() => {
@@ -551,7 +613,7 @@ export default function AuthPage() {
               ) : step === 'authenticate' ? (
                 <Fingerprint size={24} className="text-jarvis-blue" />
               ) : (
-                <img src="/arc-reactor-icon.png" alt="Arc Reactor" className="w-7 h-7 object-contain" style={{ filter: 'drop-shadow(0 0 4px rgba(0, 212, 255, 0.5))' }} />
+                <img src={arcReactorIcon} alt="Arc Reactor" className="w-7 h-7 object-contain" style={{ filter: 'drop-shadow(0 0 4px rgba(0, 212, 255, 0.5))' }} />
               )}
             </div>
             <h1 className="text-xl font-display font-bold tracking-[0.2em] text-jarvis-blue glow-text">
@@ -643,7 +705,7 @@ export default function AuthPage() {
                     </>
                   )}
                 </button>
-                <BtnAccents color="rgba(240,165,0,0.3)" />
+                <BtnAccents color="rgba(240,165,0,0.2)" />
               </div>
             </form>
           )}
@@ -677,22 +739,12 @@ export default function AuthPage() {
                 </button>
                 <BtnAccents />
               </div>
-
-              <button
-                onClick={() => {
-                  setStep('identify');
-                  setError('');
-                }}
-                className="w-full text-center text-xs text-gray-500 hover:text-gray-300 transition-colors mt-1"
-              >
-                Use a different account
-              </button>
             </div>
           )}
 
           {/* Step: TOTP Verification */}
           {step === 'totp' && (
-            <form onSubmit={handleTOTPVerify} className="space-y-4">
+            <div className="space-y-4">
               <div className="text-center">
                 <p className="text-sm text-gray-300">Two-Factor Authentication</p>
                 <p className="text-xs text-gray-500 mt-1">Enter the code from your authenticator app</p>
@@ -714,39 +766,12 @@ export default function AuthPage() {
                 />
               </div>
 
-              <div className="relative">
-                <button
-                  type="submit"
-                  disabled={isLoading || totpCode.length !== 6}
-                  className="jarvis-button w-full py-3 text-sm font-display font-semibold tracking-wider uppercase flex items-center justify-center gap-2"
-                  style={{ opacity: isLoading || totpCode.length !== 6 ? 0.4 : 1 }}
-                >
-                  {isLoading ? (
-                    <Loader2 size={16} className="animate-spin" />
-                  ) : (
-                    <>
-                      <Lock size={16} />
-                      Verify
-                    </>
-                  )}
-                </button>
-                <BtnAccents />
-              </div>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setStep('identify');
-                  setTotpCode('');
-                  setTotpToken('');
-                  setPendingTotpCode('');
-                  setError('');
-                }}
-                className="w-full text-center text-xs text-gray-500 hover:text-gray-300 transition-colors"
-              >
-                Back
-              </button>
-            </form>
+              {isLoading && (
+                <div className="flex justify-center">
+                  <Loader2 size={20} className="animate-spin text-jarvis-blue" />
+                </div>
+              )}
+            </div>
           )}
 
           {/* Step: Register */}
@@ -868,19 +893,8 @@ export default function AuthPage() {
                     </>
                   )}
                 </button>
-                <BtnAccents color="rgba(240,165,0,0.3)" />
+                <BtnAccents color="rgba(240,165,0,0.2)" />
               </div>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setStep('identify');
-                  setError('');
-                }}
-                className="w-full text-center text-xs text-gray-500 hover:text-gray-300 transition-colors"
-              >
-                Back
-              </button>
             </form>
           )}
           </div>
