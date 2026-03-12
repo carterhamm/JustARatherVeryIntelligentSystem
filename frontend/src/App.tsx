@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
 import AuthPage from '@/pages/AuthPage';
 import MainPage from '@/pages/MainPage';
+import MapPage from '@/pages/MapPage';
 import GoogleConnectPage from '@/pages/GoogleConnectPage';
 
 interface ErrorBoundaryProps {
@@ -85,6 +86,14 @@ export default function App() {
             <PublicRoute>
               <AuthPage />
             </PublicRoute>
+          }
+        />
+        <Route
+          path="/map"
+          element={
+            <ProtectedRoute>
+              <MapPage />
+            </ProtectedRoute>
           }
         />
         <Route path="/connect/google" element={<GoogleConnectPage />} />

@@ -414,11 +414,10 @@ function CalendarWidget() {
     );
   }
 
+  if (data.events.length === 0) return null;
+
   return (
     <WidgetCard label="TODAY" onRefresh={fetchCalendar}>
-      {data.events.length === 0 ? (
-        <p className="text-[10px] text-gray-600 font-mono py-1">No events today</p>
-      ) : (
         <div className="space-y-1.5">
           {data.events.map((event, i) => {
             const startTime = formatEventTime(event.start);
@@ -436,7 +435,6 @@ function CalendarWidget() {
             );
           })}
         </div>
-      )}
     </WidgetCard>
   );
 }
@@ -581,16 +579,7 @@ function HealthWidget() {
 
   const hasAnyData = data && (data.steps || data.heart_rate || data.sleep);
 
-  if (!hasAnyData) {
-    return (
-      <WidgetCard label="HEALTH">
-        <div className="py-2 text-center">
-          <Heart size={14} className="text-gray-600 mx-auto mb-1.5" />
-          <p className="text-[10px] text-gray-600 font-mono">No health data synced</p>
-        </div>
-      </WidgetCard>
-    );
-  }
+  if (!hasAnyData) return null;
 
   return (
     <WidgetCard label="HEALTH" onRefresh={fetchHealth}>
@@ -739,16 +728,7 @@ function RemindersWidget() {
 
   const totalCount = (data?.overdue_count ?? 0) + (data?.upcoming_count ?? 0);
 
-  if (totalCount === 0 && !data?.error) {
-    return (
-      <WidgetCard label="REMINDERS">
-        <div className="py-1.5 text-center">
-          <Bell size={12} className="text-gray-600 mx-auto mb-1" />
-          <p className="text-[10px] text-gray-600 font-mono">All clear</p>
-        </div>
-      </WidgetCard>
-    );
-  }
+  if (totalCount === 0 && !data?.error) return null;
 
   return (
     <WidgetCard label="REMINDERS" onRefresh={fetchReminders}>
@@ -1155,7 +1135,6 @@ export default function WidgetPanel() {
         { type: 'calendar', urgency: 3, visible: true },
         { type: 'health', urgency: 3, visible: true },
         { type: 'habits', urgency: 2.5, visible: true },
-        { type: 'email', urgency: 2, visible: true },
         { type: 'reminders', urgency: 2, visible: true },
         { type: 'system', urgency: 1.5, visible: true },
       ] as WidgetLayoutItem[];
@@ -1174,30 +1153,17 @@ export default function WidgetPanel() {
         WebkitMaskImage: 'linear-gradient(to bottom, transparent 0px, black 8px, black calc(100% - 8px), transparent 100%)',
       }}
     >
-      {visibleWidgets.map((w) => {
-        const urgency = getUrgencyLevel(w.urgency);
-        return (
+      {visibleWidgets.map((w) => (
           <div
             key={w.type}
             data-widget={w.type}
-            className="relative"
             style={{
               transition: 'transform 0.35s ease, opacity 0.35s ease',
             }}
           >
-            {/* Urgency left-border indicator */}
-            <div
-              className="absolute left-0 top-2 bottom-2 w-[2px] rounded-full z-10"
-              style={{
-                backgroundColor: getUrgencyColor(urgency),
-                boxShadow: getUrgencyGlow(urgency),
-                transition: 'background-color 0.5s ease, box-shadow 0.5s ease',
-              }}
-            />
-            {renderWidget(w.type, urgency, w.type)}
+            {renderWidget(w.type, 'low', w.type)}
           </div>
-        );
-      })}
+      ))}
       {/* Always show Google Connect (only renders if not connected) */}
       <GoogleConnectWidget />
     </div>

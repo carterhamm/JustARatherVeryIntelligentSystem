@@ -154,17 +154,6 @@ export default function ContactsPanel() {
     }
   }, [searchResults]);
 
-  const handleDeleteAll = useCallback(async () => {
-    try {
-      await api.delete('/contacts');
-      setContacts([]);
-      setSearchResults(null);
-      setTotalCount(0);
-    } catch {
-      // silently fail
-    }
-  }, []);
-
   const handleClose = useCallback(() => setIsOpen(false), []);
 
   const displayList = searchResults ?? contacts;
@@ -325,12 +314,6 @@ export default function ContactsPanel() {
             {totalCount > 0 && (
               <div className="px-4 py-2 border-t border-white/[0.04] flex items-center justify-between">
                 <span className="text-[10px] text-gray-600 font-mono">{totalCount} CONTACTS ENCRYPTED</span>
-                <button
-                  onClick={handleDeleteAll}
-                  className="text-[10px] text-gray-600 hover:text-red-400 transition-colors font-mono"
-                >
-                  DELETE ALL
-                </button>
               </div>
             )}
           </motion.div>

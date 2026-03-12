@@ -4,6 +4,7 @@ import { useUIStore } from '@/stores/uiStore';
 import { useSettingsStore, type ModelProvider } from '@/stores/settingsStore';
 import gsap from 'gsap';
 import clsx from 'clsx';
+import arcReactorIcon from '@/assets/arc-reactor-icon.png';
 
 const providerLabels: Record<ModelProvider, string> = {
   claude: 'Claude',
@@ -116,9 +117,12 @@ export default function StatusBar() {
     <div className="fixed top-4 left-4 right-4 z-30 flex justify-between items-start pointer-events-none">
       {/* Left capsule — Logo + Status + Activity */}
       <div ref={leftRef} className="glass-capsule pointer-events-auto h-10 px-4 flex items-center gap-2.5 opacity-0">
-        <div className="w-5 h-5 flex items-center justify-center flex-shrink-0 rounded-md bg-gradient-to-br from-jarvis-blue/25 to-blue-500/15">
-          <span className="text-[8px] font-display font-bold text-jarvis-blue">J</span>
-        </div>
+        <img
+          src={arcReactorIcon}
+          alt="Arc Reactor"
+          className="w-5 h-5 flex-shrink-0 object-contain"
+          style={{ filter: 'drop-shadow(0 0 3px rgba(0, 212, 255, 0.4))' }}
+        />
 
         <span className="font-display text-[11px] font-bold tracking-[0.2em] text-jarvis-blue glow-text hidden sm:block">
           J.A.R.V.I.S.

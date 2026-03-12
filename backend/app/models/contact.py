@@ -41,6 +41,21 @@ class Contact(UUIDMixin, TimestampMixin, Base):
     address: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
+    # Photo (base64-encoded data + MIME type)
+    photo: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    photo_content_type: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+
+    # Structured address components (in addition to combined 'address' field)
+    street: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    city: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    state: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    postal_code: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    country: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # Additional vCard fields
+    birthday: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
     # Relationships
     user: Mapped["User"] = relationship("User", lazy="selectin")
 

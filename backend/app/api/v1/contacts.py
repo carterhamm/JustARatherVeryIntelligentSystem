@@ -7,6 +7,7 @@ AES-256 encrypted at rest using per-user keys.
 
 from __future__ import annotations
 
+import base64
 import csv
 import io
 import logging
@@ -40,6 +41,15 @@ class ContactCreate(BaseModel):
     title: Optional[str] = None
     address: Optional[str] = None
     notes: Optional[str] = None
+    photo: Optional[str] = None
+    photo_content_type: Optional[str] = None
+    street: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    postal_code: Optional[str] = None
+    country: Optional[str] = None
+    birthday: Optional[str] = None
+    url: Optional[str] = None
 
 
 class ContactResponse(BaseModel):
@@ -52,6 +62,15 @@ class ContactResponse(BaseModel):
     title: Optional[str] = None
     address: Optional[str] = None
     notes: Optional[str] = None
+    photo: Optional[str] = None
+    photo_content_type: Optional[str] = None
+    street: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    postal_code: Optional[str] = None
+    country: Optional[str] = None
+    birthday: Optional[str] = None
+    url: Optional[str] = None
     created_at: str
 
 
@@ -64,7 +83,11 @@ class UploadResponse(BaseModel):
 
 # ── Helpers ──────────────────────────────────────────────────────────────
 
-_FIELDS = ["first_name", "last_name", "phone", "email", "company", "title", "address", "notes"]
+_FIELDS = [
+    "first_name", "last_name", "phone", "email", "company", "title", "address", "notes",
+    "photo", "photo_content_type", "street", "city", "state", "postal_code", "country",
+    "birthday", "url",
+]
 
 
 def _encrypt_contact(data: dict[str, Any], user_id: uuid.UUID) -> dict[str, Any]:
@@ -118,20 +141,76 @@ def _parse_vcard(content: str) -> list[dict[str, Any]]:
         # Title
         if hasattr(vcard, "title"):
             c["title"] = vcard.title.value
-        # Address (first one, joined)
+        # Address (first one, joined + structured components)
         if hasattr(vcard, "adr"):
             adr = vcard.adr.value
-            parts = [
-                getattr(adr, "street", ""),
-                getattr(adr, "city", ""),
-                getattr(adr, "region", ""),
-                getattr(adr, "code", ""),
-                getattr(adr, "country", ""),
-            ]
+            adr_street = getattr(adr, "street", "") or ""
+            adr_city = getattr(adr, "city", "") or ""
+            adr_region = getattr(adr, "region", "") or ""
+            adr_code = getattr(adr, "code", "") or ""
+            adr_country = getattr(adr, "country", "") or ""
+            parts = [adr_street, adr_city, adr_region, adr_code, adr_country]
             c["address"] = ", ".join(p for p in parts if p)
+            # Structured address components
+            if adr_street:
+                c["street"] = adr_street
+            if adr_city:
+                c["city"] = adr_city
+            if adr_region:
+                c["state"] = adr_region
+            if adr_code:
+                c["postal_code"] = adr_code
+            if adr_country:
+                c["country"] = adr_country
         # Notes
         if hasattr(vcard, "note"):
             c["notes"] = vcard.note.value
+        # Photo
+        if hasattr(vcard, "photo"):
+            photo_prop = vcard.photo
+            photo_val = photo_prop.value
+            # Determine content type from params
+            params = getattr(photo_prop, "params", {})
+            content_type = None
+            if "TYPE" in params:
+                ptype = params["TYPE"]
+                if isinstance(ptype, list):
+                    ptype = ptype[0]
+                ptype = ptype.lower()
+                if "/" not in ptype:
+                    content_type = f"image/{ptype}"
+                else:
+                    content_type = ptype
+            elif "MEDIATYPE" in params:
+                mt = params["MEDIATYPE"]
+                content_type = mt[0] if isinstance(mt, list) else mt
+            # Encode binary data as base64; keep already-encoded data as-is
+            encoding = params.get("ENCODING", [])
+            if isinstance(encoding, list):
+                encoding = encoding[0] if encoding else ""
+            encoding = encoding.upper() if isinstance(encoding, str) else ""
+            if isinstance(photo_val, bytes):
+                c["photo"] = base64.b64encode(photo_val).decode("ascii")
+            elif encoding == "B" or encoding == "BASE64":
+                # Already base64-encoded string
+                c["photo"] = photo_val.replace("\n", "").replace("\r", "").replace(" ", "")
+            else:
+                # Could be a URL or already-encoded string
+                c["photo"] = photo_val
+            if content_type:
+                c["photo_content_type"] = content_type
+            elif not content_type and isinstance(photo_val, bytes):
+                c["photo_content_type"] = "image/jpeg"  # sensible default
+        # Birthday
+        if hasattr(vcard, "bday"):
+            bday_val = vcard.bday.value
+            if hasattr(bday_val, "isoformat"):
+                c["birthday"] = bday_val.isoformat()
+            else:
+                c["birthday"] = str(bday_val)
+        # URL
+        if hasattr(vcard, "url"):
+            c["url"] = vcard.url.value
 
         contacts.append(c)
     return contacts
@@ -151,6 +230,13 @@ def _parse_csv(content: str) -> list[dict[str, Any]]:
         "title": "title", "job title": "title",
         "address": "address",
         "notes": "notes", "note": "notes",
+        "street": "street", "street address": "street",
+        "city": "city",
+        "state": "state", "region": "state", "province": "state",
+        "zip": "postal_code", "zip code": "postal_code", "postal code": "postal_code", "postal_code": "postal_code", "postcode": "postal_code",
+        "country": "country",
+        "birthday": "birthday", "birth date": "birthday", "birthdate": "birthday", "date of birth": "birthday",
+        "website": "url", "url": "url", "web": "url", "homepage": "url",
     }
     for row in reader:
         c: dict[str, Any] = {}
