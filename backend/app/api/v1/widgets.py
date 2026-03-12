@@ -371,9 +371,33 @@ async def _score_emails_with_gemini(emails: list[dict[str, Any]]) -> list[dict[s
     return scored
 
 
+def _is_automated_sender(from_addr: str) -> bool:
+    """Check if sender is clearly a company/automated service, not a person."""
+    lower = from_addr.lower()
+    # Check noreply patterns first
+    if _is_noreply(lower):
+        return True
+    # Known automated service senders
+    _AUTOMATED_SENDERS = (
+        "uber", "lyft", "doordash", "grubhub", "instacart",
+        "mercury", "venmo", "cashapp", "zelle", "wise",
+        "railway", "vercel", "netlify", "heroku", "render",
+        "github", "gitlab", "bitbucket", "circleci", "travis",
+        "stripe", "paypal", "square", "shopify",
+        "amazon", "apple", "google", "microsoft",
+        "linkedin", "facebook", "instagram", "twitter", "x.com",
+        "slack", "discord", "notion", "figma", "canva",
+        "dropbox", "icloud", "onedrive",
+        "usps", "ups", "fedex", "dhl",
+        "mint", "intuit", "turbotax", "irs.gov",
+        "sprint", "t-mobile", "verizon", "at&t", "xfinity",
+    )
+    return any(s in lower for s in _AUTOMATED_SENDERS)
+
+
 def _fallback_filter(emails: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Heuristic fallback: return emails not from noreply/notification addresses."""
-    return [e for e in emails if not _is_noreply(e.get("from", ""))]
+    """Heuristic fallback: return emails not from automated addresses."""
+    return [e for e in emails if not _is_automated_sender(e.get("from", ""))]
 
 
 @router.get("/email")
@@ -410,11 +434,19 @@ async def get_email_widget(
     try:
         from app.integrations.google_workspace import gmail_important_recent
 
-        emails = await gmail_important_recent(google_tokens, max_results=10)
+        emails = await gmail_important_recent(google_tokens, max_results=15)
         total_checked = len(emails)
 
         if not emails:
             result = {"connected": True, "important": [], "total_checked": 0}
+            await _cache_email_result(redis, cache_key, result)
+            return result
+
+        # Pre-filter: remove obvious automated/company senders before LLM
+        emails = [e for e in emails if not _is_automated_sender(e.get("from", ""))]
+
+        if not emails:
+            result = {"connected": True, "important": [], "total_checked": total_checked}
             await _cache_email_result(redis, cache_key, result)
             return result
 
