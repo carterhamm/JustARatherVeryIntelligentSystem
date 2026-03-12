@@ -339,6 +339,9 @@ def _get_tool_status(user_prefs: dict | None = None) -> str:
     # Contacts search — always available (user-uploaded contacts)
     lines.append("- Contacts search: CONNECTED (search user's uploaded contacts by name/phone/email/company)")
 
+    # Health data (Apple HealthKit via iOS app)
+    lines.append("- Health data (HealthKit): CONNECTED (steps, heart rate, sleep, workouts via JARVIS iOS app)")
+
     # Calculator, date/time — always available
     lines.append("- Calculator, date/time: ALWAYS AVAILABLE")
 

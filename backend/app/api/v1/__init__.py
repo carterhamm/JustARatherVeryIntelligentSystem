@@ -16,6 +16,7 @@ from app.api.v1.google_oauth import router as google_oauth_router
 from app.api.v1.vnc import router as vnc_router
 from app.api.v1.widgets import router as widgets_router
 from app.api.v1.contacts import router as contacts_router
+from app.api.v1.health import router as health_router
 
 v1_router = APIRouter()
 v1_router.include_router(auth_router, prefix="/auth", tags=["auth"])
@@ -31,4 +32,5 @@ v1_router.include_router(cron_router, tags=["Cron"])
 v1_router.include_router(google_oauth_router, tags=["Google OAuth"])
 v1_router.include_router(vnc_router, tags=["VNC"])
 v1_router.include_router(widgets_router, tags=["Widgets"])
-v1_router.include_router(contacts_router, tags=["Contacts"])
+v1_router.include_router(contacts_router, prefix="/contacts", tags=["Contacts"])
+v1_router.include_router(health_router, prefix="/health", tags=["Health"])

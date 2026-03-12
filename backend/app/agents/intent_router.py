@@ -122,6 +122,10 @@ TOOL_CATEGORIES = {
         "description": "Research briefing, what has JARVIS been learning, research findings, continuous learning updates",
         "tools": ["research_briefing"],
     },
+    "health": {
+        "description": "Health data, fitness, steps, heart rate, sleep, workouts, Apple Health, HealthKit",
+        "tools": ["health_summary"],
+    },
 }
 
 _CATEGORY_LIST = "\n".join(

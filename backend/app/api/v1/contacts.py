@@ -26,7 +26,7 @@ from app.models.user import User
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/contacts", tags=["Contacts"])
+router = APIRouter(tags=["Contacts"])
 
 
 # ── Schemas ──────────────────────────────────────────────────────────────

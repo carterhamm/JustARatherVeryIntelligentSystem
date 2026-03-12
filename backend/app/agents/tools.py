@@ -2823,6 +2823,135 @@ class MacMiniScreenshotTool(BaseTool):
 # Research briefing
 # ═════════════════════════════════════════════════════════════════════════
 
+class HealthSummaryTool(BaseTool):
+    """Get the user's health data summary from Apple HealthKit."""
+
+    name = "health_summary"
+    description = (
+        "Get the user's health data summary: today's steps, latest heart rate, "
+        "last night's sleep, and recent workouts. Data synced from JARVIS iOS app."
+    )
+
+    async def execute(
+        self,
+        params: dict[str, Any],
+        *,
+        state: Optional[AgentState] = None,
+    ) -> str:
+        user_id = (state or {}).get("user_id")
+        if not user_id:
+            return "No user context available."
+
+        try:
+            from datetime import timedelta
+            from sqlalchemy import select, func
+            from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession as _AS
+            from sqlalchemy.orm import sessionmaker
+            from app.config import settings
+            from app.models.health import HealthSample
+
+            engine = create_async_engine(settings.DATABASE_URL)
+            async_session = sessionmaker(engine, class_=_AS, expire_on_commit=False)
+
+            now = datetime.now(timezone.utc)
+            today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            yesterday_start = today_start - timedelta(days=1)
+            week_ago = today_start - timedelta(days=7)
+
+            parts: list[str] = []
+
+            async with async_session() as session:
+                # Steps today
+                steps_result = await session.execute(
+                    select(func.sum(HealthSample.value))
+                    .where(
+                        HealthSample.user_id == user_id,
+                        HealthSample.sample_type == "steps",
+                        HealthSample.start_date >= today_start,
+                    )
+                )
+                steps_total = steps_result.scalar()
+                if steps_total is not None:
+                    parts.append(f"Steps today: {round(steps_total):,}")
+                else:
+                    parts.append("Steps today: No data yet")
+
+                # Heart rate (most recent)
+                hr_result = await session.execute(
+                    select(HealthSample)
+                    .where(
+                        HealthSample.user_id == user_id,
+                        HealthSample.sample_type == "heart_rate",
+                    )
+                    .order_by(HealthSample.start_date.desc())
+                    .limit(1)
+                )
+                hr = hr_result.scalar_one_or_none()
+                if hr:
+                    parts.append(
+                        f"Heart rate: {round(hr.value)} {hr.unit} "
+                        f"(recorded {hr.start_date.strftime('%I:%M %p')})"
+                    )
+                else:
+                    parts.append("Heart rate: No data")
+
+                # Sleep last night
+                sleep_result = await session.execute(
+                    select(func.sum(HealthSample.value))
+                    .where(
+                        HealthSample.user_id == user_id,
+                        HealthSample.sample_type == "sleep",
+                        HealthSample.start_date >= yesterday_start,
+                        HealthSample.start_date < today_start + timedelta(hours=12),
+                    )
+                )
+                sleep_total = sleep_result.scalar()
+                if sleep_total is not None:
+                    parts.append(f"Sleep last night: {round(sleep_total, 1)} hours")
+                else:
+                    parts.append("Sleep last night: No data")
+
+                # Recent workouts (last 7 days)
+                workout_result = await session.execute(
+                    select(HealthSample)
+                    .where(
+                        HealthSample.user_id == user_id,
+                        HealthSample.sample_type == "workout",
+                        HealthSample.start_date >= week_ago,
+                    )
+                    .order_by(HealthSample.start_date.desc())
+                    .limit(5)
+                )
+                workouts = workout_result.scalars().all()
+                if workouts:
+                    parts.append(f"Workouts (last 7 days): {len(workouts)}")
+                    for w in workouts:
+                        detail = f"  - {w.value} {w.unit}"
+                        if w.source_name:
+                            detail += f" ({w.source_name})"
+                        detail += f" on {w.start_date.strftime('%a %b %d')}"
+                        if w.metadata_json:
+                            try:
+                                meta = json.loads(w.metadata_json)
+                                if meta.get("workout_type"):
+                                    detail = f"  - {meta['workout_type']}: {w.value} {w.unit}"
+                                    if w.source_name:
+                                        detail += f" ({w.source_name})"
+                                    detail += f" on {w.start_date.strftime('%a %b %d')}"
+                            except (json.JSONDecodeError, TypeError):
+                                pass
+                        parts.append(detail)
+                else:
+                    parts.append("Workouts (last 7 days): None recorded")
+
+            await engine.dispose()
+            return "\n".join(parts)
+
+        except Exception as e:
+            logger.exception("HealthSummaryTool error")
+            return f"Error fetching health summary: {e}"
+
+
 class ResearchBriefingTool(BaseTool):
     """Access JARVIS's continuous research findings."""
 
@@ -3003,6 +3132,8 @@ def get_tool_registry() -> dict[str, BaseTool]:
             MacMiniExecTool(),
             MacMiniClaudeCodeTool(),
             MacMiniScreenshotTool(),
+            # Health
+            HealthSummaryTool(),
             # Research daemon
             ResearchBriefingTool(),
             # Contacts

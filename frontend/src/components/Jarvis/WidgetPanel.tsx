@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Cloud, Sun, CloudRain, CloudSnow, CloudLightning, CloudDrizzle, Wind, Droplets,
-  Calendar, Clock, ChevronRight, ExternalLink, Loader2, RefreshCw,
+  Calendar, Clock, ChevronRight, ExternalLink, RefreshCw,
   Thermometer, Eye, EyeOff, MapPin,
 } from 'lucide-react';
 import { api } from '@/services/api';
@@ -52,6 +52,82 @@ interface SystemStatus {
   date: string;
   timezone: string;
   services: Record<string, boolean>;
+}
+
+// ── Skeleton primitives ────────────────────────────────────────────────
+
+function SkeletonLine({ className }: { className?: string }) {
+  return <div className={clsx('skeleton-line', className)} />;
+}
+
+function WeatherSkeleton() {
+  return (
+    <WidgetCard label="WEATHER">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2.5">
+          {/* Icon placeholder */}
+          <SkeletonLine className="w-[22px] h-[22px] rounded-full flex-shrink-0" />
+          <div>
+            {/* Temperature */}
+            <SkeletonLine className="w-14 h-5 mb-1" />
+            {/* Description */}
+            <SkeletonLine className="w-20 h-2.5" />
+          </div>
+        </div>
+        <div className="flex flex-col items-end gap-1">
+          {/* Location */}
+          <SkeletonLine className="w-16 h-2" />
+          {/* Hi/Lo */}
+          <SkeletonLine className="w-12 h-2" />
+        </div>
+      </div>
+      {/* Detail row */}
+      <div className="flex items-center gap-4 mt-2 pt-2 border-t border-white/[0.04]">
+        <SkeletonLine className="w-14 h-2" />
+        <SkeletonLine className="w-8 h-2" />
+        <SkeletonLine className="w-12 h-2" />
+      </div>
+    </WidgetCard>
+  );
+}
+
+function CalendarSkeleton() {
+  return (
+    <WidgetCard label="CALENDAR">
+      <div className="space-y-1.5">
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="flex items-start gap-2 py-1" style={{ animationDelay: `${i * 0.15}s` }}>
+            <SkeletonLine className="w-0.5 h-5 flex-shrink-0 rounded-full" />
+            <div className="flex-1">
+              <SkeletonLine className="w-3/4 h-2.5 mb-1" />
+              <SkeletonLine className="w-12 h-2" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </WidgetCard>
+  );
+}
+
+function SubsystemsSkeleton() {
+  return (
+    <WidgetCard label="SUBSYSTEMS">
+      <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="flex items-center gap-1.5">
+            <SkeletonLine className="w-1 h-1 rounded-full flex-shrink-0" />
+            <SkeletonLine className="w-16 h-2" />
+          </div>
+        ))}
+      </div>
+      <div className="mt-2 pt-2 border-t border-white/[0.04]">
+        <div className="flex items-center justify-between">
+          <SkeletonLine className="w-10 h-2" />
+          <SkeletonLine className="w-16 h-2" />
+        </div>
+      </div>
+    </WidgetCard>
+  );
 }
 
 // ── Weather icon mapping ───────────────────────────────────────────────
@@ -122,13 +198,7 @@ function WeatherWidget() {
   }, [fetchWeather]);
 
   if (loading && !data) {
-    return (
-      <WidgetCard label="WEATHER">
-        <div className="flex items-center justify-center py-4">
-          <Loader2 size={14} className="animate-spin text-jarvis-blue/50" />
-        </div>
-      </WidgetCard>
-    );
+    return <WeatherSkeleton />;
   }
 
   if (data?.error && !data.temperature) {
@@ -245,13 +315,7 @@ function CalendarWidget() {
   }, [fetchCalendar]);
 
   if (loading && !data) {
-    return (
-      <WidgetCard label="CALENDAR">
-        <div className="flex items-center justify-center py-4">
-          <Loader2 size={14} className="animate-spin text-jarvis-blue/50" />
-        </div>
-      </WidgetCard>
-    );
+    return <CalendarSkeleton />;
   }
 
   if (!data?.connected) {
@@ -311,7 +375,22 @@ function GoogleConnectWidget() {
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading) return null;
+  if (loading) {
+    return (
+      <WidgetCard label="CONNECTIONS">
+        <div className="flex items-center justify-between py-1">
+          <div className="flex items-center gap-2.5">
+            <SkeletonLine className="w-6 h-6 flex-shrink-0" />
+            <div>
+              <SkeletonLine className="w-14 h-2.5 mb-1" />
+              <SkeletonLine className="w-24 h-2" />
+            </div>
+          </div>
+          <SkeletonLine className="w-3 h-3" />
+        </div>
+      </WidgetCard>
+    );
+  }
 
   // Only show if Google is NOT connected
   if (status?.google_connected) return null;
@@ -346,13 +425,16 @@ function GoogleConnectWidget() {
 
 function QuickStatsWidget() {
   const [status, setStatus] = useState<SystemStatus | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     api.get<SystemStatus>('/widgets/status')
       .then(setStatus)
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, []);
 
+  if (loading && !status) return <SubsystemsSkeleton />;
   if (!status) return null;
 
   const services = status.services || {};

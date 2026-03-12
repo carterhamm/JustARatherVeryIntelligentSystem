@@ -720,6 +720,27 @@
     mix-blend-mode: overlay;
   }
 
+  /* ═══════════════════════════════════════════════════════════════
+     SKELETON LOADING — HUD-style pulsing placeholder bars
+     ═══════════════════════════════════════════════════════════════ */
+
+  .skeleton-line {
+    background: linear-gradient(
+      90deg,
+      rgba(0, 212, 255, 0.06) 0%,
+      rgba(0, 212, 255, 0.12) 50%,
+      rgba(0, 212, 255, 0.06) 100%
+    );
+    background-size: 200% 100%;
+    animation: skeletonPulse 1.8s ease-in-out infinite;
+    border-radius: 2px;
+  }
+
+  @keyframes skeletonPulse {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
   /* Old hud-boot classes kept for backward compat */
   .hud-boot-1 { animation: floatIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.1s both; }
   .hud-boot-2 { animation: floatIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.2s both; }

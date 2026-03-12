@@ -85,10 +85,10 @@ window.dispatchEvent(new Event('novnc-loaded'));
     --bg-primary: #0A0E17;
     --bg-secondary: #0D1321;
     --bg-panel: rgba(13, 19, 33, 0.85);
-    --cyan: #4FC3F7;
+    --cyan: #00d4ff;
     --cyan-bright: #00E5FF;
-    --cyan-dim: rgba(79, 195, 247, 0.15);
-    --cyan-glow: rgba(0, 229, 255, 0.3);
+    --cyan-dim: rgba(0, 212, 255, 0.15);
+    --cyan-glow: rgba(0, 212, 255, 0.3);
     --orange: #FF6D00;
     --orange-dim: rgba(255, 109, 0, 0.2);
     --green: #00E676;
@@ -96,7 +96,7 @@ window.dispatchEvent(new Event('novnc-loaded'));
     --text-primary: #E0E6ED;
     --text-secondary: #8899AA;
     --text-dim: #4A5568;
-    --border: rgba(79, 195, 247, 0.25);
+    --border: rgba(0, 212, 255, 0.25);
     --font-hud: 'Rajdhani', 'Segoe UI', sans-serif;
     --font-mono: 'Share Tech Mono', 'Courier New', monospace;
   }
@@ -115,8 +115,8 @@ window.dispatchEvent(new Event('novnc-loaded'));
     position: fixed;
     inset: 0;
     background-image:
-      linear-gradient(rgba(79, 195, 247, 0.03) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(79, 195, 247, 0.03) 1px, transparent 1px);
+      linear-gradient(rgba(0, 212, 255, 0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0, 212, 255, 0.03) 1px, transparent 1px);
     background-size: 40px 40px;
     pointer-events: none;
     z-index: 0;
@@ -666,15 +666,6 @@ window.dispatchEvent(new Event('novnc-loaded'));
 <!-- ═══════════════════════ STATUS BAR ═══════════════════════ -->
 <div class="status-bar">
   <div class="status-left">
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" style="opacity:0.8">
-      <circle cx="12" cy="12" r="10" stroke="#4FC3F7" stroke-width="1.5" fill="none"/>
-      <circle cx="12" cy="12" r="5" stroke="#00E5FF" stroke-width="1" fill="none"/>
-      <circle cx="12" cy="12" r="2" fill="#00E5FF"/>
-      <line x1="12" y1="2" x2="12" y2="7" stroke="#4FC3F7" stroke-width="0.8"/>
-      <line x1="12" y1="17" x2="12" y2="22" stroke="#4FC3F7" stroke-width="0.8"/>
-      <line x1="2" y1="12" x2="7" y2="12" stroke="#4FC3F7" stroke-width="0.8"/>
-      <line x1="17" y1="12" x2="22" y2="12" stroke="#4FC3F7" stroke-width="0.8"/>
-    </svg>
     <span class="status-label">J.A.R.V.I.S.</span>
   </div>
   <div class="status-center">
@@ -738,19 +729,19 @@ window.dispatchEvent(new Event('novnc-loaded'));
     </div>
     <div class="arc-reactor">
       <svg class="arc-reactor-svg" viewBox="0 0 64 64" fill="none">
-        <circle cx="32" cy="32" r="30" stroke="#4FC3F7" stroke-width="1" opacity="0.3"/>
-        <circle cx="32" cy="32" r="24" stroke="#4FC3F7" stroke-width="1" opacity="0.5"/>
+        <circle cx="32" cy="32" r="30" stroke="#00d4ff" stroke-width="1" opacity="0.3"/>
+        <circle cx="32" cy="32" r="24" stroke="#00d4ff" stroke-width="1" opacity="0.5"/>
         <circle cx="32" cy="32" r="16" stroke="#00E5FF" stroke-width="1.5" opacity="0.7"/>
         <circle cx="32" cy="32" r="8" stroke="#00E5FF" stroke-width="2" opacity="0.9"/>
         <circle cx="32" cy="32" r="3" fill="#00E5FF"/>
-        <line x1="32" y1="2" x2="32" y2="8" stroke="#4FC3F7" stroke-width="0.8" opacity="0.5"/>
-        <line x1="32" y1="56" x2="32" y2="62" stroke="#4FC3F7" stroke-width="0.8" opacity="0.5"/>
-        <line x1="2" y1="32" x2="8" y2="32" stroke="#4FC3F7" stroke-width="0.8" opacity="0.5"/>
-        <line x1="56" y1="32" x2="62" y2="32" stroke="#4FC3F7" stroke-width="0.8" opacity="0.5"/>
-        <line x1="11" y1="11" x2="15" y2="15" stroke="#4FC3F7" stroke-width="0.6" opacity="0.3"/>
-        <line x1="49" y1="49" x2="53" y2="53" stroke="#4FC3F7" stroke-width="0.6" opacity="0.3"/>
-        <line x1="53" y1="11" x2="49" y2="15" stroke="#4FC3F7" stroke-width="0.6" opacity="0.3"/>
-        <line x1="15" y1="49" x2="11" y2="53" stroke="#4FC3F7" stroke-width="0.6" opacity="0.3"/>
+        <line x1="32" y1="2" x2="32" y2="8" stroke="#00d4ff" stroke-width="0.8" opacity="0.5"/>
+        <line x1="32" y1="56" x2="32" y2="62" stroke="#00d4ff" stroke-width="0.8" opacity="0.5"/>
+        <line x1="2" y1="32" x2="8" y2="32" stroke="#00d4ff" stroke-width="0.8" opacity="0.5"/>
+        <line x1="56" y1="32" x2="62" y2="32" stroke="#00d4ff" stroke-width="0.8" opacity="0.5"/>
+        <line x1="11" y1="11" x2="15" y2="15" stroke="#00d4ff" stroke-width="0.6" opacity="0.3"/>
+        <line x1="49" y1="49" x2="53" y2="53" stroke="#00d4ff" stroke-width="0.6" opacity="0.3"/>
+        <line x1="53" y1="11" x2="49" y2="15" stroke="#00d4ff" stroke-width="0.6" opacity="0.3"/>
+        <line x1="15" y1="49" x2="11" y2="53" stroke="#00d4ff" stroke-width="0.6" opacity="0.3"/>
       </svg>
     </div>
     <div class="login-body">

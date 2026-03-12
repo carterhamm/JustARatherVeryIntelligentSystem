@@ -862,6 +862,20 @@ _TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "required": ["query"],
         },
     },
+    # -- Health Summary ---------------------------------------------------
+    {
+        "name": "health_summary",
+        "description": (
+            "Get the user's health data summary from Apple HealthKit (synced via iOS app). "
+            "Returns today's steps, latest heart rate, last night's sleep, and recent workouts. "
+            "Use when the user asks about their health, fitness, steps, sleep, heart rate, or workouts."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+        },
+    },
     # -- Research Briefing -----------------------------------------------
     {
         "name": "research_briefing",
