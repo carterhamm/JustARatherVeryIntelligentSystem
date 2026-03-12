@@ -15,9 +15,48 @@ on the Mac Mini behind Caddy auth + Cloudflare tunnel. Used for:
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 import httpx
+
+
+# ── Unicode Rich Text (markdown → styled Unicode for iMessage) ──────────
+
+_BOLD_MAP: dict[str, str] = {}
+_ITALIC_MAP: dict[str, str] = {}
+_BOLD_ITALIC_MAP: dict[str, str] = {}
+
+
+def _build_unicode_maps() -> None:
+    bold_upper, bold_lower, bold_digit = 0x1D5D4, 0x1D5EE, 0x1D7EC
+    italic_upper, italic_lower = 0x1D608, 0x1D622
+    bi_upper, bi_lower = 0x1D63C, 0x1D656
+    for i in range(26):
+        u, l = chr(ord('A') + i), chr(ord('a') + i)
+        _BOLD_MAP[u] = chr(bold_upper + i)
+        _BOLD_MAP[l] = chr(bold_lower + i)
+        _ITALIC_MAP[u] = chr(italic_upper + i)
+        _ITALIC_MAP[l] = chr(italic_lower + i)
+        _BOLD_ITALIC_MAP[u] = chr(bi_upper + i)
+        _BOLD_ITALIC_MAP[l] = chr(bi_lower + i)
+    for i in range(10):
+        _BOLD_MAP[str(i)] = chr(bold_digit + i)
+
+
+_build_unicode_maps()
+
+
+def _apply_map(text: str, m: dict[str, str]) -> str:
+    return "".join(m.get(c, c) for c in text)
+
+
+def markdown_to_unicode_rich(text: str) -> str:
+    """Convert **bold**, *italic*, ***bold italic*** to Unicode styled chars."""
+    text = re.sub(r'\*\*\*(.+?)\*\*\*', lambda m: _apply_map(m[1], _BOLD_ITALIC_MAP), text)
+    text = re.sub(r'\*\*(.+?)\*\*', lambda m: _apply_map(m[1], _BOLD_MAP), text)
+    text = re.sub(r'(?<!\w)\*(.+?)\*(?!\w)', lambda m: _apply_map(m[1], _ITALIC_MAP), text)
+    return text
 
 from app.config import settings
 
@@ -57,6 +96,9 @@ async def send_imessage(to: str, text: str, service: str = "iMessage") -> dict[s
             "success": False,
             "message": "Mac Mini agent not configured (MAC_MINI_AGENT_URL / MAC_MINI_AGENT_KEY missing)",
         }
+
+    # Convert markdown formatting to Unicode styled characters for iMessage
+    text = markdown_to_unicode_rich(text)
 
     url = f"{_get_url()}/send-imessage"
     payload = {"to": to, "text": text, "service": service}
