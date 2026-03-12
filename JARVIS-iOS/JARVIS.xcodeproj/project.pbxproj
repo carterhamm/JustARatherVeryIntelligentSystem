@@ -36,6 +36,7 @@
 		FC1411AB91DD85D53D4F48C4 /* JARVISWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 366131BF98CEBD234A1B3EAC /* JARVISWatchApp.swift */; };
 		FD80A2D76DD27A8DE7E83C61 /* VoiceModeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E597386B40A8FC0AB71471E2 /* VoiceModeView.swift */; };
 		A1B2C3D4E5F6071829304150 /* HealthSyncService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F607182930AABB /* HealthSyncService.swift */; };
+		B2C3D4E5F6A7081930415061 /* LocationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C3D4E5F6A708193041BBCC /* LocationService.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -71,6 +72,7 @@
 		EBB74C0965F0962BFFAB863A /* AuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthService.swift; sourceTree = "<group>"; };
 		F55A50A51BD792770F36AE43 /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F607182930AABB /* HealthSyncService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthSyncService.swift; sourceTree = "<group>"; };
+		B2C3D4E5F6A708193041BBCC /* LocationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationService.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -186,6 +188,7 @@
 				C23F1A4BB6396E675D7FBEBE /* ChatService.swift */,
 				A1B2C3D4E5F607182930AABB /* HealthSyncService.swift */,
 				D7AE01E6649045BD1D4A9F5A /* KeychainService.swift */,
+				B2C3D4E5F6A708193041BBCC /* LocationService.swift */,
 				36BA9152D43204B6A619BD45 /* VoiceService.swift */,
 			);
 			path = Services;
@@ -374,6 +377,7 @@
 				610ECED3F3228D681EBCADD7 /* JARVISConfig.swift in Sources */,
 				ED36D820CBB05421D318B538 /* JARVISTheme.swift in Sources */,
 				9C4DD8A87CAE66E72E87142E /* KeychainService.swift in Sources */,
+				B2C3D4E5F6A7081930415061 /* LocationService.swift in Sources */,
 				BB2C89BFB04E54F07380940D /* LoginView.swift in Sources */,
 				5B7D04F69A21759D923906EE /* MainView.swift in Sources */,
 				44C96CDDF87F06F1499FC39B /* MessageBubbleView.swift in Sources */,

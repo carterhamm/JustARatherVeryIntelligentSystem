@@ -77,7 +77,7 @@ export default function ContactsPanel() {
   const loadContacts = useCallback(async () => {
     setIsLoading(true);
     try {
-      const result = await api.get<Contact[]>('/v1/contacts', { limit: 50 });
+      const result = await api.get<Contact[]>('/contacts', { limit: 50 });
       setContacts(result);
     } catch {
       // silently fail
@@ -88,7 +88,7 @@ export default function ContactsPanel() {
 
   const loadCount = useCallback(async () => {
     try {
-      const result = await api.get<{ count: number }>('/v1/contacts/count');
+      const result = await api.get<{ count: number }>('/contacts/count');
       setTotalCount(result.count);
     } catch {
       // silently fail
@@ -105,7 +105,7 @@ export default function ContactsPanel() {
     searchTimeoutRef.current = setTimeout(async () => {
       setIsSearching(true);
       try {
-        const result = await api.get<Contact[]>('/v1/contacts/search', { q: searchQuery.trim() });
+        const result = await api.get<Contact[]>('/contacts/search', { q: searchQuery.trim() });
         setSearchResults(result);
       } catch {
         setSearchResults([]);
@@ -127,7 +127,7 @@ export default function ContactsPanel() {
     formData.append('file', file);
 
     try {
-      const result = await api.postFormData<UploadResult>('/v1/contacts/upload', formData);
+      const result = await api.postFormData<UploadResult>('/contacts/upload', formData);
       setUploadStatus('success');
       setUploadMessage(result.message);
       loadContacts();
@@ -143,7 +143,7 @@ export default function ContactsPanel() {
 
   const handleDelete = useCallback(async (id: string) => {
     try {
-      await api.delete(`/v1/contacts/${id}`);
+      await api.delete(`/contacts/${id}`);
       setContacts((prev) => prev.filter((c) => c.id !== id));
       setTotalCount((prev) => prev - 1);
       if (searchResults) {
@@ -156,7 +156,7 @@ export default function ContactsPanel() {
 
   const handleDeleteAll = useCallback(async () => {
     try {
-      await api.delete('/v1/contacts');
+      await api.delete('/contacts');
       setContacts([]);
       setSearchResults(null);
       setTotalCount(0);
