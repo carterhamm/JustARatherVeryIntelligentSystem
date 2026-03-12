@@ -39,6 +39,9 @@ pyotp>=2.9.0,<3.0                        # TOTP 2FA
 httpx>=0.28.0,<1.0
 aiohttp>=3.11.0,<4.0
 
+# -- Timezone data (needed by zoneinfo on minimal Linux containers) -----------
+tzdata>=2024.1
+
 # -- Logging -------------------------------------------------------------------
 structlog>=24.4.0,<25.0
 
