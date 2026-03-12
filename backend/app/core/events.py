@@ -89,6 +89,14 @@ async def startup_handler(app: FastAPI) -> None:
         except Exception as exc:
             logger.warning("stark_protocol_check_failed", error=str(exc))
 
+    # -- NTP time sync --------------------------------------------------------
+    try:
+        from app.utils.ntp_time import get_ntp_offset
+        offset = get_ntp_offset()  # triggers initial sync
+        logger.info("ntp_synced", server="time.apple.com", offset_seconds=round(offset, 4))
+    except Exception as exc:
+        logger.warning("ntp_sync_failed", error=str(exc))
+
     logger.info("startup_complete", app=settings.APP_NAME)
 
 

@@ -232,13 +232,21 @@ async def get_system_status(
     except Exception:
         pass
 
-    now = datetime.now(tz=_MTN)
+    ntp_synced = False
+    try:
+        from app.utils.ntp_time import ntp_now
+        now = ntp_now().astimezone(_MTN)
+        ntp_synced = True
+    except Exception:
+        now = datetime.now(tz=_MTN)
 
     return {
         "google_connected": google_connected,
         "time": now.strftime("%I:%M %p"),
         "date": now.strftime("%A, %B %d"),
         "timezone": "Mountain Time",
+        "ntp_synced": ntp_synced,
+        "ntp_server": "time.apple.com",
         "heartbeat": heartbeat_status,
         "services": {
             "weather_api": bool(settings.WEATHER_API_KEY),
@@ -255,6 +263,18 @@ _NOREPLY_PATTERNS = (
     "noreply", "no-reply", "no_reply", "donotreply", "do-not-reply",
     "notifications@", "notification@", "notify@", "mailer-daemon",
     "postmaster@", "bounce@", "auto-confirm", "automated@",
+    "support@", "help@", "info@", "hello@", "team@", "billing@",
+    "accounts@", "security@", "alerts@", "alert@", "updates@",
+    "news@", "newsletter@", "marketing@", "promo@", "promotions@",
+    "feedback@", "survey@", "receipts@", "orders@", "shipping@",
+    "delivery@", "tracking@", "confirm@", "verification@",
+    "service@", "services@", "admin@", "system@",
+    "@github.com", "@linkedin.com", "@facebookmail.com",
+    "@accounts.google.com", "@google.com", "@apple.com",
+    "@amazon.com", "@paypal.com", "@stripe.com",
+    "@notion.so", "@slack.com", "@discord.com",
+    "@vercel.com", "@railway.app", "@netlify.com",
+    "@circleci.com", "@travis-ci.com", "builds@",
 )
 
 
@@ -285,23 +305,29 @@ async def _score_emails_with_gemini(emails: list[dict[str, Any]]) -> list[dict[s
         )
 
     prompt = (
-        "You are an email importance scorer. For each email below, assign an "
-        "importance score from 1 (junk/low) to 10 (critical/urgent).\n\n"
-        "Criteria for HIGH scores (7-10):\n"
-        "- Direct personal messages from real people\n"
-        "- Financial alerts (bank, payments, billing issues)\n"
-        "- Calendar invites or meeting changes\n"
-        "- Security alerts (password changes, login attempts)\n"
-        "- Time-sensitive action required\n"
-        "- Messages from employers, professors, or important contacts\n\n"
-        "Criteria for LOW scores (1-4):\n"
-        "- Marketing / promotional content\n"
-        "- Automated notifications (build status, social media)\n"
-        "- Newsletters\n"
-        "- No-reply senders with routine updates\n\n"
+        "You are JARVIS, an AI assistant filtering emails for importance. "
+        "Score each email 1-10. ONLY emails from REAL INDIVIDUAL PEOPLE deserve high scores.\n\n"
+        "SCORE 8-10 (show to user):\n"
+        "- A real person writing directly to the user (recruiter, colleague, friend, family)\n"
+        "- Job interview invitations or offers from a named recruiter/hiring manager\n"
+        "- Personal requests that need a human reply\n"
+        "- Messages from professors, mentors, or managers addressed personally\n\n"
+        "SCORE 1-4 (HIDE — do NOT score high):\n"
+        "- ANY company/brand/service sending automated emails (Apple, Google, Amazon, GitHub, LinkedIn, etc.)\n"
+        "- Receipts, order confirmations, shipping notifications\n"
+        "- Security alerts, password resets, verification codes\n"
+        "- Newsletters, marketing, promotional content\n"
+        "- Build/deploy notifications, CI/CD alerts\n"
+        "- Social media notifications (likes, follows, comments)\n"
+        "- Billing statements, subscription renewals\n"
+        "- Calendar auto-notifications\n"
+        "- ANY email from a no-reply, notifications@, or automated address\n"
+        "- ANY email where the sender is a company name, not a person's name\n\n"
+        "KEY RULE: If the sender is a company/service/brand (not a person's first+last name), score 1-4.\n"
+        "The user ONLY wants to see emails from actual humans who wrote to them personally.\n\n"
         "Reply ONLY with valid JSON: a list of objects with 'index' (1-based) "
         "and 'score' (integer 1-10). Example:\n"
-        '[{"index": 1, "score": 8}, {"index": 2, "score": 3}]\n\n'
+        '[{"index": 1, "score": 9}, {"index": 2, "score": 2}]\n\n'
         "Emails:\n" + "\n".join(email_summaries)
     )
 
@@ -403,7 +429,7 @@ async def get_email_widget(
                     "snippet": e["snippet"],
                 }
                 for e in scored
-                if e.get("score", 0) >= 7
+                if e.get("score", 0) >= 8
             ]
         except Exception as gemini_exc:
             logger.warning("Gemini email scoring failed, using fallback: %s", gemini_exc)

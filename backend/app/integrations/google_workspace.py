@@ -141,7 +141,7 @@ async def gmail_important_recent(
 
         results = service.users().messages().list(
             userId="me",
-            q="is:inbox newer_than:7d -category:promotions -category:social -category:updates -category:forums",
+            q="is:inbox is:important newer_than:7d -category:promotions -category:social -category:updates -category:forums -from:noreply -from:no-reply -from:notifications",
             maxResults=max_results,
         ).execute()
 

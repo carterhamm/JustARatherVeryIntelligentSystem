@@ -55,6 +55,28 @@ class ContactCreate(BaseModel):
     extra_fields: Optional[str] = None  # JSON string
 
 
+class ContactUpdate(BaseModel):
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    company: Optional[str] = None
+    title: Optional[str] = None
+    address: Optional[str] = None
+    notes: Optional[str] = None
+    photo: Optional[str] = None
+    photo_content_type: Optional[str] = None
+    street: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    postal_code: Optional[str] = None
+    country: Optional[str] = None
+    birthday: Optional[str] = None
+    url: Optional[str] = None
+    raw_vcard: Optional[str] = None
+    extra_fields: Optional[str] = None
+
+
 class ContactResponse(BaseModel):
     id: str
     first_name: str
@@ -353,34 +375,34 @@ def _parse_csv(content: str) -> list[dict[str, Any]]:
 
 @router.post("/upload", response_model=UploadResponse)
 async def upload_contacts(
-    file: UploadFile = File(...),
+    file: list[UploadFile] = File(...),
     current_user: User = Depends(get_current_active_user_or_service),
     db: AsyncSession = Depends(get_db),
 ):
-    """Upload contacts from a .vcf or .csv file."""
-    content = (await file.read()).decode("utf-8", errors="ignore")
-    filename = (file.filename or "").lower()
-
-    if filename.endswith(".vcf") or "BEGIN:VCARD" in content[:200]:
-        parsed = _parse_vcard(content)
-    elif filename.endswith(".csv"):
-        parsed = _parse_csv(content)
-    else:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Unsupported format. Upload a .vcf or .csv file.",
-        )
-
+    """Upload contacts from one or more .vcf or .csv files."""
     imported, skipped, errors = 0, 0, 0
-    for raw in parsed:
-        try:
-            encrypted = _encrypt_contact(raw, current_user.id)
-            contact = Contact(user_id=current_user.id, **encrypted)
-            db.add(contact)
-            imported += 1
-        except Exception:
-            logger.exception("Failed to import contact")
-            errors += 1
+
+    for upload_file in file:
+        content = (await upload_file.read()).decode("utf-8", errors="ignore")
+        filename = (upload_file.filename or "").lower()
+
+        if filename.endswith(".vcf") or "BEGIN:VCARD" in content[:200]:
+            parsed = _parse_vcard(content)
+        elif filename.endswith(".csv"):
+            parsed = _parse_csv(content)
+        else:
+            skipped += 1
+            continue
+
+        for raw in parsed:
+            try:
+                encrypted = _encrypt_contact(raw, current_user.id)
+                contact = Contact(user_id=current_user.id, **encrypted)
+                db.add(contact)
+                imported += 1
+            except Exception:
+                logger.exception("Failed to import contact")
+                errors += 1
 
     if imported > 0:
         await db.commit()
@@ -464,6 +486,32 @@ async def count_contacts(
         select(func.count()).select_from(Contact).where(Contact.user_id == current_user.id)
     )
     return {"count": result.scalar() or 0}
+
+
+@router.put("/{contact_id}", response_model=ContactResponse)
+async def update_contact(
+    contact_id: uuid.UUID,
+    body: ContactUpdate,
+    current_user: User = Depends(get_current_active_user_or_service),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update a contact. Only provided (non-None) fields are changed."""
+    result = await db.execute(
+        select(Contact).where(Contact.id == contact_id, Contact.user_id == current_user.id)
+    )
+    contact = result.scalar_one_or_none()
+    if not contact:
+        raise HTTPException(status_code=404, detail="Contact not found")
+
+    updates = body.model_dump(exclude_unset=True)
+    for field, value in updates.items():
+        if field in _FIELDS:
+            encrypted = encrypt_message(value, current_user.id) if value else None
+            setattr(contact, field, encrypted)
+
+    await db.commit()
+    await db.refresh(contact)
+    return ContactResponse(**_decrypt_contact(contact))
 
 
 @router.delete("/{contact_id}")
