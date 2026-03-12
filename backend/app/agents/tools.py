@@ -3065,6 +3065,261 @@ class SearchContactsTool(BaseTool):
 
 
 # ═════════════════════════════════════════════════════════════════════════
+# Habit Tracker
+# ═════════════════════════════════════════════════════════════════════════
+
+class HabitTool(BaseTool):
+    """Track, log, and check streaks for user habits."""
+
+    name = "habit_tracker"
+    description = (
+        "Track and manage habits: list habits with today's status, "
+        "log completions, check streaks, create new habits."
+    )
+
+    async def execute(
+        self,
+        params: dict[str, Any],
+        *,
+        state: Optional[AgentState] = None,
+    ) -> str:
+        user_id = (state or {}).get("user_id")
+        if not user_id:
+            return "No user context available."
+
+        action = params.get("action", "list")
+        habit_name = params.get("habit_name", "")
+        notes = params.get("notes")
+        frequency = params.get("frequency", "daily")
+
+        try:
+            from sqlalchemy import select, func
+            from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession as _AS
+            from sqlalchemy.orm import sessionmaker
+            from app.config import settings
+            from app.models.habit import Habit, HabitLog
+            from datetime import timedelta
+
+            engine = create_async_engine(settings.DATABASE_URL)
+            async_session = sessionmaker(engine, class_=_AS, expire_on_commit=False)
+
+            async with async_session() as session:
+                if action == "list":
+                    return await self._list_habits(session, user_id)
+                elif action == "log":
+                    if not habit_name:
+                        return "Please specify which habit to log (habit_name parameter)."
+                    return await self._log_habit(session, user_id, habit_name, notes)
+                elif action == "streak":
+                    if not habit_name:
+                        return await self._all_streaks(session, user_id)
+                    return await self._habit_streak(session, user_id, habit_name)
+                elif action == "create":
+                    if not habit_name:
+                        return "Please specify a name for the new habit (habit_name parameter)."
+                    return await self._create_habit(session, user_id, habit_name, frequency)
+                else:
+                    return f"Unknown action '{action}'. Use: list, log, streak, create."
+
+            await engine.dispose()
+
+        except Exception as e:
+            logger.exception("HabitTool error")
+            return f"Error with habit tracker: {e}"
+
+    async def _list_habits(self, session, user_id) -> str:
+        from sqlalchemy import select, func
+        from app.models.habit import Habit, HabitLog
+        from datetime import timedelta
+
+        result = await session.execute(
+            select(Habit)
+            .where(Habit.user_id == user_id, Habit.is_active.is_(True))
+            .order_by(Habit.sort_order.asc(), Habit.created_at.asc())
+        )
+        habits = result.scalars().all()
+        if not habits:
+            return "No habits tracked yet. Create one by saying 'track a new habit called <name>'."
+
+        now = datetime.now(timezone.utc)
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        tomorrow_start = today_start + timedelta(days=1)
+
+        parts: list[str] = []
+        completed = 0
+        total = 0
+
+        for habit in habits:
+            count_result = await session.execute(
+                select(func.count())
+                .select_from(HabitLog)
+                .where(
+                    HabitLog.habit_id == habit.id,
+                    HabitLog.user_id == user_id,
+                    HabitLog.completed_at >= today_start,
+                    HabitLog.completed_at < tomorrow_start,
+                )
+            )
+            today_count = count_result.scalar() or 0
+            done = today_count >= habit.target_count
+
+            streak = await self._calc_streak(session, habit, user_id)
+
+            icon = habit.icon or ""
+            check = "DONE" if done else f"{today_count}/{habit.target_count}"
+            parts.append(
+                f"{icon} {habit.name}: [{check}] | "
+                f"streak: {streak} day{'s' if streak != 1 else ''} | "
+                f"{habit.frequency}"
+            )
+
+            today_date = now.date()
+            applies = True
+            if habit.frequency == "weekday" and today_date.weekday() >= 5:
+                applies = False
+            if applies:
+                total += 1
+                if done:
+                    completed += 1
+
+        header = f"Today's habits: {completed}/{total} complete\n"
+        return header + "\n".join(f"- {p}" for p in parts)
+
+    async def _log_habit(self, session, user_id, habit_name: str, notes: str | None) -> str:
+        from app.models.habit import Habit, HabitLog
+
+        habit = await self._find_habit(session, user_id, habit_name)
+        if not habit:
+            return f"No habit matching '{habit_name}'. Use action='list' to see your habits."
+
+        log = HabitLog(
+            habit_id=habit.id,
+            user_id=user_id,
+            completed_at=datetime.now(timezone.utc),
+            notes=notes,
+            value=1.0,
+        )
+        session.add(log)
+        await session.commit()
+
+        streak = await self._calc_streak(session, habit, user_id)
+        return (
+            f"Logged '{habit.name}' as complete! "
+            f"Current streak: {streak} day{'s' if streak != 1 else ''}."
+        )
+
+    async def _habit_streak(self, session, user_id, habit_name: str) -> str:
+        habit = await self._find_habit(session, user_id, habit_name)
+        if not habit:
+            return f"No habit matching '{habit_name}'."
+
+        streak = await self._calc_streak(session, habit, user_id)
+        return (
+            f"'{habit.name}' streak: {streak} consecutive day{'s' if streak != 1 else ''}."
+        )
+
+    async def _all_streaks(self, session, user_id) -> str:
+        from sqlalchemy import select
+        from app.models.habit import Habit
+
+        result = await session.execute(
+            select(Habit)
+            .where(Habit.user_id == user_id, Habit.is_active.is_(True))
+            .order_by(Habit.sort_order.asc())
+        )
+        habits = result.scalars().all()
+        if not habits:
+            return "No habits tracked yet."
+
+        parts = []
+        for habit in habits:
+            streak = await self._calc_streak(session, habit, user_id)
+            parts.append(f"{habit.name}: {streak} day{'s' if streak != 1 else ''}")
+
+        return "Current streaks:\n" + "\n".join(f"- {p}" for p in parts)
+
+    async def _create_habit(self, session, user_id, name: str, frequency: str) -> str:
+        from app.models.habit import Habit
+
+        habit = Habit(
+            user_id=user_id,
+            name=name,
+            frequency=frequency,
+            target_count=1,
+        )
+        session.add(habit)
+        await session.commit()
+        return f"Created habit '{name}' ({frequency}). Say 'I did {name}' to log it."
+
+    async def _find_habit(self, session, user_id, name: str):
+        """Fuzzy-match a habit by name (case-insensitive substring)."""
+        from sqlalchemy import select
+        from app.models.habit import Habit
+
+        result = await session.execute(
+            select(Habit).where(
+                Habit.user_id == user_id,
+                Habit.is_active.is_(True),
+            )
+        )
+        habits = result.scalars().all()
+        name_lower = name.lower().strip()
+
+        for h in habits:
+            if h.name.lower() == name_lower:
+                return h
+        for h in habits:
+            if name_lower in h.name.lower() or h.name.lower() in name_lower:
+                return h
+        return None
+
+    async def _calc_streak(self, session, habit, user_id) -> int:
+        """Calculate current streak for a habit."""
+        from sqlalchemy import select, func
+        from app.models.habit import HabitLog
+        from datetime import timedelta
+
+        today = datetime.now(timezone.utc).date()
+        streak = 0
+
+        for days_back in range(0, 365):
+            check_date = today - timedelta(days=days_back)
+
+            if habit.frequency == "weekday" and check_date.weekday() >= 5:
+                continue
+            if habit.frequency == "weekly":
+                if check_date.weekday() != today.weekday() and days_back > 0:
+                    continue
+
+            day_start = datetime(
+                check_date.year, check_date.month, check_date.day,
+                tzinfo=timezone.utc,
+            )
+            day_end = day_start + timedelta(days=1)
+
+            result = await session.execute(
+                select(func.count())
+                .select_from(HabitLog)
+                .where(
+                    HabitLog.habit_id == habit.id,
+                    HabitLog.user_id == user_id,
+                    HabitLog.completed_at >= day_start,
+                    HabitLog.completed_at < day_end,
+                )
+            )
+            count = result.scalar() or 0
+
+            if count >= habit.target_count:
+                streak += 1
+            else:
+                if days_back == 0:
+                    continue
+                break
+
+        return streak
+
+
+# ═════════════════════════════════════════════════════════════════════════
 # System Health tool
 # ═════════════════════════════════════════════════════════════════════════
 
@@ -3607,6 +3862,8 @@ def get_tool_registry() -> dict[str, BaseTool]:
             MCPDiscoveryTool(),
             # Focus / deep work sessions
             FocusSessionTool(),
+            # Habit tracking
+            HabitTool(),
         ]
         _registry = {t.name: t for t in tools}
     return _registry

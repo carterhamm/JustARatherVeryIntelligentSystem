@@ -8,6 +8,7 @@ from app.models.passkey import PasskeyCredential
 from app.models.contact import Contact
 from app.models.health import HealthSample
 from app.models.focus_session import FocusSession
+from app.models.habit import Habit, HabitLog
 
 __all__ = [
     "Base",
@@ -21,4 +22,6 @@ __all__ = [
     "Contact",
     "HealthSample",
     "FocusSession",
+    "Habit",
+    "HabitLog",
 ]

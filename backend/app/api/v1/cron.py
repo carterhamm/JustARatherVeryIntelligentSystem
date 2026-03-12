@@ -623,3 +623,61 @@ async def mcp_scan_status(
         "last_scan": last_scan_ts,
         "message": "No scan results cached. POST to /cron/mcp-scan to run one.",
     }
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Self-healing daemon — automatic error detection and repair
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+@router.post("/self-heal")
+async def self_heal(
+    current_user: User = Depends(get_current_active_user_or_service),
+) -> dict[str, Any]:
+    """Execute a single self-healing cycle.
+
+    1. Health-check the live backend and Railway deployment
+    2. Scan recent deploy logs for Python tracebacks / crash signatures
+    3. If errors detected, dispatch Claude Code on Mac Mini to fix
+    4. Notify owner via iMessage with detection/fix report
+
+    Protected by SERVICE_API_KEY or JWT — meant to be called by Railway cron
+    every 15 minutes.
+    """
+    from app.services.self_heal import run_self_heal
+
+    logger.info("Self-heal triggered by user=%s", current_user.username)
+    try:
+        result = await run_self_heal()
+    except Exception as exc:
+        logger.exception("Self-heal failed: %s", exc)
+        raise HTTPException(status_code=500, detail=f"Self-heal error: {exc}")
+    return result
+
+
+@router.get("/self-heal/status")
+async def self_heal_status(
+    current_user: User = Depends(get_current_active_user_or_service),
+) -> dict[str, Any]:
+    """Return the latest self-heal result and today's log."""
+    import json as _json
+    from datetime import datetime as _dt
+
+    r = await get_redis_client()
+    now = _dt.now(tz=_MTN)
+
+    # Last result
+    last_raw = await r.cache_get("jarvis:self_heal:last_result")
+    last_result = _json.loads(last_raw) if last_raw else None
+
+    # Today's log
+    today = now.strftime("%Y-%m-%d")
+    log_raw = await r.cache_get(f"jarvis:self_heal:log:{today}")
+    today_log = _json.loads(log_raw) if log_raw else []
+
+    return {
+        "current_time": now.strftime("%I:%M %p %Z"),
+        "last_self_heal": last_result,
+        "today_log": today_log,
+        "today_run_count": len(today_log),
+    }

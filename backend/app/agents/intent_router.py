@@ -134,6 +134,10 @@ TOOL_CATEGORIES = {
         "description": "Focus sessions, deep work, study sessions, productivity tracking, distraction logging, work timer, how much time did I focus",
         "tools": ["focus_session"],
     },
+    "habits": {
+        "description": "Habits, habit tracking, streaks, daily routines, habit log, did I exercise, workout streak",
+        "tools": ["habit_tracker"],
+    },
 }
 
 _CATEGORY_LIST = "\n".join(

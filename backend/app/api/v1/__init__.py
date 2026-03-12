@@ -18,6 +18,7 @@ from app.api.v1.widgets import router as widgets_router
 from app.api.v1.contacts import router as contacts_router
 from app.api.v1.health import router as health_router
 from app.api.v1.focus import router as focus_router
+from app.api.v1.habits import router as habits_router
 
 v1_router = APIRouter()
 v1_router.include_router(auth_router, prefix="/auth", tags=["auth"])
@@ -36,3 +37,4 @@ v1_router.include_router(widgets_router, tags=["Widgets"])
 v1_router.include_router(contacts_router, prefix="/contacts", tags=["Contacts"])
 v1_router.include_router(health_router, prefix="/health", tags=["Health"])
 v1_router.include_router(focus_router, prefix="/focus", tags=["Focus Sessions"])
+v1_router.include_router(habits_router, prefix="/habits", tags=["Habits"])

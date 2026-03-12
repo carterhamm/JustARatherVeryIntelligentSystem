@@ -628,3 +628,75 @@ async def get_widget_layout(
     widgets.sort(key=lambda w: w.urgency, reverse=True)
 
     return LayoutResponse(widgets=widgets)
+
+
+@router.get("/habits")
+async def get_habits_widget(
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Return today's habit summary for the dashboard widget."""
+    from app.models.habit import Habit, HabitLog
+
+    now = datetime.now(tz=_MTN)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    tomorrow_start = today_start + timedelta(days=1)
+
+    today_start_utc = today_start.astimezone(zoneinfo.ZoneInfo("UTC"))
+    tomorrow_start_utc = tomorrow_start.astimezone(zoneinfo.ZoneInfo("UTC"))
+
+    result = await db.execute(
+        select(Habit)
+        .where(Habit.user_id == current_user.id, Habit.is_active.is_(True))
+        .order_by(Habit.sort_order.asc(), Habit.created_at.asc())
+    )
+    habits = result.scalars().all()
+
+    if not habits:
+        return {"total": 0, "completed": 0, "habits": []}
+
+    habit_list = []
+    completed_count = 0
+    applicable_count = 0
+
+    for habit in habits:
+        today_date = now.date()
+        applies_today = True
+        if habit.frequency == "weekday" and today_date.weekday() >= 5:
+            applies_today = False
+
+        count_result = await db.execute(
+            select(func.count())
+            .select_from(HabitLog)
+            .where(
+                HabitLog.habit_id == habit.id,
+                HabitLog.user_id == current_user.id,
+                HabitLog.completed_at >= today_start_utc,
+                HabitLog.completed_at < tomorrow_start_utc,
+            )
+        )
+        today_count = count_result.scalar() or 0
+        done = today_count >= habit.target_count
+
+        if applies_today:
+            applicable_count += 1
+            if done:
+                completed_count += 1
+
+        habit_list.append({
+            "id": str(habit.id),
+            "name": habit.name,
+            "icon": habit.icon,
+            "color": habit.color,
+            "target": habit.target_count,
+            "today_count": today_count,
+            "done": done,
+            "frequency": habit.frequency,
+            "applies_today": applies_today,
+        })
+
+    return {
+        "total": applicable_count,
+        "completed": completed_count,
+        "habits": habit_list,
+    }

@@ -989,6 +989,44 @@ _TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "required": ["action"],
         },
     },
+    # -- Habit Tracker ---------------------------------------------------
+    {
+        "name": "habit_tracker",
+        "description": (
+            "Track and manage habits. Actions: 'list' shows all active habits with today's "
+            "status and streaks; 'log' marks a habit as completed; 'streak' checks streak info. "
+            "Use when the user mentions habits, streaks, tracking, or daily routines."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["list", "log", "streak", "create"],
+                    "description": (
+                        "'list' = show all habits and today's progress; "
+                        "'log' = mark a habit complete; "
+                        "'streak' = check streak for a specific habit; "
+                        "'create' = create a new habit."
+                    ),
+                },
+                "habit_name": {
+                    "type": "string",
+                    "description": "Name of the habit (for 'log', 'streak', 'create' actions). Fuzzy-matched against existing habits.",
+                },
+                "notes": {
+                    "type": "string",
+                    "description": "Optional notes for the completion log.",
+                },
+                "frequency": {
+                    "type": "string",
+                    "enum": ["daily", "weekday", "weekly", "custom"],
+                    "description": "Frequency for new habits (default: 'daily').",
+                },
+            },
+            "required": ["action"],
+        },
+    },
     # -- Research Briefing -----------------------------------------------
     {
         "name": "research_briefing",

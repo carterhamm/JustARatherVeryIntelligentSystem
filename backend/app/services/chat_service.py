@@ -345,6 +345,9 @@ def _get_tool_status(user_prefs: dict | None = None) -> str:
     # Focus / deep work sessions — always available (DB-backed)
     lines.append("- Focus sessions (deep work tracker): CONNECTED (start/end sessions, track productivity, view stats)")
 
+    # Habit tracking — always available (DB-backed)
+    lines.append("- Habit tracking: CONNECTED (create, log, streak tracking — all stored in DB)")
+
     # MCP Discovery — always available (uses public GitHub API)
     lines.append("- MCP Discovery (GitHub): CONNECTED (search for new capabilities and integrations)")
 

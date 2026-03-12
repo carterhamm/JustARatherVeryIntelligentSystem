@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   Cloud, Sun, CloudRain, CloudSnow, CloudLightning, CloudDrizzle, Wind, Droplets,
   Calendar, Clock, ChevronRight, ExternalLink, RefreshCw,
-  Thermometer, Eye, EyeOff, MapPin,
+  Thermometer, Eye, EyeOff, MapPin, Target, Check, Flame,
   Heart, Activity, Moon, Mail, Bell, AlertTriangle,
 } from 'lucide-react';
 import { api } from '@/services/api';
@@ -887,6 +887,170 @@ function formatReminderTime(isoStr: string): string {
   }
 }
 
+// ── Habits Widget ─────────────────────────────────────────────────────
+
+interface HabitData {
+  id: string;
+  name: string;
+  icon: string | null;
+  color: string | null;
+  target: number;
+  today_count: number;
+  done: boolean;
+  frequency: string;
+  applies_today: boolean;
+}
+
+interface HabitsData {
+  total: number;
+  completed: number;
+  habits: HabitData[];
+}
+
+function HabitProgressRing({ done, count, target, color }: { done: boolean; count: number; target: number; color?: string | null }) {
+  const size = 16;
+  const stroke = 2;
+  const radius = (size - stroke) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const pct = Math.min(count / target, 1);
+  const offset = circumference - pct * circumference;
+  const ringColor = done ? '#39ff14' : (color || '#00d4ff');
+
+  return (
+    <svg width={size} height={size} className="flex-shrink-0">
+      <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth={stroke} />
+      <circle
+        cx={size / 2} cy={size / 2} r={radius} fill="none"
+        stroke={ringColor} strokeWidth={stroke}
+        strokeDasharray={circumference} strokeDashoffset={offset}
+        strokeLinecap="round"
+        style={{ filter: done ? `drop-shadow(0 0 3px ${ringColor}40)` : undefined }}
+        transform={`rotate(-90 ${size / 2} ${size / 2})`}
+      />
+      {done && (
+        <path
+          d={`M${size * 0.3} ${size * 0.5} L${size * 0.45} ${size * 0.65} L${size * 0.7} ${size * 0.35}`}
+          stroke={ringColor}
+          strokeWidth="1.5"
+          fill="none"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      )}
+    </svg>
+  );
+}
+
+function HabitsWidget() {
+  const [data, setData] = useState<HabitsData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const fetchHabits = useCallback(async () => {
+    try {
+      setLoading(true);
+      const res = await api.get<HabitsData>('/widgets/habits');
+      setData(res);
+    } catch {
+      setData(null);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchHabits();
+    const interval = setInterval(fetchHabits, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [fetchHabits]);
+
+  if (loading && !data) {
+    return (
+      <WidgetCard label="HABITS">
+        <div className="space-y-1.5">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="flex items-center gap-2 py-1">
+              <div className="skeleton-line w-4 h-4 rounded flex-shrink-0" />
+              <div className="skeleton-line w-20 h-2.5 flex-1" />
+              <div className="skeleton-line w-6 h-2" />
+            </div>
+          ))}
+        </div>
+      </WidgetCard>
+    );
+  }
+
+  if (!data || data.habits.length === 0) return null;
+
+  const pct = data.total > 0 ? Math.round((data.completed / data.total) * 100) : 0;
+
+  return (
+    <WidgetCard label="HABITS" onRefresh={fetchHabits}>
+      {/* Summary bar */}
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-1.5">
+          <Target size={10} className="text-jarvis-blue" />
+          <span className="text-[10px] font-mono text-gray-400">
+            {data.completed}/{data.total}
+          </span>
+        </div>
+        <span className={clsx('text-[10px] font-mono font-semibold', {
+          'text-hud-green': pct === 100,
+          'text-hud-amber': pct > 0 && pct < 100,
+          'text-gray-600': pct === 0,
+        })}>
+          {pct}%
+        </span>
+      </div>
+
+      {/* Progress bar */}
+      <div className="w-full h-1 rounded-full bg-white/[0.04] mb-2.5 overflow-hidden">
+        <div
+          className="h-full rounded-full transition-all duration-500"
+          style={{
+            width: `${pct}%`,
+            background: pct === 100
+              ? 'linear-gradient(90deg, #39ff14, #00ff88)'
+              : 'linear-gradient(90deg, #00d4ff, #0080ff)',
+            boxShadow: pct === 100
+              ? '0 0 8px rgba(57, 255, 20, 0.4)'
+              : '0 0 6px rgba(0, 212, 255, 0.3)',
+          }}
+        />
+      </div>
+
+      {/* Habit list */}
+      <div className="space-y-1">
+        {data.habits
+          .filter((h) => h.applies_today)
+          .map((habit) => (
+          <div key={habit.id} className="flex items-center gap-2 py-0.5">
+            <HabitProgressRing
+              done={habit.done}
+              count={habit.today_count}
+              target={habit.target}
+              color={habit.color}
+            />
+            <span className={clsx(
+              'text-[10px] font-mono flex-1 truncate',
+              habit.done ? 'text-gray-500 line-through' : 'text-gray-300',
+            )}>
+              {habit.icon && <span className="mr-1">{habit.icon}</span>}
+              {habit.name}
+            </span>
+            {habit.done ? (
+              <Check size={10} className="text-hud-green flex-shrink-0" />
+            ) : (
+              <span className="text-[9px] font-mono text-gray-600 flex-shrink-0">
+                {habit.today_count}/{habit.target}
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+    </WidgetCard>
+  );
+}
+
 // ── Widget renderer (maps type string to component) ───────────────────
 
 function renderWidget(type: string, urgencyLevel: UrgencyLevel, key: string) {
@@ -903,6 +1067,8 @@ function renderWidget(type: string, urgencyLevel: UrgencyLevel, key: string) {
       return <EmailWidget key={key} />;
     case 'reminders':
       return <RemindersWidget key={key} />;
+    case 'habits':
+      return <HabitsWidget key={key} />;
     case 'system':
       return <QuickStatsWidget key={key} />;
     default:
@@ -988,6 +1154,7 @@ export default function WidgetPanel() {
         { type: 'weather', urgency: 3, visible: true },
         { type: 'calendar', urgency: 3, visible: true },
         { type: 'health', urgency: 3, visible: true },
+        { type: 'habits', urgency: 2.5, visible: true },
         { type: 'email', urgency: 2, visible: true },
         { type: 'reminders', urgency: 2, visible: true },
         { type: 'system', urgency: 1.5, visible: true },
