@@ -48,8 +48,21 @@ function EmptyState() {
           </div>
         </div>
 
-        <div className="mt-6 hud-divider max-w-[200px] mx-auto">
-          <div className="hud-divider-dot" />
+        <div className="mt-6 flex items-center justify-center gap-0 max-w-[240px] mx-auto">
+          {/* Left ticks */}
+          <div className="flex items-center gap-[3px] mr-1">
+            <div className="w-[2px] h-[3px] bg-jarvis-blue/15 rounded-full" />
+            <div className="w-[2px] h-[5px] bg-jarvis-blue/20 rounded-full" />
+          </div>
+          {/* Main divider */}
+          <div className="hud-divider flex-1">
+            <div className="hud-divider-dot" />
+          </div>
+          {/* Right ticks */}
+          <div className="flex items-center gap-[3px] ml-1">
+            <div className="w-[2px] h-[5px] bg-jarvis-blue/20 rounded-full" />
+            <div className="w-[2px] h-[3px] bg-jarvis-blue/15 rounded-full" />
+          </div>
         </div>
 
         <p className="mt-4 text-[9px] text-gray-600 font-mono tracking-wider">

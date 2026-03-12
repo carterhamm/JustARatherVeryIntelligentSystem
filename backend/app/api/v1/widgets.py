@@ -251,28 +251,194 @@ async def get_system_status(
 
 # ── Email Widget ────────────────────────────────────────────────────────
 
+_NOREPLY_PATTERNS = (
+    "noreply", "no-reply", "no_reply", "donotreply", "do-not-reply",
+    "notifications@", "notification@", "notify@", "mailer-daemon",
+    "postmaster@", "bounce@", "auto-confirm", "automated@",
+)
+
+
+def _is_noreply(from_addr: str) -> bool:
+    """Check whether a From address looks like a no-reply / notification sender."""
+    lower = from_addr.lower()
+    return any(p in lower for p in _NOREPLY_PATTERNS)
+
+
+async def _score_emails_with_gemini(emails: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Use Gemini to score each email's importance (1-10).
+
+    Returns the email list with an added 'score' key. Falls back to the
+    heuristic filter (exclude noreply senders) if Gemini is unavailable.
+    """
+    import httpx
+
+    if not settings.GOOGLE_GEMINI_API_KEY:
+        raise RuntimeError("Gemini API key not configured")
+
+    # Build a concise summary for the LLM
+    email_summaries = []
+    for i, e in enumerate(emails):
+        email_summaries.append(
+            f"{i + 1}. From: {e['from']}\n"
+            f"   Subject: {e['subject']}\n"
+            f"   Snippet: {e['snippet'][:150]}"
+        )
+
+    prompt = (
+        "You are an email importance scorer. For each email below, assign an "
+        "importance score from 1 (junk/low) to 10 (critical/urgent).\n\n"
+        "Criteria for HIGH scores (7-10):\n"
+        "- Direct personal messages from real people\n"
+        "- Financial alerts (bank, payments, billing issues)\n"
+        "- Calendar invites or meeting changes\n"
+        "- Security alerts (password changes, login attempts)\n"
+        "- Time-sensitive action required\n"
+        "- Messages from employers, professors, or important contacts\n\n"
+        "Criteria for LOW scores (1-4):\n"
+        "- Marketing / promotional content\n"
+        "- Automated notifications (build status, social media)\n"
+        "- Newsletters\n"
+        "- No-reply senders with routine updates\n\n"
+        "Reply ONLY with valid JSON: a list of objects with 'index' (1-based) "
+        "and 'score' (integer 1-10). Example:\n"
+        '[{"index": 1, "score": 8}, {"index": 2, "score": 3}]\n\n'
+        "Emails:\n" + "\n".join(email_summaries)
+    )
+
+    model = "gemini-3.1-flash-lite-preview"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {
+            "responseMimeType": "application/json",
+            "temperature": 0.1,
+        },
+    }
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        resp = await client.post(
+            url,
+            json=payload,
+            params={"key": settings.GOOGLE_GEMINI_API_KEY},
+        )
+        resp.raise_for_status()
+        data = resp.json()
+
+    raw_text = data["candidates"][0]["content"]["parts"][0]["text"]
+    scores = json.loads(raw_text)
+
+    # Build a lookup: 1-based index → score
+    score_map: dict[int, int] = {}
+    for entry in scores:
+        idx = entry.get("index")
+        score = entry.get("score", 1)
+        if isinstance(idx, int) and isinstance(score, int):
+            score_map[idx] = max(1, min(10, score))
+
+    # Attach scores to emails
+    scored: list[dict[str, Any]] = []
+    for i, email in enumerate(emails):
+        email_copy = dict(email)
+        email_copy["score"] = score_map.get(i + 1, 5)
+        scored.append(email_copy)
+
+    return scored
+
+
+def _fallback_filter(emails: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Heuristic fallback: return emails not from noreply/notification addresses."""
+    return [e for e in emails if not _is_noreply(e.get("from", ""))]
+
+
 @router.get("/email")
 async def get_email_widget(
     current_user: User = Depends(get_current_active_user),
 ) -> dict[str, Any]:
-    """Return unread email count and recent subjects (requires Google OAuth)."""
+    """Return important emails from the past week, filtered by LLM scoring.
+
+    Results are cached in Redis for 15 minutes to avoid hammering Gmail.
+    """
     prefs = current_user.preferences or {}
     google_tokens = prefs.get("google_tokens")
 
     if not google_tokens:
-        return {"connected": False, "unread_count": 0, "recent": []}
+        return {"connected": False, "important": [], "total_checked": 0}
+
+    # Normalise token key
+    if "token" in google_tokens and "access_token" not in google_tokens:
+        google_tokens["access_token"] = google_tokens["token"]
+
+    # Check Redis cache first
+    cache_key = f"jarvis:widget:email:{current_user.id}"
+    try:
+        from app.db.redis import get_redis_client
+
+        redis = await get_redis_client()
+        cached = await redis.cache_get(cache_key)
+        if cached:
+            return json.loads(cached)
+    except Exception:
+        logger.debug("Redis cache miss or unavailable for email widget")
+        redis = None
 
     try:
-        from app.integrations.google_workspace import gmail_unread_count
+        from app.integrations.google_workspace import gmail_important_recent
 
-        if "token" in google_tokens and "access_token" not in google_tokens:
-            google_tokens["access_token"] = google_tokens["token"]
+        emails = await gmail_important_recent(google_tokens, max_results=10)
+        total_checked = len(emails)
 
-        result = await gmail_unread_count(google_tokens)
-        return {"connected": True, **result}
+        if not emails:
+            result = {"connected": True, "important": [], "total_checked": 0}
+            await _cache_email_result(redis, cache_key, result)
+            return result
+
+        # Try Gemini scoring; fall back to heuristic filter
+        try:
+            scored = await _score_emails_with_gemini(emails)
+            important = [
+                {
+                    "subject": e["subject"],
+                    "from": e["from"],
+                    "date": e["date"],
+                    "snippet": e["snippet"],
+                }
+                for e in scored
+                if e.get("score", 0) >= 7
+            ]
+        except Exception as gemini_exc:
+            logger.warning("Gemini email scoring failed, using fallback: %s", gemini_exc)
+            filtered = _fallback_filter(emails)
+            important = [
+                {
+                    "subject": e["subject"],
+                    "from": e["from"],
+                    "date": e["date"],
+                    "snippet": e["snippet"],
+                }
+                for e in filtered
+            ]
+
+        result = {
+            "connected": True,
+            "important": important,
+            "total_checked": total_checked,
+        }
+        await _cache_email_result(redis, cache_key, result)
+        return result
+
     except Exception as exc:
         logger.warning("Email widget failed: %s", exc)
-        return {"connected": True, "unread_count": 0, "recent": [], "error": str(exc)}
+        return {"connected": True, "important": [], "total_checked": 0, "error": str(exc)}
+
+
+async def _cache_email_result(redis, cache_key: str, result: dict) -> None:
+    """Cache the email widget result in Redis for 15 minutes."""
+    if redis is None:
+        return
+    try:
+        await redis.cache_set(cache_key, json.dumps(result), ttl=900)
+    except Exception:
+        logger.debug("Failed to cache email widget result")
 
 
 # ── Reminders Widget ───────────────────────────────────────────────────

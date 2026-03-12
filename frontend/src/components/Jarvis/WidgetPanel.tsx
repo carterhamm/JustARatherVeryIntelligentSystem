@@ -79,8 +79,11 @@ interface RemindersData {
 
 interface EmailData {
   connected: boolean;
-  unread_count: number;
-  recent: { subject: string; from: string }[];
+  important: { subject: string; from: string; date?: string; snippet?: string }[];
+  total_checked: number;
+  // Legacy fields for backward compat
+  unread_count?: number;
+  recent?: { subject: string; from: string }[];
   error?: string;
 }
 
@@ -653,48 +656,53 @@ function EmailWidget() {
 
   useEffect(() => {
     fetchEmail();
-    const interval = setInterval(fetchEmail, 5 * 60 * 1000); // 5 min
+    const interval = setInterval(fetchEmail, 10 * 60 * 1000); // 10 min
     return () => clearInterval(interval);
   }, [fetchEmail]);
 
-  if (loading && !data) return <GenericSkeleton label="EMAIL" />;
+  if (loading && !data) return <GenericSkeleton label="INTEL" />;
 
   // Do not render if Google not connected
   if (!data?.connected) return null;
 
-  return (
-    <WidgetCard label="EMAIL" onRefresh={fetchEmail}>
-      <div className="space-y-1.5">
-        {/* Unread count header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5">
-            <Mail size={10} className={clsx({
-              'text-hud-red': (data.unread_count ?? 0) > 10,
-              'text-hud-amber': (data.unread_count ?? 0) > 0 && (data.unread_count ?? 0) <= 10,
-              'text-gray-600': (data.unread_count ?? 0) === 0,
-            })} />
-            <span className="text-[9px] text-gray-500 font-mono">UNREAD</span>
-          </div>
-          <span className={clsx('text-[11px] font-mono font-medium', {
-            'text-hud-red': (data.unread_count ?? 0) > 10,
-            'text-hud-amber': (data.unread_count ?? 0) > 0 && (data.unread_count ?? 0) <= 10,
-            'text-gray-500': (data.unread_count ?? 0) === 0,
-          })}>
-            {data.unread_count ?? 0}
-          </span>
-        </div>
+  // Use new important emails format, fallback to legacy recent format
+  const importantEmails = data.important ?? data.recent ?? [];
 
-        {/* Recent subjects */}
-        {data.recent && data.recent.length > 0 && (
-          <div className="pt-1.5 border-t border-white/[0.04] space-y-1">
-            {data.recent.slice(0, 3).map((email, i) => (
-              <div key={i} className="truncate">
-                <p className="text-[10px] text-gray-400 truncate leading-tight">{email.subject}</p>
-                <p className="text-[8px] text-gray-600 font-mono truncate">{email.from}</p>
-              </div>
-            ))}
+  // Hide widget if no important emails
+  if (importantEmails.length === 0) return null;
+
+  return (
+    <WidgetCard label="INTEL" onRefresh={fetchEmail}>
+      <div className="space-y-1.5">
+        {importantEmails.slice(0, 4).map((email, i) => (
+          <div key={i} className="group">
+            <p className="text-[10px] text-gray-300 truncate leading-tight group-first:text-gray-200">
+              {email.subject}
+            </p>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <span className="text-[8px] text-jarvis-blue/30 font-mono truncate flex-1">
+                {email.from.replace(/<[^>]+>/g, '').trim()}
+              </span>
+              {email.date && (
+                <span className="text-[7px] text-gray-700 font-mono flex-shrink-0">
+                  {(() => {
+                    try {
+                      const d = new Date(email.date);
+                      const now = new Date();
+                      const diffH = Math.floor((now.getTime() - d.getTime()) / 3600000);
+                      if (diffH < 1) return 'now';
+                      if (diffH < 24) return `${diffH}h`;
+                      return `${Math.floor(diffH / 24)}d`;
+                    } catch { return ''; }
+                  })()}
+                </span>
+              )}
+            </div>
+            {i < importantEmails.length - 1 && i < 3 && (
+              <div className="mt-1.5 h-px bg-white/[0.03]" />
+            )}
           </div>
-        )}
+        ))}
       </div>
     </WidgetCard>
   );

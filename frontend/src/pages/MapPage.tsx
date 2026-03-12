@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
+import maplibregl from 'maplibre-gl';
+import 'maplibre-gl/dist/maplibre-gl.css';
 import { api } from '@/services/api';
 import {
   ArrowLeft,
@@ -144,46 +144,41 @@ function getShortLocation(contact: Contact): string {
   return '';
 }
 
-function createContactIcon(contact: Contact): L.DivIcon {
+function createMarkerElement(contact: Contact): HTMLDivElement {
   const photo = getPhotoDataUri(contact);
   const initials = getInitials(contact);
+  const el = document.createElement('div');
+  el.className = 'jarvis-contact-marker';
+  el.style.cursor = 'pointer';
 
   if (photo) {
-    return L.divIcon({
-      className: 'jarvis-contact-marker',
-      html: `
-        <div class="jarvis-pin-photo" style="
-          width: 44px; height: 44px; border-radius: 50%;
-          background: rgba(0, 20, 40, 0.9);
-          border: 2px solid rgba(0, 212, 255, 0.6);
-          box-shadow: 0 0 16px rgba(0, 212, 255, 0.3), 0 4px 12px rgba(0,0,0,0.5);
-          overflow: hidden;
-          transition: all 0.25s ease;
-        ">
-          <img src="${photo}" alt="" style="
-            width: 100%; height: 100%; object-fit: cover;
-            border-radius: 50%;
-          " />
-        </div>
-        <div style="
-          width: 12px; height: 12px;
-          background: rgba(0, 212, 255, 0.8);
-          border: 2px solid rgba(10, 14, 23, 0.9);
+    el.innerHTML = `
+      <div class="jarvis-pin-photo" style="
+        width: 44px; height: 44px; border-radius: 50%;
+        background: rgba(0, 20, 40, 0.9);
+        border: 2px solid rgba(0, 212, 255, 0.6);
+        box-shadow: 0 0 16px rgba(0, 212, 255, 0.3), 0 4px 12px rgba(0,0,0,0.5);
+        overflow: hidden;
+        transition: all 0.25s ease;
+        position: relative;
+      ">
+        <img src="${photo}" alt="" style="
+          width: 100%; height: 100%; object-fit: cover;
           border-radius: 50%;
-          position: absolute;
-          bottom: -2px; right: -2px;
-          box-shadow: 0 0 6px rgba(0, 212, 255, 0.5);
-        "></div>
-      `,
-      iconSize: [44, 44],
-      iconAnchor: [22, 22],
-      popupAnchor: [0, -26],
-    });
-  }
-
-  return L.divIcon({
-    className: 'jarvis-contact-marker',
-    html: `
+        " />
+      </div>
+      <div style="
+        width: 12px; height: 12px;
+        background: rgba(0, 212, 255, 0.8);
+        border: 2px solid rgba(10, 14, 23, 0.9);
+        border-radius: 50%;
+        position: absolute;
+        bottom: -2px; right: -2px;
+        box-shadow: 0 0 6px rgba(0, 212, 255, 0.5);
+      "></div>
+    `;
+  } else {
+    el.innerHTML = `
       <div style="
         width: 40px; height: 40px; border-radius: 50%;
         background: rgba(0, 20, 40, 0.9);
@@ -195,11 +190,10 @@ function createContactIcon(contact: Contact): L.DivIcon {
         letter-spacing: 0.5px;
         transition: all 0.25s ease;
       ">${initials}</div>
-    `,
-    iconSize: [40, 40],
-    iconAnchor: [20, 20],
-    popupAnchor: [0, -24],
-  });
+    `;
+  }
+
+  return el;
 }
 
 function createPopupContent(contact: Contact): string {
@@ -443,9 +437,8 @@ function MapControls({
 export default function MapPage() {
   const navigate = useNavigate();
   const mapContainerRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<L.Map | null>(null);
-  const markersRef = useRef<L.LayerGroup | null>(null);
-  const gridLayerRef = useRef<L.LayerGroup | null>(null);
+  const mapRef = useRef<maplibregl.Map | null>(null);
+  const markersRef = useRef<maplibregl.Marker[]>([]);
 
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [geocodedContacts, setGeocodedContacts] = useState<GeocodedContact[]>([]);
@@ -524,101 +517,101 @@ export default function MapPage() {
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return;
 
-    const map = L.map(mapContainerRef.current, {
-      center: [40.2969, -111.6946], // Orem, Utah
+    const map = new maplibregl.Map({
+      container: mapContainerRef.current,
+      style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
+      center: [-111.6946, 40.2969], // Orem, Utah [lng, lat]
       zoom: 5,
-      zoomControl: false,
       attributionControl: false,
     });
 
-    // CartoDB Dark Matter tiles
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-      maxZoom: 19,
-      subdomains: 'abcd',
-    }).addTo(map);
+    // Add navigation control (zoom +/-)
+    map.addControl(
+      new maplibregl.NavigationControl({ showCompass: false }),
+      'bottom-right',
+    );
 
-    // Custom zoom control in bottom-right
-    L.control.zoom({ position: 'bottomright' }).addTo(map);
-
-    // Attribution
-    L.control
-      .attribution({ position: 'bottomleft', prefix: false })
-      .addAttribution(
-        '&copy; <a href="https://carto.com/" style="color:#00d4ff">CARTO</a> &copy; <a href="https://www.openstreetmap.org/" style="color:#00d4ff">OSM</a>',
-      )
-      .addTo(map);
-
-    const markers = L.layerGroup().addTo(map);
-    markersRef.current = markers;
-
-    const gridLayer = L.layerGroup();
-    gridLayerRef.current = gridLayer;
+    // Add attribution
+    map.addControl(
+      new maplibregl.AttributionControl({
+        compact: true,
+        customAttribution: '&copy; <a href="https://carto.com/" style="color:#00d4ff">CARTO</a> &copy; <a href="https://www.openstreetmap.org/" style="color:#00d4ff">OSM</a>',
+      }),
+      'bottom-left',
+    );
 
     mapRef.current = map;
 
     return () => {
       map.remove();
       mapRef.current = null;
-      markersRef.current = null;
-      gridLayerRef.current = null;
+      markersRef.current = [];
     };
   }, []);
 
   // ---- Place markers when geocoded contacts update ----
   useEffect(() => {
     const map = mapRef.current;
-    const markers = markersRef.current;
-    if (!map || !markers) return;
+    if (!map) return;
 
-    markers.clearLayers();
+    // Remove existing markers
+    markersRef.current.forEach((m) => m.remove());
+    markersRef.current = [];
+
+    const newMarkers: maplibregl.Marker[] = [];
 
     geocodedContacts.forEach((c) => {
-      const marker = L.marker([c.lat, c.lng], { icon: createContactIcon(c) });
-      marker.bindPopup(createPopupContent(c), {
-        className: 'jarvis-popup',
+      const el = createMarkerElement(c);
+
+      const popup = new maplibregl.Popup({
         closeButton: true,
-        maxWidth: 280,
-      });
-      marker.on('click', () => {
+        maxWidth: '280px',
+        className: 'jarvis-popup',
+        offset: [0, -8],
+      }).setHTML(createPopupContent(c));
+
+      const marker = new maplibregl.Marker({ element: el, anchor: 'center' })
+        .setLngLat([c.lng, c.lat])
+        .setPopup(popup)
+        .addTo(map);
+
+      el.addEventListener('click', () => {
         setSelectedContactId(c.id);
       });
-      markers.addLayer(marker);
+
+      newMarkers.push(marker);
     });
+
+    markersRef.current = newMarkers;
 
     // Fit bounds if we have markers
     if (geocodedContacts.length > 0) {
-      const bounds = L.latLngBounds(geocodedContacts.map((c) => [c.lat, c.lng]));
-      map.fitBounds(bounds, { padding: [60, 60], maxZoom: 12 });
+      const bounds = new maplibregl.LngLatBounds();
+      geocodedContacts.forEach((c) => bounds.extend([c.lng, c.lat]));
+      map.fitBounds(bounds, { padding: 60, maxZoom: 12 });
     }
   }, [geocodedContacts]);
-
-  // ---- Toggle grid overlay ----
-  useEffect(() => {
-    const map = mapRef.current;
-    const gridLayer = gridLayerRef.current;
-    if (!map || !gridLayer) return;
-
-    if (gridVisible) {
-      gridLayer.addTo(map);
-    } else {
-      gridLayer.remove();
-    }
-  }, [gridVisible]);
 
   // ---- Fly to contact ----
   const flyToContact = useCallback((contact: GeocodedContact) => {
     const map = mapRef.current;
     if (!map) return;
     setSelectedContactId(contact.id);
-    map.flyTo([contact.lat, contact.lng], 14, { duration: 1.2 });
+    map.flyTo({ center: [contact.lng, contact.lat], zoom: 14, duration: 1200 });
 
-    // Open popup
-    markersRef.current?.eachLayer((layer) => {
-      if (layer instanceof L.Marker) {
-        const latlng = layer.getLatLng();
-        if (Math.abs(latlng.lat - contact.lat) < 0.0001 && Math.abs(latlng.lng - contact.lng) < 0.0001) {
-          layer.openPopup();
-        }
+    // Open popup on the matching marker
+    markersRef.current.forEach((marker) => {
+      const lngLat = marker.getLngLat();
+      if (
+        Math.abs(lngLat.lat - contact.lat) < 0.0001 &&
+        Math.abs(lngLat.lng - contact.lng) < 0.0001
+      ) {
+        // Close any existing popups first, then toggle this one
+        markersRef.current.forEach((m) => {
+          const p = m.getPopup();
+          if (p && p.isOpen()) p.remove();
+        });
+        marker.togglePopup();
       }
     });
   }, []);
@@ -627,8 +620,9 @@ export default function MapPage() {
   const resetView = useCallback(() => {
     const map = mapRef.current;
     if (!map || geocodedContacts.length === 0) return;
-    const bounds = L.latLngBounds(geocodedContacts.map((c) => [c.lat, c.lng]));
-    map.flyToBounds(bounds, { padding: [60, 60], maxZoom: 12, duration: 0.8 });
+    const bounds = new maplibregl.LngLatBounds();
+    geocodedContacts.forEach((c) => bounds.extend([c.lng, c.lat]));
+    map.fitBounds(bounds, { padding: 60, maxZoom: 12, duration: 800 });
     setSelectedContactId(null);
   }, [geocodedContacts]);
 
@@ -676,7 +670,7 @@ export default function MapPage() {
         />
       )}
 
-      {/* ── Top Bar ─────────────────────────────────────────────── */}
+      {/* -- Top Bar -- */}
       <div className="absolute top-0 left-0 right-0 z-20 pointer-events-none">
         <div
           className="flex items-center justify-between px-4 py-3 pointer-events-auto"
@@ -724,7 +718,7 @@ export default function MapPage() {
         </div>
       </div>
 
-      {/* ── Geocode Progress ─────────────────────────────────────── */}
+      {/* -- Geocode Progress -- */}
       {isGeocoding && (
         <div className="absolute top-[52px] left-0 right-0 z-20 pointer-events-none flex justify-center">
           <div
@@ -757,7 +751,7 @@ export default function MapPage() {
         </div>
       )}
 
-      {/* ── Loading Overlay ──────────────────────────────────────── */}
+      {/* -- Loading Overlay -- */}
       {isLoading && (
         <div
           className="absolute inset-0 z-30 flex items-center justify-center"
@@ -778,14 +772,14 @@ export default function MapPage() {
         </div>
       )}
 
-      {/* ── Map Controls ─────────────────────────────────────────── */}
+      {/* -- Map Controls -- */}
       <MapControls
         onResetView={resetView}
         onToggleGrid={() => setGridVisible((p) => !p)}
         gridVisible={gridVisible}
       />
 
-      {/* ── Sidebar ──────────────────────────────────────────────── */}
+      {/* -- Sidebar -- */}
       <div
         className="absolute top-0 right-0 bottom-0 z-10 flex flex-col transition-transform duration-300 ease-out"
         style={{
@@ -949,68 +943,69 @@ export default function MapPage() {
         </div>
       </div>
 
-      {/* ── Inline styles for Leaflet overrides ─────────────────── */}
+      {/* -- Inline styles for MapLibre overrides -- */}
       <style>{`
-        /* Popup */
-        .jarvis-popup .leaflet-popup-content-wrapper {
+        /* Popup container */
+        .jarvis-popup .maplibregl-popup-content {
           background: rgba(10, 14, 23, 0.95) !important;
           border: 1px solid rgba(0, 212, 255, 0.15) !important;
           border-radius: 6px !important;
           box-shadow: 0 0 24px rgba(0, 212, 255, 0.08), 0 12px 40px rgba(0, 0, 0, 0.6) !important;
           color: #e0e0e0 !important;
-          padding: 0 !important;
+          padding: 14px 16px !important;
           backdrop-filter: blur(20px);
           -webkit-backdrop-filter: blur(20px);
         }
-        .jarvis-popup .leaflet-popup-content {
-          margin: 14px 16px !important;
+        .jarvis-popup .maplibregl-popup-tip {
+          border-top-color: rgba(10, 14, 23, 0.95) !important;
         }
-        .jarvis-popup .leaflet-popup-tip {
-          background: rgba(10, 14, 23, 0.95) !important;
-          border: 1px solid rgba(0, 212, 255, 0.15) !important;
-          box-shadow: none !important;
-        }
-        .jarvis-popup .leaflet-popup-close-button {
+        .jarvis-popup .maplibregl-popup-close-button {
           color: rgba(0, 212, 255, 0.4) !important;
-          font-size: 16px !important;
-          padding: 6px 8px 0 0 !important;
+          font-size: 18px !important;
+          padding: 4px 8px !important;
+          right: 2px !important;
+          top: 2px !important;
         }
-        .jarvis-popup .leaflet-popup-close-button:hover {
+        .jarvis-popup .maplibregl-popup-close-button:hover {
           color: #00d4ff !important;
+          background: transparent !important;
         }
 
-        /* Zoom controls */
-        .leaflet-control-zoom a {
+        /* Navigation controls */
+        .maplibregl-ctrl-group {
           background: rgba(10, 14, 23, 0.9) !important;
           border: 1px solid rgba(0, 212, 255, 0.12) !important;
-          color: rgba(0, 212, 255, 0.6) !important;
+          box-shadow: none !important;
+          border-radius: 4px !important;
+        }
+        .maplibregl-ctrl-group button {
           width: 34px !important;
           height: 34px !important;
-          line-height: 32px !important;
-          font-size: 16px !important;
-          transition: all 0.2s ease !important;
-        }
-        .leaflet-control-zoom a:hover {
-          background: rgba(0, 212, 255, 0.08) !important;
-          border-color: rgba(0, 212, 255, 0.25) !important;
-          color: #00d4ff !important;
-        }
-        .leaflet-control-zoom {
           border: none !important;
-          box-shadow: none !important;
-          margin-bottom: 12px !important;
+          border-bottom: 1px solid rgba(0, 212, 255, 0.08) !important;
+        }
+        .maplibregl-ctrl-group button:last-child {
+          border-bottom: none !important;
+        }
+        .maplibregl-ctrl-group button .maplibregl-ctrl-icon {
+          filter: invert(0.7) sepia(1) saturate(3) hue-rotate(160deg) !important;
+          opacity: 0.6 !important;
+        }
+        .maplibregl-ctrl-group button:hover .maplibregl-ctrl-icon {
+          opacity: 1 !important;
+        }
+        .maplibregl-ctrl-group button:hover {
+          background: rgba(0, 212, 255, 0.08) !important;
         }
 
         /* Attribution */
-        .leaflet-control-attribution {
+        .maplibregl-ctrl-attrib {
           background: rgba(10, 14, 23, 0.6) !important;
           color: #444 !important;
           font-size: 8px !important;
           font-family: 'JetBrains Mono', monospace !important;
-          border: none !important;
-          padding: 2px 6px !important;
         }
-        .leaflet-control-attribution a {
+        .maplibregl-ctrl-attrib a {
           color: rgba(0, 212, 255, 0.4) !important;
         }
 
@@ -1018,6 +1013,7 @@ export default function MapPage() {
         .jarvis-contact-marker {
           background: none !important;
           border: none !important;
+          position: relative;
         }
 
         /* Marker hover effect */

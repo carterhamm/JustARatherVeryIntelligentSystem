@@ -125,6 +125,52 @@ async def gmail_unread_count(
     return await asyncio.to_thread(_sync)
 
 
+async def gmail_important_recent(
+    google_tokens: dict,
+    max_results: int = 10,
+) -> list[dict[str, Any]]:
+    """Fetch recent non-promotional inbox emails from the past 7 days.
+
+    Returns a list of dicts with: subject, from, date, snippet, message_id.
+    Excludes promotions, social, updates, and forums categories.
+    """
+    import asyncio
+
+    def _sync() -> list[dict[str, Any]]:
+        service = _build_service(google_tokens, "gmail", "v1")
+
+        results = service.users().messages().list(
+            userId="me",
+            q="is:inbox newer_than:7d -category:promotions -category:social -category:updates -category:forums",
+            maxResults=max_results,
+        ).execute()
+
+        emails: list[dict[str, Any]] = []
+        for msg_ref in results.get("messages", []):
+            msg = service.users().messages().get(
+                userId="me",
+                id=msg_ref["id"],
+                format="metadata",
+                metadataHeaders=["From", "Subject", "Date"],
+            ).execute()
+
+            headers = {
+                h["name"]: h["value"]
+                for h in msg.get("payload", {}).get("headers", [])
+            }
+            emails.append({
+                "subject": headers.get("Subject", "(no subject)"),
+                "from": headers.get("From", ""),
+                "date": headers.get("Date", ""),
+                "snippet": msg.get("snippet", ""),
+                "message_id": msg["id"],
+            })
+
+        return emails
+
+    return await asyncio.to_thread(_sync)
+
+
 async def gmail_send(
     google_tokens: dict,
     to: str,

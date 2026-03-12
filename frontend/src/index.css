@@ -255,8 +255,10 @@
   .hud-divider {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 0;
     width: 100%;
+    position: relative;
+    height: 9px;
   }
 
   .hud-divider::before,
@@ -264,15 +266,49 @@
     content: '';
     flex: 1;
     height: 1px;
-    background: linear-gradient(90deg, transparent, rgba(0, 212, 255, 0.2), transparent);
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(0, 212, 255, 0.06) 15%,
+      rgba(0, 212, 255, 0.18) 40%,
+      rgba(0, 212, 255, 0.3) 50%,
+      rgba(0, 212, 255, 0.18) 60%,
+      rgba(0, 212, 255, 0.06) 85%,
+      transparent 100%
+    );
   }
 
   .hud-divider-dot {
-    width: 4px;
-    height: 4px;
-    background: rgba(0, 212, 255, 0.4);
-    transform: rotate(45deg);
+    position: relative;
+    width: 9px;
+    height: 9px;
     flex-shrink: 0;
+  }
+
+  /* Outer ring */
+  .hud-divider-dot::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    border: 1px solid rgba(0, 212, 255, 0.3);
+    animation: dividerPulse 3s ease-in-out infinite;
+  }
+
+  /* Inner core glow */
+  .hud-divider-dot::after {
+    content: '';
+    position: absolute;
+    inset: 2.5px;
+    border-radius: 50%;
+    background: rgba(0, 212, 255, 0.6);
+    box-shadow: 0 0 6px rgba(0, 212, 255, 0.5), 0 0 12px rgba(0, 212, 255, 0.2);
+    animation: dividerPulse 3s ease-in-out infinite;
+  }
+
+  @keyframes dividerPulse {
+    0%, 100% { opacity: 0.5; }
+    50% { opacity: 1; }
   }
 
   /* ═══════════════════════════════════════════════════════════════
