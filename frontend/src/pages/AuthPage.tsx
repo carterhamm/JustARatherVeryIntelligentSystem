@@ -88,8 +88,6 @@ function HudBezel({ children }: { children: React.ReactNode }) {
 
           {/* Background fill */}
           <path d={bezelPath} fill="url(#bezelFill)" />
-          {/* Inner glow stroke */}
-          <path d={bezelPath} fill="none" stroke="rgba(0, 212, 255, 0.05)" strokeWidth="8" />
           {/* Static border (faint) */}
           <path d={bezelPath} fill="none" stroke="rgba(0, 212, 255, 0.15)" strokeWidth="1.5" />
           {/* Beam animation — traveling highlight along border */}
@@ -110,28 +108,6 @@ function HudBezel({ children }: { children: React.ReactNode }) {
               repeatCount="indefinite"
             />
           </path>
-
-          {/* ── Accent tabs (sensor/button protrusions) ── */}
-          {/* Right side */}
-          <rect x={w + 0.5} y={h * 0.2} width="3" height="16"
-                fill="rgba(0, 212, 255, 0.14)" rx="0.5" />
-          <rect x={w + 0.5} y={h * 0.72} width="3" height="12"
-                fill="rgba(0, 212, 255, 0.08)" rx="0.5" />
-          {/* Left side */}
-          <rect x={-3.5} y={h * 0.25} width="3" height="14"
-                fill="rgba(0, 212, 255, 0.1)" rx="0.5" />
-          <rect x={-3.5} y={h * 0.68} width="3" height="10"
-                fill="rgba(0, 212, 255, 0.08)" rx="0.5" />
-          {/* Bottom edge */}
-          <rect x={w * 0.25} y={h + 0.5} width="16" height="2.5"
-                fill="rgba(0, 212, 255, 0.08)" rx="0.5" />
-          <rect x={w * 0.65} y={h + 0.5} width="16" height="2.5"
-                fill="rgba(0, 212, 255, 0.08)" rx="0.5" />
-          {/* Top edge (flanking the header recess) */}
-          <rect x={BVL + 4} y={-3} width="10" height="2"
-                fill="rgba(0, 212, 255, 0.1)" rx="0.5" />
-          <rect x={w - BVL - 14} y={-3} width="10" height="2"
-                fill="rgba(0, 212, 255, 0.1)" rx="0.5" />
 
           {/* ── Recess accent lines ── */}
           <line x1={w / 2 - RH + RA + 8} y1={RD}
@@ -165,11 +141,11 @@ function HudBezel({ children }: { children: React.ReactNode }) {
 function BtnAccents({ color = 'rgba(0,212,255,0.2)' }: { color?: string }) {
   return (
     <>
-      <svg className="absolute top-0 right-0 w-1.5 h-1.5 pointer-events-none" viewBox="0 0 6 6" fill="none">
-        <line x1="0" y1="0" x2="6" y2="6" stroke={color} strokeWidth="1" />
+      <svg className="absolute -top-px -right-px w-[9px] h-[9px] pointer-events-none" viewBox="0 0 9 9" fill="none">
+        <line x1="0" y1="0" x2="9" y2="9" stroke={color} strokeWidth="1.2" />
       </svg>
-      <svg className="absolute bottom-0 left-0 w-1.5 h-1.5 pointer-events-none" viewBox="0 0 6 6" fill="none">
-        <line x1="0" y1="0" x2="6" y2="6" stroke={color} strokeWidth="1" />
+      <svg className="absolute -bottom-px -left-px w-[9px] h-[9px] pointer-events-none" viewBox="0 0 9 9" fill="none">
+        <line x1="0" y1="0" x2="9" y2="9" stroke={color} strokeWidth="1.2" />
       </svg>
     </>
   );

@@ -5,6 +5,7 @@ from app.models.user import User
 from app.models.conversation import Conversation, Message
 from app.models.reminder import Reminder
 from app.models.passkey import PasskeyCredential
+from app.models.contact import Contact
 
 __all__ = [
     "Base",
@@ -15,4 +16,5 @@ __all__ = [
     "Message",
     "Reminder",
     "PasskeyCredential",
+    "Contact",
 ]

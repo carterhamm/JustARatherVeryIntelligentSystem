@@ -8,6 +8,7 @@ import DiagnosticsPanel from '@/components/Jarvis/DiagnosticsPanel';
 import SettingsPanel from '@/components/SettingsPanel';
 import DataImportPanel from '@/components/DataImportPanel';
 import KnowledgePanel from '@/components/KnowledgePanel';
+import ContactsPanel from '@/components/ContactsPanel';
 
 function HudCorner({ position }: { position: 'tl' | 'tr' | 'bl' | 'br' }) {
   const isTop = position.startsWith('t');
@@ -128,6 +129,7 @@ export default function MainPage() {
       <SettingsPanel />
       <DataImportPanel />
       <KnowledgePanel />
+      <ContactsPanel />
     </div>
   );
 }

@@ -843,6 +843,25 @@ _TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "required": [],
         },
     },
+    # -- Search Contacts -------------------------------------------------
+    {
+        "name": "search_contacts",
+        "description": (
+            "Search the user's uploaded contacts by name, phone number, email, "
+            "company, or any other field. Use when the user asks for someone's "
+            "number, email, or other contact info."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Search query (name, phone, email, company, etc.).",
+                },
+            },
+            "required": ["query"],
+        },
+    },
     # -- Research Briefing -----------------------------------------------
     {
         "name": "research_briefing",

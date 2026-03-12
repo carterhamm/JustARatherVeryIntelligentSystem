@@ -336,6 +336,9 @@ def _get_tool_status(user_prefs: dict | None = None) -> str:
     # Scripture lookup (Bible + LDS — free, no key)
     lines.append("- Scripture lookup (Bible KJV + Book of Mormon/D&C/PGP): CONNECTED (free, no key needed)")
 
+    # Contacts search — always available (user-uploaded contacts)
+    lines.append("- Contacts search: CONNECTED (search user's uploaded contacts by name/phone/email/company)")
+
     # Calculator, date/time — always available
     lines.append("- Calculator, date/time: ALWAYS AVAILABLE")
 

@@ -2850,6 +2850,92 @@ class ResearchBriefingTool(BaseTool):
 
 
 # ═════════════════════════════════════════════════════════════════════════
+# Contacts search
+# ═════════════════════════════════════════════════════════════════════════
+
+class SearchContactsTool(BaseTool):
+    """Search the user's uploaded contacts."""
+
+    name = "search_contacts"
+    description = (
+        "Search the user's uploaded contacts by name, phone, email, company, etc. "
+        "Use when the user asks for someone's contact info."
+    )
+
+    async def execute(
+        self,
+        params: dict[str, Any],
+        *,
+        state: Optional[AgentState] = None,
+    ) -> str:
+        query = params.get("query", "").strip()
+        if not query:
+            return "Please provide a search query."
+
+        user_id = (state or {}).get("user_id")
+        if not user_id:
+            return "No user context available."
+
+        try:
+            from sqlalchemy import select
+            from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession as _AS
+            from sqlalchemy.orm import sessionmaker
+            from app.config import settings
+            from app.models.contact import Contact
+            from app.core.encryption import decrypt_message
+
+            engine = create_async_engine(settings.DATABASE_URL)
+            async_session = sessionmaker(engine, class_=_AS, expire_on_commit=False)
+
+            async with async_session() as session:
+                result = await session.execute(
+                    select(Contact).where(Contact.user_id == user_id)
+                )
+                contacts = result.scalars().all()
+
+            await engine.dispose()
+
+            if not contacts:
+                return "No contacts found. The user hasn't uploaded any contacts yet."
+
+            query_lower = query.lower()
+            matches = []
+            fields = ["first_name", "last_name", "phone", "email", "company", "title", "address", "notes"]
+
+            for c in contacts:
+                decrypted = {}
+                for f in fields:
+                    val = getattr(c, f, None)
+                    decrypted[f] = decrypt_message(val, c.user_id) if val else None
+
+                searchable = " ".join(str(v) for v in decrypted.values() if v).lower()
+                if query_lower in searchable:
+                    name = f"{decrypted.get('first_name', '')} {decrypted.get('last_name', '')}".strip()
+                    parts = [name]
+                    if decrypted.get("phone"):
+                        parts.append(f"Phone: {decrypted['phone']}")
+                    if decrypted.get("email"):
+                        parts.append(f"Email: {decrypted['email']}")
+                    if decrypted.get("company"):
+                        parts.append(f"Company: {decrypted['company']}")
+                    if decrypted.get("title"):
+                        parts.append(f"Title: {decrypted['title']}")
+                    if decrypted.get("address"):
+                        parts.append(f"Address: {decrypted['address']}")
+                    matches.append(" | ".join(parts))
+
+            if not matches:
+                return f"No contacts matching '{query}'."
+
+            header = f"Found {len(matches)} contact{'s' if len(matches) != 1 else ''}:\n"
+            return header + "\n".join(f"- {m}" for m in matches[:20])
+
+        except Exception as e:
+            logger.exception("SearchContactsTool error")
+            return f"Error searching contacts: {e}"
+
+
+# ═════════════════════════════════════════════════════════════════════════
 # Tool registry factory
 # ═════════════════════════════════════════════════════════════════════════
 
@@ -2919,6 +3005,8 @@ def get_tool_registry() -> dict[str, BaseTool]:
             MacMiniScreenshotTool(),
             # Research daemon
             ResearchBriefingTool(),
+            # Contacts
+            SearchContactsTool(),
         ]
         _registry = {t.name: t for t in tools}
     return _registry
