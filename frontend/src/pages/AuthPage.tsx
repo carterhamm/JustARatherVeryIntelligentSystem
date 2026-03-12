@@ -2,7 +2,7 @@ import { useState, FormEvent, useMemo, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { isWebAuthnAvailable } from '@/utils/webauthn';
-import { Loader2, Shield, Fingerprint, User, Mail, ArrowRight, AlertTriangle, Check, Key, Lock } from 'lucide-react';
+import { Loader2, Fingerprint, User, Mail, ArrowRight, AlertTriangle, Check, Key, Lock } from 'lucide-react';
 import gsap from 'gsap';
 import clsx from 'clsx';
 
@@ -74,8 +74,8 @@ function HudBezel({ children }: { children: React.ReactNode }) {
         >
           <defs>
             <linearGradient id="bezelFill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="rgba(8, 14, 30, 0.92)" />
-              <stop offset="100%" stopColor="rgba(4, 8, 20, 0.96)" />
+              <stop offset="0%" stopColor="rgba(4, 6, 14, 0.82)" />
+              <stop offset="100%" stopColor="rgba(2, 4, 10, 0.88)" />
             </linearGradient>
             <linearGradient id="beamGlow" x1="0" y1="0" x2="1" y2="0">
               <stop offset="0%" stopColor="transparent" />
@@ -95,10 +95,11 @@ function HudBezel({ children }: { children: React.ReactNode }) {
           <path
             d={bezelPath}
             fill="none"
-            stroke="rgba(0, 212, 255, 0.6)"
+            stroke="rgba(0, 212, 255, 0.8)"
             strokeWidth="2"
             strokeDasharray={`${Math.round((w + h) * 0.15)} ${Math.round((w + h) * 2.5)}`}
             strokeLinecap="round"
+            style={{ filter: 'drop-shadow(0 0 6px rgba(0, 212, 255, 0.7)) drop-shadow(0 0 12px rgba(0, 212, 255, 0.3))' }}
           >
             <animate
               attributeName="stroke-dashoffset"
@@ -155,6 +156,20 @@ function HudBezel({ children }: { children: React.ReactNode }) {
       )}
       <div className="relative z-10">{children}</div>
     </div>
+  );
+}
+
+// Diagonal accent marks for cut-corner buttons (matches widget style)
+function BtnAccents({ color = 'rgba(0,212,255,0.25)' }: { color?: string }) {
+  return (
+    <>
+      <svg className="absolute top-0 right-0 w-[6px] h-[6px] pointer-events-none" viewBox="0 0 6 6" fill="none">
+        <line x1="0" y1="0" x2="6" y2="6" stroke={color} strokeWidth="1" />
+      </svg>
+      <svg className="absolute bottom-0 left-0 w-[6px] h-[6px] pointer-events-none" viewBox="0 0 6 6" fill="none">
+        <line x1="0" y1="0" x2="6" y2="6" stroke={color} strokeWidth="1" />
+      </svg>
+    </>
   );
 }
 
@@ -531,7 +546,13 @@ export default function AuthPage() {
           {/* Branding */}
           <div className="text-center mb-6">
             <div className="inline-flex items-center justify-center w-14 h-14 mb-3 hud-clip-sm bg-gradient-to-br from-jarvis-blue/15 to-blue-500/10 border border-jarvis-blue/10">
-              <Shield size={24} className="text-jarvis-blue" />
+              {step === 'totp' ? (
+                <Lock size={24} className="text-jarvis-blue" />
+              ) : step === 'authenticate' ? (
+                <Fingerprint size={24} className="text-jarvis-blue" />
+              ) : (
+                <img src="/arc-reactor-icon.png" alt="Arc Reactor" className="w-7 h-7 object-contain" style={{ filter: 'drop-shadow(0 0 4px rgba(0, 212, 255, 0.5))' }} />
+              )}
             </div>
             <h1 className="text-xl font-display font-bold tracking-[0.2em] text-jarvis-blue glow-text">
               J.A.R.V.I.S.
@@ -606,21 +627,24 @@ export default function AuthPage() {
                 </div>
               </div>
 
-              <button
-                type="submit"
-                disabled={isLoading || !identifier.trim()}
-                className="jarvis-button-gold w-full py-3 text-sm font-display font-semibold tracking-wider uppercase flex items-center justify-center gap-2"
-                style={{ opacity: isLoading || !identifier.trim() ? 0.4 : 1 }}
-              >
-                {isLoading ? (
-                  <Loader2 size={16} className="animate-spin" />
-                ) : (
-                  <>
-                    Continue
-                    <ArrowRight size={14} />
-                  </>
-                )}
-              </button>
+              <div className="relative">
+                <button
+                  type="submit"
+                  disabled={isLoading || !identifier.trim()}
+                  className="jarvis-button-gold w-full py-3 text-sm font-display font-semibold tracking-wider uppercase flex items-center justify-center gap-2"
+                  style={{ opacity: isLoading || !identifier.trim() ? 0.4 : 1 }}
+                >
+                  {isLoading ? (
+                    <Loader2 size={16} className="animate-spin" />
+                  ) : (
+                    <>
+                      Continue
+                      <ArrowRight size={14} />
+                    </>
+                  )}
+                </button>
+                <BtnAccents color="rgba(240,165,0,0.3)" />
+              </div>
             </form>
           )}
 
@@ -635,21 +659,24 @@ export default function AuthPage() {
                 <p className="text-xs text-gray-500 mt-1">Authenticate with your passkey</p>
               </div>
 
-              <button
-                onClick={pendingTotpCode ? handleAuthenticateWithTotp : handleAuthenticate}
-                disabled={isLoading}
-                className="jarvis-button w-full py-3 text-sm font-display font-semibold tracking-wider uppercase flex items-center justify-center gap-2"
-                style={{ opacity: isLoading ? 0.5 : 1 }}
-              >
-                {isLoading ? (
-                  <Loader2 size={16} className="animate-spin" />
-                ) : (
-                  <>
-                    <Fingerprint size={16} />
-                    Verify Identity
-                  </>
-                )}
-              </button>
+              <div className="relative">
+                <button
+                  onClick={pendingTotpCode ? handleAuthenticateWithTotp : handleAuthenticate}
+                  disabled={isLoading}
+                  className="jarvis-button w-full py-3 text-sm font-display font-semibold tracking-wider uppercase flex items-center justify-center gap-2"
+                  style={{ opacity: isLoading ? 0.5 : 1 }}
+                >
+                  {isLoading ? (
+                    <Loader2 size={16} className="animate-spin" />
+                  ) : (
+                    <>
+                      <Fingerprint size={16} />
+                      Verify Identity
+                    </>
+                  )}
+                </button>
+                <BtnAccents />
+              </div>
 
               <button
                 onClick={() => {
@@ -667,9 +694,6 @@ export default function AuthPage() {
           {step === 'totp' && (
             <form onSubmit={handleTOTPVerify} className="space-y-4">
               <div className="text-center">
-                <div className="inline-flex items-center justify-center w-12 h-12 rounded-full glass-cyan mb-3">
-                  <Lock size={24} className="text-jarvis-blue" />
-                </div>
                 <p className="text-sm text-gray-300">Two-Factor Authentication</p>
                 <p className="text-xs text-gray-500 mt-1">Enter the code from your authenticator app</p>
               </div>
@@ -690,21 +714,24 @@ export default function AuthPage() {
                 />
               </div>
 
-              <button
-                type="submit"
-                disabled={isLoading || totpCode.length !== 6}
-                className="jarvis-button w-full py-3 text-sm font-display font-semibold tracking-wider uppercase flex items-center justify-center gap-2"
-                style={{ opacity: isLoading || totpCode.length !== 6 ? 0.4 : 1 }}
-              >
-                {isLoading ? (
-                  <Loader2 size={16} className="animate-spin" />
-                ) : (
-                  <>
-                    <Lock size={16} />
-                    Verify
-                  </>
-                )}
-              </button>
+              <div className="relative">
+                <button
+                  type="submit"
+                  disabled={isLoading || totpCode.length !== 6}
+                  className="jarvis-button w-full py-3 text-sm font-display font-semibold tracking-wider uppercase flex items-center justify-center gap-2"
+                  style={{ opacity: isLoading || totpCode.length !== 6 ? 0.4 : 1 }}
+                >
+                  {isLoading ? (
+                    <Loader2 size={16} className="animate-spin" />
+                  ) : (
+                    <>
+                      <Lock size={16} />
+                      Verify
+                    </>
+                  )}
+                </button>
+                <BtnAccents />
+              </div>
 
               <button
                 type="button"
@@ -823,23 +850,26 @@ export default function AuthPage() {
                 </div>
               </div>
 
-              <button
-                type="submit"
-                disabled={isLoading || !email.trim() || !username.trim() || !shtVerified}
-                className="jarvis-button-gold w-full py-3 text-sm font-display font-semibold tracking-wider uppercase flex items-center justify-center gap-2 mt-2"
-                style={{
-                  opacity: isLoading || !email.trim() || !username.trim() || !shtVerified ? 0.4 : 1,
-                }}
-              >
-                {isLoading ? (
-                  <Loader2 size={16} className="animate-spin" />
-                ) : (
-                  <>
-                    <Fingerprint size={16} />
-                    Create Passkey & Register
-                  </>
-                )}
-              </button>
+              <div className="relative">
+                <button
+                  type="submit"
+                  disabled={isLoading || !email.trim() || !username.trim() || !shtVerified}
+                  className="jarvis-button-gold w-full py-3 text-sm font-display font-semibold tracking-wider uppercase flex items-center justify-center gap-2 mt-2"
+                  style={{
+                    opacity: isLoading || !email.trim() || !username.trim() || !shtVerified ? 0.4 : 1,
+                  }}
+                >
+                  {isLoading ? (
+                    <Loader2 size={16} className="animate-spin" />
+                  ) : (
+                    <>
+                      <Fingerprint size={16} />
+                      Create Passkey & Register
+                    </>
+                  )}
+                </button>
+                <BtnAccents color="rgba(240,165,0,0.3)" />
+              </div>
 
               <button
                 type="button"
