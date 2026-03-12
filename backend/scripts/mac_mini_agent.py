@@ -133,6 +133,76 @@ class ClaudeCodeResponse(BaseModel):
     duration_ms: float
 
 
+# ── Unicode Rich Text (for iMessage bold/italic) ────────────────────────
+
+_BOLD_MAP = {}
+_ITALIC_MAP = {}
+_BOLD_ITALIC_MAP = {}
+
+def _build_unicode_maps():
+    """Build char→Unicode maps for Mathematical Sans-Serif styled characters."""
+    # Mathematical Sans-Serif Bold: U+1D5D4 (A) to U+1D607 (z), digits U+1D7EC-U+1D7F5
+    bold_upper_start = 0x1D5D4
+    bold_lower_start = 0x1D5EE
+    bold_digit_start = 0x1D7EC
+    # Mathematical Sans-Serif Italic: U+1D608 (A) to U+1D63B (z)
+    italic_upper_start = 0x1D608
+    italic_lower_start = 0x1D622
+    # Mathematical Sans-Serif Bold Italic: U+1D63C (A) to U+1D66F (z)
+    bi_upper_start = 0x1D63C
+    bi_lower_start = 0x1D656
+
+    for i in range(26):
+        upper = chr(ord('A') + i)
+        lower = chr(ord('a') + i)
+        _BOLD_MAP[upper] = chr(bold_upper_start + i)
+        _BOLD_MAP[lower] = chr(bold_lower_start + i)
+        _ITALIC_MAP[upper] = chr(italic_upper_start + i)
+        _ITALIC_MAP[lower] = chr(italic_lower_start + i)
+        _BOLD_ITALIC_MAP[upper] = chr(bi_upper_start + i)
+        _BOLD_ITALIC_MAP[lower] = chr(bi_lower_start + i)
+    for i in range(10):
+        _BOLD_MAP[str(i)] = chr(bold_digit_start + i)
+
+_build_unicode_maps()
+
+
+def _apply_char_map(text: str, char_map: dict[str, str]) -> str:
+    """Convert characters using a Unicode map, leaving unmapped chars as-is."""
+    return "".join(char_map.get(c, c) for c in text)
+
+
+import re as _re
+
+def markdown_to_unicode_rich(text: str) -> str:
+    """Convert markdown-style formatting to Unicode styled characters.
+
+    Supports:
+      ***bold italic*** or ___bold italic___
+      **bold** or __bold__
+      *italic* or _italic_
+    """
+    # Bold italic first (***text*** or ___text___)
+    text = _re.sub(
+        r'\*\*\*(.+?)\*\*\*|___(.+?)___',
+        lambda m: _apply_char_map(m.group(1) or m.group(2), _BOLD_ITALIC_MAP),
+        text,
+    )
+    # Bold (**text** or __text__)
+    text = _re.sub(
+        r'\*\*(.+?)\*\*|__(.+?)__',
+        lambda m: _apply_char_map(m.group(1) or m.group(2), _BOLD_MAP),
+        text,
+    )
+    # Italic (*text* or _text_)
+    text = _re.sub(
+        r'\*(.+?)\*|_(.+?)_',
+        lambda m: _apply_char_map(m.group(1) or m.group(2), _ITALIC_MAP),
+        text,
+    )
+    return text
+
+
 # ── Endpoints ────────────────────────────────────────────────────────────
 
 @app.get("/health")
@@ -153,6 +223,9 @@ async def send_imessage(
 
     if not recipient or not text:
         raise HTTPException(400, "Both 'to' and 'text' are required")
+
+    # Convert markdown bold/italic to Unicode styled characters for iMessage
+    text = markdown_to_unicode_rich(text)
 
     safe_text = text.replace("\\", "\\\\").replace('"', '\\"')
     safe_recipient = recipient.replace("\\", "\\\\").replace('"', '\\"')

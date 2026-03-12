@@ -613,7 +613,7 @@ export default function AuthPage() {
               ) : step === 'authenticate' ? (
                 <Fingerprint size={24} className="text-jarvis-blue" />
               ) : (
-                <img src={arcReactorIcon} alt="Arc Reactor" className="w-7 h-7 object-contain" style={{ filter: 'drop-shadow(0 0 4px rgba(0, 212, 255, 0.5))' }} />
+                <img src={arcReactorIcon} alt="Arc Reactor" className="w-[34px] h-[34px] object-contain" style={{ filter: 'drop-shadow(0 0 4px rgba(0, 212, 255, 0.5))' }} />
               )}
             </div>
             <h1 className="text-xl font-display font-bold tracking-[0.2em] text-jarvis-blue glow-text">
@@ -689,24 +689,22 @@ export default function AuthPage() {
                 </div>
               </div>
 
-              <div className="relative">
-                <button
-                  type="submit"
-                  disabled={isLoading || !identifier.trim()}
-                  className="jarvis-button-gold w-full py-3 text-sm font-display font-semibold tracking-wider uppercase flex items-center justify-center gap-2"
-                  style={{ opacity: isLoading || !identifier.trim() ? 0.4 : 1 }}
-                >
-                  {isLoading ? (
-                    <Loader2 size={16} className="animate-spin" />
-                  ) : (
-                    <>
-                      Continue
-                      <ArrowRight size={14} />
-                    </>
-                  )}
-                </button>
+              <button
+                type="submit"
+                disabled={isLoading || !identifier.trim()}
+                className="relative jarvis-button-gold w-full py-3 text-sm font-display font-semibold tracking-wider uppercase flex items-center justify-center gap-2"
+                style={{ opacity: isLoading || !identifier.trim() ? 0.4 : 1 }}
+              >
                 <BtnAccents color="rgba(240,165,0,0.2)" />
-              </div>
+                {isLoading ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : (
+                  <>
+                    Continue
+                    <ArrowRight size={14} />
+                  </>
+                )}
+              </button>
             </form>
           )}
 
@@ -721,24 +719,22 @@ export default function AuthPage() {
                 <p className="text-xs text-gray-500 mt-1">Authenticate with your passkey</p>
               </div>
 
-              <div className="relative">
-                <button
-                  onClick={pendingTotpCode ? handleAuthenticateWithTotp : handleAuthenticate}
-                  disabled={isLoading}
-                  className="jarvis-button w-full py-3 text-sm font-display font-semibold tracking-wider uppercase flex items-center justify-center gap-2"
-                  style={{ opacity: isLoading ? 0.5 : 1 }}
-                >
-                  {isLoading ? (
-                    <Loader2 size={16} className="animate-spin" />
-                  ) : (
-                    <>
-                      <Fingerprint size={16} />
-                      Verify Identity
-                    </>
-                  )}
-                </button>
+              <button
+                onClick={pendingTotpCode ? handleAuthenticateWithTotp : handleAuthenticate}
+                disabled={isLoading}
+                className="relative jarvis-button w-full py-3 text-sm font-display font-semibold tracking-wider uppercase flex items-center justify-center gap-2"
+                style={{ opacity: isLoading ? 0.5 : 1 }}
+              >
                 <BtnAccents />
-              </div>
+                {isLoading ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : (
+                  <>
+                    <Fingerprint size={16} />
+                    Verify Identity
+                  </>
+                )}
+              </button>
             </div>
           )}
 
@@ -875,26 +871,24 @@ export default function AuthPage() {
                 </div>
               </div>
 
-              <div className="relative">
-                <button
-                  type="submit"
-                  disabled={isLoading || !email.trim() || !username.trim() || !shtVerified}
-                  className="jarvis-button-gold w-full py-3 text-sm font-display font-semibold tracking-wider uppercase flex items-center justify-center gap-2 mt-2"
-                  style={{
-                    opacity: isLoading || !email.trim() || !username.trim() || !shtVerified ? 0.4 : 1,
-                  }}
-                >
-                  {isLoading ? (
-                    <Loader2 size={16} className="animate-spin" />
-                  ) : (
-                    <>
-                      <Fingerprint size={16} />
-                      Create Passkey & Register
-                    </>
-                  )}
-                </button>
+              <button
+                type="submit"
+                disabled={isLoading || !email.trim() || !username.trim() || !shtVerified}
+                className="relative jarvis-button-gold w-full py-3 text-sm font-display font-semibold tracking-wider uppercase flex items-center justify-center gap-2 mt-2"
+                style={{
+                  opacity: isLoading || !email.trim() || !username.trim() || !shtVerified ? 0.4 : 1,
+                }}
+              >
                 <BtnAccents color="rgba(240,165,0,0.2)" />
-              </div>
+                {isLoading ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : (
+                  <>
+                    <Fingerprint size={16} />
+                    Create Passkey & Register
+                  </>
+                )}
+              </button>
             </form>
           )}
           </div>

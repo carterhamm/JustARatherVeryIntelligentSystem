@@ -426,14 +426,6 @@ function WidgetCard({
           <div className="w-1 h-1 bg-jarvis-blue/40 rotate-45" />
           <span className="hud-label text-[8px]">{label}</span>
         </div>
-        {onRefresh && (
-          <button
-            onClick={(e) => { e.stopPropagation(); onRefresh(); }}
-            className="text-gray-700 hover:text-jarvis-blue transition-colors"
-          >
-            <RefreshCw size={9} />
-          </button>
-        )}
       </div>
       {children}
     </div>
