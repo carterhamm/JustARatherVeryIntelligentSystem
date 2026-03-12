@@ -27,8 +27,8 @@ TOOL_CATEGORIES = {
         "tools": ["search_knowledge"],
     },
     "email": {
-        "description": "Reading, sending, or managing email",
-        "tools": ["send_email", "read_email", "send_jarvis_email"],
+        "description": "Reading, sending, or managing email (Gmail or iCloud)",
+        "tools": ["send_email", "read_email", "read_icloud_email", "send_jarvis_email"],
     },
     "calendar": {
         "description": "Calendar events, scheduling, availability",

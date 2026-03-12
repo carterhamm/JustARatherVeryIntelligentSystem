@@ -86,6 +86,37 @@ _TOOL_DEFINITIONS: list[dict[str, Any]] = [
         },
     },
     {
+        "name": "read_icloud_email",
+        "description": (
+            "Read recent emails from the user's iCloud Mail inbox via IMAP. "
+            "Use when the user asks about iCloud email specifically, or when "
+            "Gmail is not connected but iCloud is."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": (
+                        "Search query. Supports 'from:name', 'subject:text', "
+                        "'unread', or freeform text to search both sender and subject."
+                    ),
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Max emails to return.",
+                    "default": 5,
+                },
+                "days": {
+                    "type": "integer",
+                    "description": "How many days back to search (only used when no query).",
+                    "default": 7,
+                },
+            },
+            "required": [],
+        },
+    },
+    {
         "name": "send_jarvis_email",
         "description": (
             "Send an email FROM jarvis@malibupoint.dev (JARVIS's own email address). "

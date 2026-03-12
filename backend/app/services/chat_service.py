@@ -284,6 +284,13 @@ def _get_tool_status(user_prefs: dict | None = None) -> str:
     else:
         lines.append("- Gmail/Calendar/Drive/Sheets: NOT CONNECTED — tell user to visit https://app.malibupoint.dev/connect/google to connect")
 
+    # iCloud Mail — per-user IMAP via App-Specific Password
+    icloud_prefs = prefs.get("icloud_mail", {})
+    if icloud_prefs.get("connected"):
+        lines.append("- iCloud Mail (IMAP): CONNECTED (read_icloud_email tool available)")
+    else:
+        lines.append("- iCloud Mail: NOT CONNECTED — user needs App-Specific Password from appleid.apple.com")
+
     # Web search
     lines.append("- Web search: CONNECTED (Gemini grounding)")
 

@@ -55,6 +55,41 @@ async def _get_google_tokens(state: Optional[AgentState]) -> Optional[dict]:
     return None
 
 
+async def _get_icloud_credentials(state: Optional[AgentState]) -> Optional[dict]:
+    """Load per-user iCloud Mail credentials from DB preferences.
+
+    Returns dict with 'apple_id' and 'app_password' (decrypted), or None.
+    """
+    user_id = (state or {}).get("user_id", "")
+    if not user_id:
+        return None
+    try:
+        from sqlalchemy import select
+        from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession as _AS
+        from sqlalchemy.orm import sessionmaker
+        from app.config import settings
+        from app.models.user import User
+        from app.core.encryption import decrypt_message
+
+        engine = create_async_engine(settings.DATABASE_URL)
+        async_session = sessionmaker(engine, class_=_AS, expire_on_commit=False)
+        async with async_session() as session:
+            result = await session.execute(
+                select(User).where(User.id == user_id)
+            )
+            user = result.scalar_one_or_none()
+            if user and user.preferences:
+                icloud_prefs = user.preferences.get("icloud_mail", {})
+                if icloud_prefs.get("connected"):
+                    apple_id = decrypt_message(icloud_prefs["apple_id"], user.id)
+                    app_password = decrypt_message(icloud_prefs["app_password"], user.id)
+                    return {"apple_id": apple_id, "app_password": app_password}
+        await engine.dispose()
+    except Exception:
+        logger.debug("Failed to load iCloud credentials for user %s", user_id, exc_info=True)
+    return None
+
+
 # ═════════════════════════════════════════════════════════════════════════
 # Base class
 # ═════════════════════════════════════════════════════════════════════════
@@ -341,6 +376,69 @@ class ReadEmailTool(BaseTool):
                 f"   Subject: {email.get('subject', '(no subject)')}\n"
                 f"   Date: {email.get('date', 'Unknown')}\n"
                 f"   Snippet: {email.get('snippet', '')[:150]}"
+            )
+        return "\n".join(lines)
+
+
+class ReadICloudEmailTool(BaseTool):
+    """Read recent emails from the user's iCloud Mail via IMAP."""
+
+    name = "read_icloud_email"
+    description = (
+        "Read recent emails from the user's iCloud Mail inbox.  "
+        "Params: query? (str, search term — 'from:name', 'subject:text', "
+        "'unread', or freeform text), limit? (int, default 5), "
+        "days? (int, how many days back, default 7)."
+    )
+
+    async def execute(
+        self,
+        params: dict[str, Any],
+        *,
+        state: Optional[AgentState] = None,
+    ) -> str:
+        creds = await _get_icloud_credentials(state)
+        if not creds:
+            return (
+                "iCloud Mail is not connected. The user needs to set up an "
+                "App-Specific Password at appleid.apple.com and connect it "
+                "via the JARVIS dashboard."
+            )
+
+        query = params.get("query", "")
+        limit = params.get("limit", 5)
+        days = params.get("days", 7)
+
+        try:
+            if query:
+                from app.integrations.icloud_mail import icloud_search
+                emails = await icloud_search(
+                    creds["apple_id"],
+                    creds["app_password"],
+                    query=query,
+                    max_results=limit,
+                )
+            else:
+                from app.integrations.icloud_mail import icloud_fetch_recent
+                emails = await icloud_fetch_recent(
+                    creds["apple_id"],
+                    creds["app_password"],
+                    max_results=limit,
+                    days=days,
+                )
+        except Exception as exc:
+            return f"Failed to read iCloud emails: {exc}"
+
+        if not emails:
+            return "No iCloud emails found matching the query."
+
+        lines: list[str] = []
+        for i, em in enumerate(emails, 1):
+            lines.append(
+                f"{i}. From: {em.get('from', 'Unknown')}\n"
+                f"   Subject: {em.get('subject', '(no subject)')}\n"
+                f"   Date: {em.get('date', 'Unknown')}\n"
+                f"   Snippet: {em.get('snippet', '')[:150]}"
             )
         return "\n".join(lines)
 
@@ -3797,6 +3895,7 @@ def get_tool_registry() -> dict[str, BaseTool]:
             SearchKnowledgeTool(),
             SendEmailTool(),
             ReadEmailTool(),
+            ReadICloudEmailTool(),
             SendJarvisEmailTool(),
             CreateCalendarEventTool(),
             ListCalendarEventsTool(),
