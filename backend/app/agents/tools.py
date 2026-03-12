@@ -3065,6 +3065,469 @@ class SearchContactsTool(BaseTool):
 
 
 # ═════════════════════════════════════════════════════════════════════════
+# System Health tool
+# ═════════════════════════════════════════════════════════════════════════
+
+class SystemHealthTool(BaseTool):
+    """Report health status of all JARVIS subsystems."""
+
+    name = "system_health"
+    description = (
+        "Check the real-time health of all JARVIS infrastructure components: "
+        "Railway backend, Mac Mini agent, LM Studio, XTTS voice server, "
+        "Qdrant vector store, Redis, PostgreSQL, ElevenLabs, and Gemini. "
+        "Use when Mr. Stark asks 'are all systems running?', 'is everything online?', "
+        "or any similar system status question. "
+        "Params: force_refresh? (bool, default false — bypass 5-min cache)."
+    )
+
+    async def execute(
+        self,
+        params: dict[str, Any],
+        *,
+        state: Optional[AgentState] = None,
+    ) -> str:
+        from app.services.system_monitor import get_system_health
+
+        force = params.get("force_refresh", False)
+        try:
+            data = await get_system_health(force_refresh=bool(force))
+        except Exception as exc:
+            return f"System health check failed: {exc}"
+
+        overall = data.get("overall", "unknown").upper()
+        healthy_count = data.get("healthy_count", 0)
+        down_count = data.get("down_count", 0)
+        total = data.get("total_systems", 0)
+        from_cache = data.get("from_cache", False)
+        checked_at = data.get("checked_at", "")
+
+        cache_note = " (cached)" if from_cache else " (live)"
+        lines = [
+            f"System Health: {overall}{cache_note}",
+            f"  {healthy_count}/{total} systems healthy, {down_count} down",
+            "",
+        ]
+
+        systems = data.get("systems", {})
+        # Sort: down first, then degraded, then healthy
+        status_order = {"down": 0, "degraded": 1, "healthy": 2}
+        sorted_systems = sorted(
+            systems.items(),
+            key=lambda x: status_order.get(x[1].get("status", "healthy"), 3),
+        )
+
+        for name, info in sorted_systems:
+            status = info.get("status", "unknown").upper()
+            latency = info.get("latency_ms", 0)
+            error = info.get("error", "")
+            detail = info.get("detail", "")
+
+            # Format display name
+            display = name.replace("_", " ").title()
+            line = f"  [{status}] {display} ({latency}ms)"
+            if error:
+                line += f" — {error}"
+            elif detail:
+                line += f" — {detail}"
+            lines.append(line)
+
+        if checked_at:
+            lines.append(f"\nChecked at: {checked_at}")
+
+        return "\n".join(lines)
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# MCP Discovery tool
+# ═════════════════════════════════════════════════════════════════════════
+
+class MCPDiscoveryTool(BaseTool):
+    """Search GitHub for MCP servers that could give JARVIS new capabilities."""
+
+    name = "mcp_discovery"
+    description = (
+        "Discover MCP (Model Context Protocol) servers on GitHub that could extend "
+        "JARVIS with new capabilities. Actions: 'search' (find servers matching a query "
+        "like 'slack', 'notion', 'browser'), 'evaluate' (deep-evaluate a specific repo URL), "
+        "'recommend' (get AI-recommended MCPs based on JARVIS's current capability gaps), "
+        "'scan' (run a full background scan and cache results). "
+        "Params: action (str), query? (str — search query or GitHub repo URL)."
+    )
+
+    async def execute(
+        self,
+        params: dict[str, Any],
+        *,
+        state: Optional[AgentState] = None,
+    ) -> str:
+        from app.services.mcp_discovery import (
+            search_mcp_servers,
+            evaluate_mcp_server,
+            get_recommendations,
+            get_cached_scan,
+            run_mcp_scan,
+        )
+
+        action = params.get("action", "").lower().strip()
+        query = params.get("query", "").strip()
+
+        if action == "search":
+            if not query:
+                return "Please provide a search query (e.g. 'slack', 'notion', 'browser automation')."
+
+            results = await search_mcp_servers(query=query, limit=12)
+            if not results:
+                return f"No MCP servers found matching '{query}' on GitHub."
+
+            lines = [f"MCP servers matching '{query}' (ranked by quality score):\n"]
+            for i, srv in enumerate(results, 1):
+                caps = ", ".join(srv.get("capabilities", [])) or "general"
+                archived = " [ARCHIVED]" if srv.get("archived") else ""
+                lines.append(
+                    f"{i}. {srv['full_name']}{archived} ({srv['stars']:,} ⭐, score {srv['score']})\n"
+                    f"   {srv.get('description', 'No description')}\n"
+                    f"   Capabilities: {caps}  |  Language: {srv.get('language', '?')}\n"
+                    f"   URL: {srv['url']}"
+                )
+            return "\n".join(lines)
+
+        elif action == "evaluate":
+            if not query:
+                return "Please provide a GitHub repo URL (e.g. 'https://github.com/owner/repo')."
+
+            result = await evaluate_mcp_server(query)
+
+            if result.get("error"):
+                return f"Evaluation failed: {result['error']}"
+
+            compat = result.get("compatibility", {})
+            security = result.get("security", {})
+            install = result.get("install_hints", [])
+            tools = result.get("tool_hints", [])
+
+            lines = [
+                f"MCP Server Evaluation: {result['full_name']}",
+                f"{'═' * 50}",
+                f"Stars: {result['stars']:,}  |  Score: {result['score']}  |  Language: {result.get('language', '?')}",
+                f"Description: {result.get('description', 'N/A')}",
+                f"URL: {result['url']}",
+                f"",
+                f"Capabilities detected: {', '.join(result.get('capabilities', [])) or 'none detected'}",
+                f"Tool hints from README: {', '.join(tools[:10]) or 'none found'}",
+                f"",
+                f"Compatibility:",
+                f"  Python: {'Yes' if compat.get('python_compatible') else 'No'}",
+                f"  Node.js: {'Required' if compat.get('node_required') else 'Not required'}",
+                f"  Docker: {'Available' if compat.get('docker_available') else 'No'}",
+                f"",
+                f"Security: trust_level={security.get('trust_level', 'unknown')}  "
+                f"(owner={security.get('owner', '?')}, "
+                f"trusted_org={'Yes' if security.get('is_trusted_org') else 'No'}, "
+                f"license={'Yes' if security.get('has_license') else 'No'})",
+            ]
+
+            if install:
+                lines.append(f"")
+                lines.append(f"Installation:")
+                for cmd in install:
+                    lines.append(f"  $ {cmd}")
+
+            if result.get("readme_excerpt"):
+                excerpt = result["readme_excerpt"][:400].replace("\n", " ")
+                lines.append(f"")
+                lines.append(f"README excerpt: {excerpt}...")
+
+            return "\n".join(lines)
+
+        elif action == "recommend":
+            return await get_recommendations()
+
+        elif action == "scan":
+            # Kick off a scan (this can take a minute with rate limiting)
+            result = await run_mcp_scan()
+            return (
+                f"MCP scan complete.\n"
+                f"  Servers found: {result.get('total_found', 0)}\n"
+                f"  Elapsed: {result.get('elapsed_seconds', 0)}s\n"
+                f"  Cached for 24 hours.\n"
+                f"Use action='recommend' to see top recommendations."
+            )
+
+        elif action == "installed":
+            # List what JARVIS currently has — use the module-level registry directly
+            registry = get_tool_registry()
+            tool_descs = [
+                {"name": t.name, "description": t.description}
+                for t in registry.values()
+            ]
+
+            if not tool_descs:
+                return "Unable to list current tools."
+
+            lines = [f"JARVIS currently has {len(tool_descs)} tools:\n"]
+            for t in tool_descs:
+                lines.append(f"- {t['name']}: {t['description'][:80]}")
+            return "\n".join(lines)
+
+        else:
+            return (
+                f"Unknown action '{action}'. Valid actions: "
+                "search, evaluate, recommend, scan, installed."
+            )
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# Focus Session tool
+# ═════════════════════════════════════════════════════════════════════════
+
+class FocusSessionTool(BaseTool):
+    """Start, end, check status, and retrieve stats for focus sessions."""
+
+    name = "focus_session"
+    description = (
+        "Manage deep work and focused learning sessions. "
+        "Actions: start (begins a session), end (ends with ratings), "
+        "status (check active session), stats (weekly/monthly summary). "
+        "Params: action (str), title? (str), category? (str), "
+        "planned_duration_min? (int), notes? (str), "
+        "energy_level? (int 1-5), productivity_rating? (int 1-5), "
+        "period? (str: 'week'|'month', default 'week')."
+    )
+
+    async def execute(
+        self,
+        params: dict[str, Any],
+        *,
+        state: Optional[AgentState] = None,
+    ) -> str:
+        action = params.get("action", "status").lower()
+        user_id = (state or {}).get("user_id")
+        if not user_id:
+            return "No user context available."
+
+        try:
+            from sqlalchemy import select
+            from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession as _AS
+            from sqlalchemy.orm import sessionmaker
+            from app.config import settings
+            from app.models.focus_session import FocusSession
+            from datetime import timedelta
+
+            engine = create_async_engine(settings.DATABASE_URL)
+            async_session = sessionmaker(engine, class_=_AS, expire_on_commit=False)
+
+            if action == "start":
+                title = params.get("title", "").strip()
+                if not title:
+                    await engine.dispose()
+                    return "Missing 'title' parameter. What are you working on?"
+
+                category = params.get("category", "").strip() or None
+                planned = params.get("planned_duration_min")
+
+                async with async_session() as session:
+                    existing_result = await session.execute(
+                        select(FocusSession)
+                        .where(
+                            FocusSession.user_id == user_id,
+                            FocusSession.ended_at.is_(None),
+                        )
+                        .limit(1)
+                    )
+                    existing = existing_result.scalar_one_or_none()
+                    if existing:
+                        elapsed = int(
+                            (datetime.now(timezone.utc) - existing.started_at).total_seconds() / 60
+                        )
+                        await engine.dispose()
+                        return (
+                            f"Already in a focus session: '{existing.title}' "
+                            f"(started {elapsed} min ago). End it first."
+                        )
+
+                    fs = FocusSession(
+                        user_id=user_id,
+                        title=title,
+                        category=category,
+                        started_at=datetime.now(timezone.utc),
+                        planned_duration_min=planned,
+                        distractions=0,
+                    )
+                    session.add(fs)
+                    await session.commit()
+                    await session.refresh(fs)
+
+                await engine.dispose()
+
+                planned_str = f", target {planned} min" if planned else ""
+                return (
+                    f"Focus session started: '{title}'"
+                    + (f" [{category}]" if category else "")
+                    + f"{planned_str}. Timer running."
+                )
+
+            elif action == "end":
+                async with async_session() as session:
+                    result = await session.execute(
+                        select(FocusSession)
+                        .where(
+                            FocusSession.user_id == user_id,
+                            FocusSession.ended_at.is_(None),
+                        )
+                        .order_by(FocusSession.started_at.desc())
+                        .limit(1)
+                    )
+                    fs = result.scalar_one_or_none()
+                    if not fs:
+                        await engine.dispose()
+                        return "No active focus session to end."
+
+                    now = datetime.now(timezone.utc)
+                    duration_min = int((now - fs.started_at).total_seconds() / 60)
+
+                    fs.ended_at = now
+                    fs.actual_duration_min = duration_min
+                    notes = params.get("notes", "").strip()
+                    energy = params.get("energy_level")
+                    productivity = params.get("productivity_rating")
+                    distractions = params.get("distractions")
+
+                    if notes:
+                        fs.notes = notes
+                    if energy is not None:
+                        fs.energy_level = int(energy)
+                    if productivity is not None:
+                        fs.productivity_rating = int(productivity)
+                    if distractions is not None:
+                        fs.distractions = int(distractions)
+
+                    await session.commit()
+
+                await engine.dispose()
+
+                hours, mins = divmod(duration_min, 60)
+                dur_str = f"{hours}h {mins}min" if hours else f"{mins} min"
+                parts = [f"Focus session complete: '{fs.title}' — {dur_str}"]
+                if fs.productivity_rating:
+                    parts.append(f"productivity {fs.productivity_rating}/5")
+                if fs.energy_level:
+                    parts.append(f"energy {fs.energy_level}/5")
+                if fs.distractions:
+                    parts.append(f"{fs.distractions} distraction(s)")
+                return ". ".join(parts) + "."
+
+            elif action == "status":
+                async with async_session() as session:
+                    result = await session.execute(
+                        select(FocusSession)
+                        .where(
+                            FocusSession.user_id == user_id,
+                            FocusSession.ended_at.is_(None),
+                        )
+                        .order_by(FocusSession.started_at.desc())
+                        .limit(1)
+                    )
+                    fs = result.scalar_one_or_none()
+
+                await engine.dispose()
+
+                if not fs:
+                    return "No active focus session."
+
+                elapsed = int(
+                    (datetime.now(timezone.utc) - fs.started_at).total_seconds() / 60
+                )
+                hours, mins = divmod(elapsed, 60)
+                elapsed_str = f"{hours}h {mins}min" if hours else f"{mins} min"
+                planned_str = ""
+                if fs.planned_duration_min:
+                    remaining = fs.planned_duration_min - elapsed
+                    if remaining > 0:
+                        planned_str = f" ({remaining} min remaining)"
+                    else:
+                        planned_str = f" ({abs(remaining)} min over target)"
+
+                return (
+                    f"Active session: '{fs.title}'"
+                    + (f" [{fs.category}]" if fs.category else "")
+                    + f" — {elapsed_str} elapsed{planned_str}"
+                    + (f", {fs.distractions} distraction(s)" if fs.distractions else "")
+                )
+
+            elif action == "stats":
+                from datetime import timedelta
+
+                period = params.get("period", "week")
+                days = 30 if period == "month" else 7
+                since = datetime.now(timezone.utc) - timedelta(days=days)
+
+                async with async_session() as session:
+                    result = await session.execute(
+                        select(FocusSession)
+                        .where(
+                            FocusSession.user_id == user_id,
+                            FocusSession.ended_at.isnot(None),
+                            FocusSession.started_at >= since,
+                        )
+                        .order_by(FocusSession.started_at.desc())
+                    )
+                    sessions_list = result.scalars().all()
+
+                await engine.dispose()
+
+                if not sessions_list:
+                    return f"No completed focus sessions in the past {days} days."
+
+                total = len(sessions_list)
+                total_min = sum(s.actual_duration_min or 0 for s in sessions_list)
+                total_hours = round(total_min / 60, 1)
+                avg_min = round(total_min / total, 1) if total else 0.0
+
+                rated = [s for s in sessions_list if s.productivity_rating is not None]
+                avg_prod = (
+                    round(sum(s.productivity_rating for s in rated) / len(rated), 1)  # type: ignore[arg-type]
+                    if rated else None
+                )
+
+                total_distractions = sum(s.distractions for s in sessions_list)
+
+                cats: dict[str, int] = {}
+                for s in sessions_list:
+                    cat = s.category or "uncategorized"
+                    cats[cat] = cats.get(cat, 0) + (s.actual_duration_min or 0)
+
+                cat_lines = [
+                    f"  {cat}: {round(m / 60, 1)}h"
+                    for cat, m in sorted(cats.items(), key=lambda x: x[1], reverse=True)
+                ]
+
+                stat_lines = [
+                    f"Focus stats (past {days} days):",
+                    f"  Sessions: {total}",
+                    f"  Total focus time: {total_hours}h",
+                    f"  Average session: {avg_min} min",
+                ]
+                if avg_prod is not None:
+                    stat_lines.append(f"  Avg productivity: {avg_prod}/5")
+                if total_distractions:
+                    stat_lines.append(f"  Total distractions: {total_distractions}")
+                if cat_lines:
+                    stat_lines.append("  By category:")
+                    stat_lines.extend(cat_lines)
+
+                return "\n".join(stat_lines)
+
+            else:
+                await engine.dispose()
+                return f"Unknown action '{action}'. Use: start, end, status, stats."
+
+        except Exception as exc:
+            logger.exception("FocusSessionTool error")
+            return f"Focus session error: {exc}"
+
+
+# ═════════════════════════════════════════════════════════════════════════
 # Tool registry factory
 # ═════════════════════════════════════════════════════════════════════════
 
@@ -3138,6 +3601,12 @@ def get_tool_registry() -> dict[str, BaseTool]:
             ResearchBriefingTool(),
             # Contacts
             SearchContactsTool(),
+            # System health monitoring
+            SystemHealthTool(),
+            # MCP discovery
+            MCPDiscoveryTool(),
+            # Focus / deep work sessions
+            FocusSessionTool(),
         ]
         _registry = {t.name: t for t in tools}
     return _registry

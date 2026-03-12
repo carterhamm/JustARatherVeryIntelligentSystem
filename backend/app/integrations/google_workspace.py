@@ -82,6 +82,49 @@ async def gmail_read(
     return await asyncio.to_thread(_sync)
 
 
+async def gmail_unread_count(
+    google_tokens: dict,
+) -> dict[str, Any]:
+    """Return the number of unread inbox messages and a few recent subject lines."""
+    import asyncio
+
+    def _sync() -> dict[str, Any]:
+        service = _build_service(google_tokens, "gmail", "v1")
+
+        # Use labels.get for the fast unread count (single API call)
+        label_info = service.users().labels().get(
+            userId="me", id="INBOX",
+        ).execute()
+        unread = label_info.get("messagesUnread", 0)
+
+        # Grab a handful of recent unread subject lines
+        results = service.users().messages().list(
+            userId="me",
+            q="is:inbox is:unread",
+            maxResults=5,
+        ).execute()
+        recent: list[dict[str, str]] = []
+        for msg_ref in results.get("messages", []):
+            msg = service.users().messages().get(
+                userId="me",
+                id=msg_ref["id"],
+                format="metadata",
+                metadataHeaders=["From", "Subject"],
+            ).execute()
+            headers = {
+                h["name"]: h["value"]
+                for h in msg.get("payload", {}).get("headers", [])
+            }
+            recent.append({
+                "subject": headers.get("Subject", "(no subject)"),
+                "from": headers.get("From", ""),
+            })
+
+        return {"unread_count": unread, "recent": recent}
+
+    return await asyncio.to_thread(_sync)
+
+
 async def gmail_send(
     google_tokens: dict,
     to: str,

@@ -7,6 +7,7 @@ from app.models.reminder import Reminder
 from app.models.passkey import PasskeyCredential
 from app.models.contact import Contact
 from app.models.health import HealthSample
+from app.models.focus_session import FocusSession
 
 __all__ = [
     "Base",
@@ -19,4 +20,5 @@ __all__ = [
     "PasskeyCredential",
     "Contact",
     "HealthSample",
+    "FocusSession",
 ]

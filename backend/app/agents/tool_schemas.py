@@ -876,6 +876,119 @@ _TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "required": [],
         },
     },
+    # -- System Health ---------------------------------------------------
+    {
+        "name": "system_health",
+        "description": (
+            "Check real-time health of all JARVIS infrastructure: Railway backend, "
+            "Mac Mini agent, LM Studio, XTTS voice, Qdrant, Redis, PostgreSQL, "
+            "ElevenLabs, and Gemini. Use when asked 'are all systems running?' "
+            "or any system status question."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "force_refresh": {
+                    "type": "boolean",
+                    "description": "Bypass the 5-minute cache and probe all systems live.",
+                    "default": False,
+                },
+            },
+            "required": [],
+        },
+    },
+    # -- MCP Discovery ---------------------------------------------------
+    {
+        "name": "mcp_discovery",
+        "description": (
+            "Search GitHub for MCP servers that could give JARVIS new capabilities. "
+            "Can search by keyword, deep-evaluate a specific repo, recommend integrations "
+            "based on current capability gaps, or list what's already installed. "
+            "Use when the user asks about new integrations, plugins, skills, or MCP servers."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["search", "evaluate", "recommend", "scan", "installed"],
+                    "description": (
+                        "Action to perform: 'search' finds servers matching a query, "
+                        "'evaluate' deep-evaluates a specific repo URL, "
+                        "'recommend' suggests MCPs based on JARVIS's capability gaps, "
+                        "'scan' runs a full background scan (takes ~1 min), "
+                        "'installed' lists JARVIS's current tools."
+                    ),
+                },
+                "query": {
+                    "type": "string",
+                    "description": (
+                        "For 'search': keyword to search (e.g. 'slack', 'notion', 'browser'). "
+                        "For 'evaluate': GitHub repo URL (e.g. 'https://github.com/owner/repo'). "
+                        "Not required for 'recommend', 'scan', or 'installed'."
+                    ),
+                },
+            },
+            "required": ["action"],
+        },
+    },
+    # -- Focus Session ---------------------------------------------------
+    {
+        "name": "focus_session",
+        "description": (
+            "Manage deep work and focused learning sessions. "
+            "Start a session ('start a 90 min physics study session'), "
+            "end it with ratings ('end my session, productivity 4/5'), "
+            "check status ('am I in a focus session?'), "
+            "or get stats ('how much deep work did I do this week?')."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["start", "end", "status", "stats"],
+                    "description": "Action to perform.",
+                },
+                "title": {
+                    "type": "string",
+                    "description": "Session title, e.g. 'Physics - Quantum Mechanics' (required for start).",
+                },
+                "category": {
+                    "type": "string",
+                    "enum": ["learning", "deep_work", "creative", "admin"],
+                    "description": "Session category.",
+                },
+                "planned_duration_min": {
+                    "type": "integer",
+                    "description": "Target duration in minutes (for start).",
+                },
+                "notes": {
+                    "type": "string",
+                    "description": "Session notes or reflections (for end).",
+                },
+                "energy_level": {
+                    "type": "integer",
+                    "description": "Energy level rating 1-5 (for end).",
+                },
+                "productivity_rating": {
+                    "type": "integer",
+                    "description": "Productivity rating 1-5 (for end).",
+                },
+                "distractions": {
+                    "type": "integer",
+                    "description": "Number of distractions (for end, overrides auto-count).",
+                },
+                "period": {
+                    "type": "string",
+                    "enum": ["week", "month"],
+                    "description": "Stats time period (for stats action, default 'week').",
+                    "default": "week",
+                },
+            },
+            "required": ["action"],
+        },
+    },
     # -- Research Briefing -----------------------------------------------
     {
         "name": "research_briefing",

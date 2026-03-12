@@ -126,6 +126,14 @@ TOOL_CATEGORIES = {
         "description": "Health data, fitness, steps, heart rate, sleep, workouts, Apple Health, HealthKit",
         "tools": ["health_summary"],
     },
+    "skills": {
+        "description": "MCP servers, new capabilities, plugins, skills, integrations discovery, what can you add, GitHub tools, extend JARVIS",
+        "tools": ["mcp_discovery"],
+    },
+    "focus": {
+        "description": "Focus sessions, deep work, study sessions, productivity tracking, distraction logging, work timer, how much time did I focus",
+        "tools": ["focus_session"],
+    },
 }
 
 _CATEGORY_LIST = "\n".join(

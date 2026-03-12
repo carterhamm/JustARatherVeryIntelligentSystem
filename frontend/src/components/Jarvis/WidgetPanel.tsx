@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   Cloud, Sun, CloudRain, CloudSnow, CloudLightning, CloudDrizzle, Wind, Droplets,
   Calendar, Clock, ChevronRight, ExternalLink, RefreshCw,
   Thermometer, Eye, EyeOff, MapPin,
+  Heart, Activity, Moon, Mail, Bell, AlertTriangle,
 } from 'lucide-react';
 import { api } from '@/services/api';
 import { useAuthStore } from '@/stores/authStore';
@@ -52,6 +53,72 @@ interface SystemStatus {
   date: string;
   timezone: string;
   services: Record<string, boolean>;
+}
+
+interface HealthSummary {
+  date: string;
+  steps?: { total: number; unit: string };
+  heart_rate?: { value: number; unit: string; recorded_at: string };
+  sleep?: { total_hours: number; unit: string };
+  workouts?: { value: number; unit: string; start: string; end: string }[];
+}
+
+interface ReminderItem {
+  id: string;
+  message: string;
+  remind_at: string;
+}
+
+interface RemindersData {
+  overdue: ReminderItem[];
+  upcoming: ReminderItem[];
+  overdue_count: number;
+  upcoming_count: number;
+  error?: string;
+}
+
+interface EmailData {
+  connected: boolean;
+  unread_count: number;
+  recent: { subject: string; from: string }[];
+  error?: string;
+}
+
+interface WidgetLayoutItem {
+  type: string;
+  urgency: number;
+  visible: boolean;
+  data_hint?: string | null;
+}
+
+interface LayoutResponse {
+  widgets: WidgetLayoutItem[];
+}
+
+// ── Urgency helpers ───────────────────────────────────────────────────
+
+type UrgencyLevel = 'high' | 'medium' | 'low';
+
+function getUrgencyLevel(score: number): UrgencyLevel {
+  if (score >= 7.0) return 'high';
+  if (score >= 4.0) return 'medium';
+  return 'low';
+}
+
+function getUrgencyColor(level: UrgencyLevel): string {
+  switch (level) {
+    case 'high': return 'rgba(255, 59, 48, 0.7)';   // red
+    case 'medium': return 'rgba(255, 149, 0, 0.6)';  // amber
+    case 'low': return 'rgba(57, 255, 20, 0.3)';     // green
+  }
+}
+
+function getUrgencyGlow(level: UrgencyLevel): string {
+  switch (level) {
+    case 'high': return '0 0 6px rgba(255, 59, 48, 0.4)';
+    case 'medium': return '0 0 4px rgba(255, 149, 0, 0.3)';
+    case 'low': return 'none';
+  }
 }
 
 // ── Skeleton primitives ────────────────────────────────────────────────
@@ -125,6 +192,18 @@ function SubsystemsSkeleton() {
           <SkeletonLine className="w-10 h-2" />
           <SkeletonLine className="w-16 h-2" />
         </div>
+      </div>
+    </WidgetCard>
+  );
+}
+
+function GenericSkeleton({ label }: { label: string }) {
+  return (
+    <WidgetCard label={label}>
+      <div className="space-y-2 py-1">
+        <SkeletonLine className="w-3/4 h-2.5" />
+        <SkeletonLine className="w-1/2 h-2" />
+        <SkeletonLine className="w-2/3 h-2" />
       </div>
     </WidgetCard>
   );
@@ -474,6 +553,244 @@ function QuickStatsWidget() {
   );
 }
 
+// ── Health Widget ─────────────────────────────────────────────────────
+
+function HealthWidget() {
+  const [data, setData] = useState<HealthSummary | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const fetchHealth = useCallback(async () => {
+    try {
+      setLoading(true);
+      const res = await api.get<HealthSummary>('/health/summary');
+      setData(res);
+    } catch {
+      setData(null);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchHealth();
+    const interval = setInterval(fetchHealth, 10 * 60 * 1000); // 10 min
+    return () => clearInterval(interval);
+  }, [fetchHealth]);
+
+  if (loading && !data) return <GenericSkeleton label="HEALTH" />;
+
+  const hasAnyData = data && (data.steps || data.heart_rate || data.sleep);
+
+  if (!hasAnyData) {
+    return (
+      <WidgetCard label="HEALTH">
+        <div className="py-2 text-center">
+          <Heart size={14} className="text-gray-600 mx-auto mb-1.5" />
+          <p className="text-[10px] text-gray-600 font-mono">No health data synced</p>
+        </div>
+      </WidgetCard>
+    );
+  }
+
+  return (
+    <WidgetCard label="HEALTH" onRefresh={fetchHealth}>
+      <div className="space-y-2">
+        {/* Steps */}
+        {data.steps && (
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              <Activity size={10} className="text-hud-green" />
+              <span className="text-[9px] text-gray-500 font-mono">STEPS</span>
+            </div>
+            <span className="text-[11px] text-gray-300 font-mono font-medium">
+              {data.steps.total.toLocaleString()}
+            </span>
+          </div>
+        )}
+
+        {/* Heart Rate */}
+        {data.heart_rate && (
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              <Heart size={10} className="text-hud-red" />
+              <span className="text-[9px] text-gray-500 font-mono">HR</span>
+            </div>
+            <span className={clsx('text-[11px] font-mono font-medium', {
+              'text-hud-red': data.heart_rate.value > 100 || data.heart_rate.value < 45,
+              'text-gray-300': data.heart_rate.value <= 100 && data.heart_rate.value >= 45,
+            })}>
+              {data.heart_rate.value} {data.heart_rate.unit}
+            </span>
+          </div>
+        )}
+
+        {/* Sleep */}
+        {data.sleep && (
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              <Moon size={10} className="text-jarvis-blue" />
+              <span className="text-[9px] text-gray-500 font-mono">SLEEP</span>
+            </div>
+            <span className={clsx('text-[11px] font-mono font-medium', {
+              'text-hud-amber': data.sleep.total_hours < 6,
+              'text-gray-300': data.sleep.total_hours >= 6,
+            })}>
+              {data.sleep.total_hours}h
+            </span>
+          </div>
+        )}
+      </div>
+    </WidgetCard>
+  );
+}
+
+// ── Email Widget ──────────────────────────────────────────────────────
+
+function EmailWidget() {
+  const [data, setData] = useState<EmailData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const fetchEmail = useCallback(async () => {
+    try {
+      setLoading(true);
+      const res = await api.get<EmailData>('/widgets/email');
+      setData(res);
+    } catch {
+      setData(null);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchEmail();
+    const interval = setInterval(fetchEmail, 5 * 60 * 1000); // 5 min
+    return () => clearInterval(interval);
+  }, [fetchEmail]);
+
+  if (loading && !data) return <GenericSkeleton label="EMAIL" />;
+
+  // Do not render if Google not connected
+  if (!data?.connected) return null;
+
+  return (
+    <WidgetCard label="EMAIL" onRefresh={fetchEmail}>
+      <div className="space-y-1.5">
+        {/* Unread count header */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5">
+            <Mail size={10} className={clsx({
+              'text-hud-red': (data.unread_count ?? 0) > 10,
+              'text-hud-amber': (data.unread_count ?? 0) > 0 && (data.unread_count ?? 0) <= 10,
+              'text-gray-600': (data.unread_count ?? 0) === 0,
+            })} />
+            <span className="text-[9px] text-gray-500 font-mono">UNREAD</span>
+          </div>
+          <span className={clsx('text-[11px] font-mono font-medium', {
+            'text-hud-red': (data.unread_count ?? 0) > 10,
+            'text-hud-amber': (data.unread_count ?? 0) > 0 && (data.unread_count ?? 0) <= 10,
+            'text-gray-500': (data.unread_count ?? 0) === 0,
+          })}>
+            {data.unread_count ?? 0}
+          </span>
+        </div>
+
+        {/* Recent subjects */}
+        {data.recent && data.recent.length > 0 && (
+          <div className="pt-1.5 border-t border-white/[0.04] space-y-1">
+            {data.recent.slice(0, 3).map((email, i) => (
+              <div key={i} className="truncate">
+                <p className="text-[10px] text-gray-400 truncate leading-tight">{email.subject}</p>
+                <p className="text-[8px] text-gray-600 font-mono truncate">{email.from}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </WidgetCard>
+  );
+}
+
+// ── Reminders Widget ──────────────────────────────────────────────────
+
+function RemindersWidget() {
+  const [data, setData] = useState<RemindersData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const fetchReminders = useCallback(async () => {
+    try {
+      setLoading(true);
+      const res = await api.get<RemindersData>('/widgets/reminders');
+      setData(res);
+    } catch {
+      setData(null);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchReminders();
+    const interval = setInterval(fetchReminders, 2 * 60 * 1000); // 2 min
+    return () => clearInterval(interval);
+  }, [fetchReminders]);
+
+  if (loading && !data) return <GenericSkeleton label="REMINDERS" />;
+
+  const totalCount = (data?.overdue_count ?? 0) + (data?.upcoming_count ?? 0);
+
+  if (totalCount === 0 && !data?.error) {
+    return (
+      <WidgetCard label="REMINDERS">
+        <div className="py-1.5 text-center">
+          <Bell size={12} className="text-gray-600 mx-auto mb-1" />
+          <p className="text-[10px] text-gray-600 font-mono">All clear</p>
+        </div>
+      </WidgetCard>
+    );
+  }
+
+  return (
+    <WidgetCard label="REMINDERS" onRefresh={fetchReminders}>
+      <div className="space-y-1.5">
+        {/* Overdue */}
+        {data?.overdue && data.overdue.length > 0 && (
+          <div className="space-y-1">
+            {data.overdue.map((r) => (
+              <div key={r.id} className="flex items-start gap-1.5">
+                <AlertTriangle size={9} className="text-hud-red mt-0.5 flex-shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-[10px] text-hud-red truncate leading-tight">{r.message}</p>
+                  <p className="text-[8px] text-gray-600 font-mono">
+                    {formatReminderTime(r.remind_at)}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Upcoming */}
+        {data?.upcoming && data.upcoming.length > 0 && (
+          <div className={clsx('space-y-1', { 'pt-1.5 border-t border-white/[0.04]': data?.overdue && data.overdue.length > 0 })}>
+            {data.upcoming.map((r) => (
+              <div key={r.id} className="flex items-start gap-1.5">
+                <Bell size={9} className="text-hud-amber mt-0.5 flex-shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-[10px] text-gray-400 truncate leading-tight">{r.message}</p>
+                  <p className="text-[8px] text-gray-600 font-mono">
+                    {formatReminderTime(r.remind_at)}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </WidgetCard>
+  );
+}
+
 // ── Widget Card (shared wrapper) ───────────────────────────────────────
 
 const _WIDGET_CLIP = 'polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px))';
@@ -482,19 +799,39 @@ function WidgetCard({
   label,
   children,
   onRefresh,
+  urgencyLevel,
 }: {
   label: string;
   children: React.ReactNode;
   onRefresh?: () => void;
+  urgencyLevel?: UrgencyLevel;
 }) {
+  const borderColor = urgencyLevel ? getUrgencyColor(urgencyLevel) : undefined;
+  const borderGlow = urgencyLevel ? getUrgencyGlow(urgencyLevel) : undefined;
+
   return (
-    <div className="relative px-4 py-3" style={{
-      background: 'rgba(8, 12, 24, 0.45)',
-      backdropFilter: 'blur(24px) saturate(1.3)',
-      WebkitBackdropFilter: 'blur(24px) saturate(1.3)',
-      border: '1px solid rgba(0, 212, 255, 0.18)',
-      clipPath: _WIDGET_CLIP,
-    }}>
+    <div
+      className="relative px-4 py-3"
+      style={{
+        background: 'rgba(8, 12, 24, 0.45)',
+        backdropFilter: 'blur(24px) saturate(1.3)',
+        WebkitBackdropFilter: 'blur(24px) saturate(1.3)',
+        border: '1px solid rgba(0, 212, 255, 0.18)',
+        clipPath: _WIDGET_CLIP,
+      }}
+    >
+      {/* Urgency indicator — left border stripe */}
+      {urgencyLevel && (
+        <div
+          className="absolute left-0 top-3 bottom-3 w-[2px] rounded-full"
+          style={{
+            backgroundColor: borderColor,
+            boxShadow: borderGlow,
+            transition: 'background-color 0.4s ease, box-shadow 0.4s ease',
+          }}
+        />
+      )}
+
       {/* Diagonal border accents at cut corners */}
       <svg className="absolute top-0 right-0 w-3 h-3 pointer-events-none" viewBox="0 0 12 12" fill="none">
         <line x1="0" y1="0" x2="12" y2="12" stroke="rgba(0,212,255,0.2)" strokeWidth="1" />
@@ -514,7 +851,7 @@ function WidgetCard({
   );
 }
 
-// ── Helper ─────────────────────────────────────────────────────────────
+// ── Helpers ────────────────────────────────────────────────────────────
 
 function formatEventTime(isoStr: string): string {
   if (!isoStr) return '';
@@ -528,24 +865,113 @@ function formatEventTime(isoStr: string): string {
   }
 }
 
+function formatReminderTime(isoStr: string): string {
+  if (!isoStr) return '';
+  try {
+    const d = new Date(isoStr);
+    const now = new Date();
+    const diffMs = d.getTime() - now.getTime();
+    const diffMin = Math.round(diffMs / 60000);
+
+    if (diffMin < 0) {
+      const absMin = Math.abs(diffMin);
+      if (absMin < 60) return `${absMin}m overdue`;
+      if (absMin < 1440) return `${Math.round(absMin / 60)}h overdue`;
+      return `${Math.round(absMin / 1440)}d overdue`;
+    }
+    if (diffMin < 60) return `in ${diffMin}m`;
+    if (diffMin < 1440) return `in ${Math.round(diffMin / 60)}h`;
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  } catch {
+    return isoStr;
+  }
+}
+
+// ── Widget renderer (maps type string to component) ───────────────────
+
+function renderWidget(type: string, urgencyLevel: UrgencyLevel, key: string) {
+  // Wrap each widget in a container that carries the urgency indicator
+  // The container provides the reorder animation target and urgency border
+  switch (type) {
+    case 'weather':
+      return <WeatherWidget key={key} />;
+    case 'calendar':
+      return <CalendarWidget key={key} />;
+    case 'health':
+      return <HealthWidget key={key} />;
+    case 'email':
+      return <EmailWidget key={key} />;
+    case 'reminders':
+      return <RemindersWidget key={key} />;
+    case 'system':
+      return <QuickStatsWidget key={key} />;
+    default:
+      return null;
+  }
+}
+
 // ── Main Panel ─────────────────────────────────────────────────────────
 
 export default function WidgetPanel() {
   const panelRef = useRef<HTMLDivElement>(null);
   const token = useAuthStore((s) => s.token);
   const [visible, setVisible] = useState(true);
+  const [layout, setLayout] = useState<WidgetLayoutItem[] | null>(null);
+  const [layoutReady, setLayoutReady] = useState(false);
+  const prevOrderRef = useRef<string[]>([]);
+
+  // Fetch layout from backend
+  const fetchLayout = useCallback(async () => {
+    try {
+      const res = await api.get<LayoutResponse>('/widgets/layout');
+      setLayout(res.widgets);
+      setLayoutReady(true);
+    } catch {
+      // Fallback: show all widgets in default order
+      setLayout(null);
+      setLayoutReady(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (token) {
+      fetchLayout();
+      const interval = setInterval(fetchLayout, 3 * 60 * 1000); // 3 min
+      return () => clearInterval(interval);
+    }
+  }, [token, fetchLayout]);
+
+  // Animate reorder when layout changes
+  useEffect(() => {
+    if (!panelRef.current || !layout) return;
+
+    const currentOrder = layout.filter((w) => w.visible).map((w) => w.type);
+    const prevOrder = prevOrderRef.current;
+
+    // Only animate if order actually changed (not first load)
+    if (prevOrder.length > 0 && JSON.stringify(prevOrder) !== JSON.stringify(currentOrder)) {
+      const children = panelRef.current.querySelectorAll('[data-widget]');
+      gsap.fromTo(
+        children,
+        { opacity: 0.6, y: 8 },
+        { opacity: 1, y: 0, duration: 0.35, stagger: 0.05, ease: 'power2.out' },
+      );
+    }
+
+    prevOrderRef.current = currentOrder;
+  }, [layout]);
 
   // Boot animation
   useEffect(() => {
-    if (panelRef.current) {
-      const cards = panelRef.current.querySelectorAll('.glass');
+    if (panelRef.current && layoutReady) {
+      const cards = panelRef.current.querySelectorAll('[data-widget]');
       gsap.fromTo(
         cards,
         { opacity: 0, x: 20, scale: 0.97 },
-        { opacity: 1, x: 0, scale: 1, duration: 0.4, stagger: 0.08, delay: 0.6, ease: 'power2.out' },
+        { opacity: 1, x: 0, scale: 1, duration: 0.4, stagger: 0.08, delay: 0.3, ease: 'power2.out' },
       );
     }
-  }, []);
+  }, [layoutReady]);
 
   // Toggle via custom event
   useEffect(() => {
@@ -553,6 +979,22 @@ export default function WidgetPanel() {
     window.addEventListener('jarvis-widgets-toggle', handler);
     return () => window.removeEventListener('jarvis-widgets-toggle', handler);
   }, []);
+
+  // Build the ordered, visible widget list
+  const visibleWidgets = useMemo(() => {
+    if (!layout) {
+      // Fallback: default order when layout endpoint is unavailable
+      return [
+        { type: 'weather', urgency: 3, visible: true },
+        { type: 'calendar', urgency: 3, visible: true },
+        { type: 'health', urgency: 3, visible: true },
+        { type: 'email', urgency: 2, visible: true },
+        { type: 'reminders', urgency: 2, visible: true },
+        { type: 'system', urgency: 1.5, visible: true },
+      ] as WidgetLayoutItem[];
+    }
+    return layout.filter((w) => w.visible);
+  }, [layout]);
 
   if (!token || !visible) return null;
 
@@ -565,10 +1007,32 @@ export default function WidgetPanel() {
         WebkitMaskImage: 'linear-gradient(to bottom, transparent 0px, black 8px, black calc(100% - 8px), transparent 100%)',
       }}
     >
-      <WeatherWidget />
-      <CalendarWidget />
+      {visibleWidgets.map((w) => {
+        const urgency = getUrgencyLevel(w.urgency);
+        return (
+          <div
+            key={w.type}
+            data-widget={w.type}
+            className="relative"
+            style={{
+              transition: 'transform 0.35s ease, opacity 0.35s ease',
+            }}
+          >
+            {/* Urgency left-border indicator */}
+            <div
+              className="absolute left-0 top-2 bottom-2 w-[2px] rounded-full z-10"
+              style={{
+                backgroundColor: getUrgencyColor(urgency),
+                boxShadow: getUrgencyGlow(urgency),
+                transition: 'background-color 0.5s ease, box-shadow 0.5s ease',
+              }}
+            />
+            {renderWidget(w.type, urgency, w.type)}
+          </div>
+        );
+      })}
+      {/* Always show Google Connect (only renders if not connected) */}
       <GoogleConnectWidget />
-      <QuickStatsWidget />
     </div>
   );
 }

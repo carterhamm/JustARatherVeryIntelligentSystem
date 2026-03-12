@@ -22,6 +22,7 @@ import app.models.reminder  # noqa: F401
 import app.models.passkey  # noqa: F401
 import app.models.contact  # noqa: F401
 import app.models.health  # noqa: F401
+import app.models.focus_session  # noqa: F401
 
 # Alembic Config object — gives access to alembic.ini values
 config = context.config

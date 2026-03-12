@@ -342,6 +342,12 @@ def _get_tool_status(user_prefs: dict | None = None) -> str:
     # Health data (Apple HealthKit via iOS app)
     lines.append("- Health data (HealthKit): CONNECTED (steps, heart rate, sleep, workouts via JARVIS iOS app)")
 
+    # Focus / deep work sessions — always available (DB-backed)
+    lines.append("- Focus sessions (deep work tracker): CONNECTED (start/end sessions, track productivity, view stats)")
+
+    # MCP Discovery — always available (uses public GitHub API)
+    lines.append("- MCP Discovery (GitHub): CONNECTED (search for new capabilities and integrations)")
+
     # Calculator, date/time — always available
     lines.append("- Calculator, date/time: ALWAYS AVAILABLE")
 

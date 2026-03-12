@@ -1,11 +1,19 @@
 """Cron-triggered endpoints for JARVIS autonomous routines.
 
-Secured with SERVICE_API_KEY — only Railway cron or daemon processes
+Secured with SERVICE_API_KEY -- only Railway cron or daemon processes
 should call these endpoints.
+
+Includes:
+  - Morning routine (enhanced with focus stats, habits, travel time)
+  - Research daemon cycle
+  - Heartbeat (enhanced with urgency scoring, focus awareness, aggregation)
+  - Focus session management
+  - Engagement tracking status
 """
 
 from __future__ import annotations
 
+import json
 import logging
 from datetime import datetime
 from typing import Any
@@ -122,23 +130,38 @@ async def morning_routine(
     current_user: User = Depends(get_current_active_user_or_service),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
-    """Execute the JARVIS morning routine.
+    """Execute the JARVIS morning routine (enhanced).
 
-    1. Gather weather, calendar, news
-    2. Compose briefing script via Gemini
+    1. Gather weather, calendar, news, focus stats, overnight emails, reminders
+    2. Compose enriched briefing script via Gemini
     3. Generate ElevenLabs audio
-    4. Play on MacBook → AirPlay to Apple TV
+    4. Play on MacBook -> AirPlay to Apple TV
     5. Start music
     """
+    from app.services.heartbeat import (
+        gather_enhanced_morning_data,
+        get_enhanced_morning_prompt,
+    )
+
     logger.info("Morning routine triggered")
 
-    # 1. Gather data
-    data = await _gather_morning_data()
-    logger.info("Morning data gathered: %s", list(data.keys()))
+    # 1. Gather data -- try enhanced first, fall back to legacy
+    owner = await _get_owner(db)
+    owner_id = str(owner.id)
+
+    try:
+        data = await gather_enhanced_morning_data(owner_id, db)
+        morning_prompt_template = get_enhanced_morning_prompt()
+        logger.info("Enhanced morning data gathered: %s", list(data.keys()))
+    except Exception as exc:
+        logger.warning("Enhanced morning data failed (%s), using legacy", exc)
+        data = await _gather_morning_data()
+        morning_prompt_template = _MORNING_PROMPT
+        logger.info("Legacy morning data gathered: %s", list(data.keys()))
 
     # 2. Generate briefing script via LLM
     llm = get_llm_client()
-    prompt = _MORNING_PROMPT.format(data="\n".join(f"{k}: {v}" for k, v in data.items()))
+    prompt = morning_prompt_template.format(data="\n".join(f"{k}: {v}" for k, v in data.items()))
 
     response = await llm.chat_completion(
         messages=[
@@ -340,10 +363,13 @@ async def heartbeat_cron(
 async def heartbeat_status(
     current_user: User = Depends(get_current_active_user_or_service),
 ) -> dict[str, Any]:
-    """Return the latest heartbeat result and today's log."""
+    """Return the latest heartbeat result, today's log, and focus session state."""
     from datetime import datetime as _dt
-    from app.services.heartbeat import get_contact_method, _MTN
-    import json as _json
+    from app.services.heartbeat import (
+        get_contact_method,
+        _MTN,
+        _check_focus_session,
+    )
 
     r = await get_redis_client()
 
@@ -353,12 +379,28 @@ async def heartbeat_status(
 
     # Last result
     last_raw = await r.cache_get("jarvis:heartbeat:last_result")
-    last_result = _json.loads(last_raw) if last_raw else None
+    last_result = json.loads(last_raw) if last_raw else None
 
     # Today's log
     today = now.strftime("%Y-%m-%d")
     log_raw = await r.cache_get(f"jarvis:heartbeat:log:{today}")
-    today_log = _json.loads(log_raw) if log_raw else []
+    today_log = json.loads(log_raw) if log_raw else []
+
+    # Focus session state
+    owner_id = str(current_user.id)
+    focus = await _check_focus_session(owner_id, r)
+
+    # Focus queue count
+    queue_raw = await r.cache_get(f"jarvis:heartbeat:focus_queue:{owner_id}")
+    queued_count = len(json.loads(queue_raw)) if queue_raw else 0
+
+    # Today's urgency score distribution
+    urgency_distribution: dict[str, int] = {}
+    for entry in today_log:
+        for cat, score in entry.get("urgency_scores", {}).items():
+            urgency_distribution[cat] = max(
+                urgency_distribution.get(cat, 0), score
+            )
 
     return {
         "current_time": now.strftime("%I:%M %p %Z"),
@@ -366,4 +408,218 @@ async def heartbeat_status(
         "last_heartbeat": last_result,
         "today_log": today_log,
         "today_run_count": len(today_log),
+        "focus_session": focus,
+        "queued_notifications": queued_count,
+        "today_peak_urgency_by_category": urgency_distribution,
+    }
+
+
+# ===================================================================
+# Focus session management
+# ===================================================================
+
+
+@router.post("/focus/start")
+async def start_focus(
+    payload: dict[str, Any],
+    current_user: User = Depends(get_current_active_user_or_service),
+) -> dict[str, Any]:
+    """Start a focus session for the current user.
+
+    Suppresses all heartbeat notifications except urgency 10 (emergencies).
+    Suppressed notifications are queued and delivered when the session ends.
+
+    Payload:
+        duration_minutes (int): How long the session lasts (default: 60)
+        label (str): Optional label like "deep work", "coding", "meeting"
+    """
+    from app.services.heartbeat import start_focus_session
+
+    owner_id = str(current_user.id)
+    duration = payload.get("duration_minutes", 60)
+    label = payload.get("label", "")
+
+    result = await start_focus_session(owner_id, duration, label)
+    logger.info(
+        "Focus session started: user=%s duration=%d label=%s",
+        current_user.username, duration, label,
+    )
+    return result
+
+
+@router.post("/focus/end")
+async def end_focus(
+    current_user: User = Depends(get_current_active_user_or_service),
+) -> dict[str, Any]:
+    """End the current focus session and deliver queued notifications.
+
+    Returns any notifications that were suppressed during the session.
+    """
+    from app.services.heartbeat import end_focus_session
+
+    owner_id = str(current_user.id)
+    result = await end_focus_session(owner_id)
+    logger.info(
+        "Focus session ended: user=%s status=%s queued=%d",
+        current_user.username,
+        result["status"],
+        len(result.get("queued_notifications", [])),
+    )
+    return result
+
+
+@router.get("/focus/status")
+async def focus_status(
+    current_user: User = Depends(get_current_active_user_or_service),
+) -> dict[str, Any]:
+    """Check if a focus session is currently active."""
+    from app.services.heartbeat import _check_focus_session, _MTN
+
+    r = await get_redis_client()
+    owner_id = str(current_user.id)
+
+    session = await _check_focus_session(owner_id, r)
+
+    # Check queue
+    queue_raw = await r.cache_get(f"jarvis:heartbeat:focus_queue:{owner_id}")
+    queued = json.loads(queue_raw) if queue_raw else []
+
+    # Today's focus stats
+    today = datetime.now(tz=_MTN).strftime("%Y-%m-%d")
+    stats_raw = await r.cache_get(f"jarvis:focus:daily_stats:{owner_id}:{today}")
+    today_stats = json.loads(stats_raw) if stats_raw else {
+        "sessions": 0, "total_minutes": 0, "labels": [],
+    }
+
+    return {
+        "active": session is not None,
+        "session": session,
+        "queued_notifications": len(queued),
+        "today_stats": today_stats,
+    }
+
+
+# ===================================================================
+# Engagement / learning metrics
+# ===================================================================
+
+
+@router.get("/heartbeat/engagement")
+async def heartbeat_engagement(
+    current_user: User = Depends(get_current_active_user_or_service),
+) -> dict[str, Any]:
+    """Return notification engagement statistics.
+
+    Shows how the user interacts with different notification categories,
+    enabling the urgency scoring to learn from patterns over time.
+    """
+    from app.services.heartbeat import _get_engagement_stats, _ENGAGEMENT_KEY_PREFIX
+
+    r = await get_redis_client()
+    owner_id = str(current_user.id)
+
+    categories = ["email", "calendar", "weather", "reminders", "research"]
+    stats_by_category: dict[str, Any] = {}
+
+    for cat in categories:
+        stats_by_category[cat] = await _get_engagement_stats(cat, r, owner_id)
+
+    # Overall stats
+    log_key = f"{_ENGAGEMENT_KEY_PREFIX}:{owner_id}:log"
+    raw = await r.cache_get(log_key)
+    total_entries = 0
+    total_responded = 0
+    if raw:
+        entries = json.loads(raw)
+        total_entries = len(entries)
+        total_responded = sum(1 for e in entries if e.get("responded"))
+
+    return {
+        "by_category": stats_by_category,
+        "overall": {
+            "total_notifications": total_entries,
+            "total_responded": total_responded,
+            "response_rate": round(total_responded / total_entries, 2) if total_entries else 0,
+        },
+    }
+
+
+@router.post("/heartbeat/engagement/record-response")
+async def record_engagement_response(
+    current_user: User = Depends(get_current_active_user_or_service),
+) -> dict[str, str]:
+    """Record that the user responded to a recent notification.
+
+    Call this when the user sends a message shortly after a heartbeat
+    notification, so the system learns which notifications are valuable.
+    """
+    from app.services.heartbeat import record_user_response
+
+    r = await get_redis_client()
+    owner_id = str(current_user.id)
+    await record_user_response(owner_id, r)
+    return {"status": "recorded"}
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# MCP Discovery — weekly scan
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+@router.post("/mcp-scan")
+async def mcp_scan(
+    current_user: User = Depends(get_current_active_user_or_service),
+) -> dict[str, Any]:
+    """Run a full MCP server discovery scan and cache the results.
+
+    Searches GitHub for MCP servers across multiple queries, scores and ranks
+    them, then stores the top 100 in Redis with a 24-hour TTL.
+
+    Intended to be called weekly by a Railway cron job.  The scan respects
+    GitHub's unauthenticated rate limit (10 req/min) so it takes 1–2 minutes.
+    """
+    from app.services.mcp_discovery import run_mcp_scan
+
+    logger.info("MCP scan triggered by user=%s", current_user.username)
+    try:
+        result = await run_mcp_scan()
+    except Exception as exc:
+        logger.exception("MCP scan failed: %s", exc)
+        raise HTTPException(status_code=500, detail=f"MCP scan error: {exc}")
+    return result
+
+
+@router.get("/mcp-scan/status")
+async def mcp_scan_status(
+    current_user: User = Depends(get_current_active_user_or_service),
+) -> dict[str, Any]:
+    """Return the status and summary of the latest MCP discovery scan."""
+    from app.services.mcp_discovery import get_cached_scan
+
+    r = await get_redis_client()
+    last_scan_ts = await r.cache_get("jarvis:mcp:last_scan")
+
+    cached = await get_cached_scan()
+    if cached:
+        return {
+            "status": "available",
+            "last_scan": last_scan_ts or cached.get("scanned_at"),
+            "total_servers": cached.get("total_found", 0),
+            "elapsed_seconds": cached.get("elapsed_seconds"),
+            "top_servers": [
+                {
+                    "full_name": s.get("full_name"),
+                    "stars": s.get("stars"),
+                    "score": s.get("score"),
+                    "capabilities": s.get("capabilities", []),
+                    "description": (s.get("description") or "")[:80],
+                }
+                for s in cached.get("servers", [])[:10]
+            ],
+        }
+
+    return {
+        "status": "no_scan",
+        "last_scan": last_scan_ts,
+        "message": "No scan results cached. POST to /cron/mcp-scan to run one.",
     }
