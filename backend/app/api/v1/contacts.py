@@ -10,6 +10,7 @@ from __future__ import annotations
 import base64
 import csv
 import io
+import json
 import logging
 import uuid
 from typing import Any, Optional
@@ -50,6 +51,8 @@ class ContactCreate(BaseModel):
     country: Optional[str] = None
     birthday: Optional[str] = None
     url: Optional[str] = None
+    raw_vcard: Optional[str] = None
+    extra_fields: Optional[str] = None  # JSON string
 
 
 class ContactResponse(BaseModel):
@@ -71,6 +74,8 @@ class ContactResponse(BaseModel):
     country: Optional[str] = None
     birthday: Optional[str] = None
     url: Optional[str] = None
+    raw_vcard: Optional[str] = None
+    extra_fields: Optional[str] = None
     created_at: str
 
 
@@ -86,7 +91,7 @@ class UploadResponse(BaseModel):
 _FIELDS = [
     "first_name", "last_name", "phone", "email", "company", "title", "address", "notes",
     "photo", "photo_content_type", "street", "city", "state", "postal_code", "country",
-    "birthday", "url",
+    "birthday", "url", "raw_vcard", "extra_fields",
 ]
 
 
@@ -108,11 +113,49 @@ def _decrypt_contact(contact: Contact) -> dict[str, Any]:
     return result
 
 
+def _serialize_vcard_value(val: Any) -> Any:
+    """Safely serialize a vCard property value to a JSON-compatible type."""
+    if val is None:
+        return None
+    if isinstance(val, bytes):
+        return base64.b64encode(val).decode("ascii")
+    if isinstance(val, (str, int, float, bool)):
+        return val
+    if hasattr(val, "isoformat"):
+        return val.isoformat()
+    if isinstance(val, (list, tuple)):
+        return [_serialize_vcard_value(v) for v in val]
+    # For vobject address/name objects, convert to string
+    return str(val)
+
+
 def _parse_vcard(content: str) -> list[dict[str, Any]]:
-    """Parse vCard content into a list of contact dicts."""
+    """Parse vCard content into a list of contact dicts.
+
+    Stores ALL vCard properties — known fields go into dedicated columns
+    for searchability, and the complete vCard is preserved in raw_vcard.
+    Any properties not mapped to a column go into extra_fields (JSON).
+    """
     contacts = []
+    # Split raw content into individual vCards for raw_vcard storage
+    raw_cards: list[str] = []
+    current: list[str] = []
+    for line in content.splitlines(keepends=True):
+        current.append(line)
+        if line.strip().upper() == "END:VCARD":
+            raw_cards.append("".join(current))
+            current = []
+
+    card_idx = 0
     for vcard in vobject.readComponents(content):
         c: dict[str, Any] = {}
+
+        # Store the raw vCard text verbatim
+        if card_idx < len(raw_cards):
+            c["raw_vcard"] = raw_cards[card_idx]
+        card_idx += 1
+
+        # ── Known fields (mapped to columns) ──
         # Name
         if hasattr(vcard, "n"):
             n = vcard.n.value
@@ -151,7 +194,6 @@ def _parse_vcard(content: str) -> list[dict[str, Any]]:
             adr_country = getattr(adr, "country", "") or ""
             parts = [adr_street, adr_city, adr_region, adr_code, adr_country]
             c["address"] = ", ".join(p for p in parts if p)
-            # Structured address components
             if adr_street:
                 c["street"] = adr_street
             if adr_city:
@@ -169,7 +211,6 @@ def _parse_vcard(content: str) -> list[dict[str, Any]]:
         if hasattr(vcard, "photo"):
             photo_prop = vcard.photo
             photo_val = photo_prop.value
-            # Determine content type from params
             params = getattr(photo_prop, "params", {})
             content_type = None
             if "TYPE" in params:
@@ -184,7 +225,6 @@ def _parse_vcard(content: str) -> list[dict[str, Any]]:
             elif "MEDIATYPE" in params:
                 mt = params["MEDIATYPE"]
                 content_type = mt[0] if isinstance(mt, list) else mt
-            # Encode binary data as base64; keep already-encoded data as-is
             encoding = params.get("ENCODING", [])
             if isinstance(encoding, list):
                 encoding = encoding[0] if encoding else ""
@@ -192,15 +232,13 @@ def _parse_vcard(content: str) -> list[dict[str, Any]]:
             if isinstance(photo_val, bytes):
                 c["photo"] = base64.b64encode(photo_val).decode("ascii")
             elif encoding == "B" or encoding == "BASE64":
-                # Already base64-encoded string
                 c["photo"] = photo_val.replace("\n", "").replace("\r", "").replace(" ", "")
             else:
-                # Could be a URL or already-encoded string
                 c["photo"] = photo_val
             if content_type:
                 c["photo_content_type"] = content_type
             elif not content_type and isinstance(photo_val, bytes):
-                c["photo_content_type"] = "image/jpeg"  # sensible default
+                c["photo_content_type"] = "image/jpeg"
         # Birthday
         if hasattr(vcard, "bday"):
             bday_val = vcard.bday.value
@@ -211,6 +249,66 @@ def _parse_vcard(content: str) -> list[dict[str, Any]]:
         # URL
         if hasattr(vcard, "url"):
             c["url"] = vcard.url.value
+
+        # ── Capture ALL remaining properties into extra_fields ──
+        _KNOWN_PROPS = {"n", "fn", "tel", "email", "org", "title", "adr", "note",
+                        "photo", "bday", "url", "version", "prodid", "rev", "uid"}
+        extra: dict[str, Any] = {}
+        for child in vcard.getChildren():
+            prop_name = child.name.lower()
+            if prop_name in _KNOWN_PROPS:
+                continue
+            val = _serialize_vcard_value(child.value)
+            params = {k: v for k, v in (getattr(child, "params", {}) or {}).items()}
+            entry = {"value": val}
+            if params:
+                entry["params"] = {k: v if len(v) > 1 else v[0] for k, v in params.items()}
+            # Multiple values for same property (e.g., multiple phones, IMs)
+            if prop_name in extra:
+                existing = extra[prop_name]
+                if isinstance(existing, list):
+                    existing.append(entry)
+                else:
+                    extra[prop_name] = [existing, entry]
+            else:
+                extra[prop_name] = entry
+
+        # Also capture ALL phone numbers and emails (not just first)
+        if hasattr(vcard, "tel_list") and len(vcard.tel_list) > 1:
+            extra["all_phones"] = []
+            for tel in vcard.tel_list:
+                tel_params = {k: v for k, v in (getattr(tel, "params", {}) or {}).items()}
+                tel_entry: dict[str, Any] = {"value": tel.value}
+                if tel_params:
+                    tel_entry["params"] = {k: v if len(v) > 1 else v[0] for k, v in tel_params.items()}
+                extra["all_phones"].append(tel_entry)
+        if hasattr(vcard, "email_list") and len(vcard.email_list) > 1:
+            extra["all_emails"] = []
+            for em in vcard.email_list:
+                em_params = {k: v for k, v in (getattr(em, "params", {}) or {}).items()}
+                em_entry: dict[str, Any] = {"value": em.value}
+                if em_params:
+                    em_entry["params"] = {k: v if len(v) > 1 else v[0] for k, v in em_params.items()}
+                extra["all_emails"].append(em_entry)
+        # Multiple addresses
+        if hasattr(vcard, "adr_list") and len(vcard.adr_list) > 1:
+            extra["all_addresses"] = []
+            for a in vcard.adr_list:
+                av = a.value
+                adr_dict = {
+                    "street": getattr(av, "street", "") or "",
+                    "city": getattr(av, "city", "") or "",
+                    "region": getattr(av, "region", "") or "",
+                    "code": getattr(av, "code", "") or "",
+                    "country": getattr(av, "country", "") or "",
+                }
+                a_params = {k: v for k, v in (getattr(a, "params", {}) or {}).items()}
+                if a_params:
+                    adr_dict["params"] = {k: v if len(v) > 1 else v[0] for k, v in a_params.items()}
+                extra["all_addresses"].append(adr_dict)
+
+        if extra:
+            c["extra_fields"] = json.dumps(extra, ensure_ascii=False)
 
         contacts.append(c)
     return contacts

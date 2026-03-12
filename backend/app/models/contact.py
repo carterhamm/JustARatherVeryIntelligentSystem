@@ -56,6 +56,10 @@ class Contact(UUIDMixin, TimestampMixin, Base):
     birthday: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
+    # Schema-flexible storage: preserves ALL vCard data without loss
+    raw_vcard: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    extra_fields: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON blob of all additional fields
+
     # Relationships
     user: Mapped["User"] = relationship("User", lazy="selectin")
 
