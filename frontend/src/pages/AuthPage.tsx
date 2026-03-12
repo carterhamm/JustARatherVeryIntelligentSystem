@@ -668,10 +668,9 @@ export default function AuthPage() {
               <button
                 type="submit"
                 disabled={isLoading || !identifier.trim()}
-                className="relative jarvis-button-gold w-full py-3 text-sm font-display font-semibold tracking-wider uppercase flex items-center justify-center gap-2"
+                className="jarvis-button-gold w-full py-3 text-sm font-display font-semibold tracking-wider uppercase flex items-center justify-center gap-2"
                 style={{ opacity: isLoading || !identifier.trim() ? 0.4 : 1 }}
               >
-                <BtnAccents color="rgba(240,165,0,0.2)" />
                 {isLoading ? (
                   <Loader2 size={16} className="animate-spin" />
                 ) : (

@@ -1062,14 +1062,10 @@ window.dispatchEvent(new Event('novnc-loaded'));
 
 
 @router.get("/mac-mini", response_class=HTMLResponse)
-async def vnc_viewer(
-    _user: TokenPayload = Depends(_get_user_from_token_or_query),
-) -> HTMLResponse:
+async def vnc_viewer() -> HTMLResponse:
     """Serve the JARVIS-styled VNC viewer page.
 
-    Requires a valid JWT access token passed via:
-    - ``?token=<jwt>`` query parameter
-    - ``Authorization: Bearer <jwt>`` header
-    - ``access_token`` cookie
+    The page itself is public — the actual security layer is the VNC
+    password required to connect to the Mac Mini's VNC server.
     """
     return HTMLResponse(content=VNC_PAGE_HTML, status_code=200)
