@@ -19,9 +19,8 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.dependencies import get_current_active_user_or_service
+from app.core.dependencies import get_current_active_user_or_service, get_db
 from app.core.encryption import decrypt_message, encrypt_message
-from app.db import get_db
 from app.models.contact import Contact
 from app.models.user import User
 
