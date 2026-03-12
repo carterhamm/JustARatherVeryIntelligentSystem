@@ -118,11 +118,11 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         # Content Security Policy — restrict resource loading
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline'; "
-            "style-src 'self' 'unsafe-inline'; "
-            "img-src 'self' data: blob:; "
-            "connect-src 'self' wss: ws:; "
-            "font-src 'self' data:; "
+            "script-src 'self' 'unsafe-inline' https://esm.sh https://cdn.skypack.dev https://cdn.apple-mapkit.com; "
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+            "img-src 'self' data: blob: https://*.apple-mapkit.com https://*.apple.com; "
+            "connect-src 'self' wss: ws: https://esm.sh https://cdn.skypack.dev https://cdn.apple-mapkit.com https://*.apple-mapkit.com https://*.apple.com https://nominatim.openstreetmap.org; "
+            "font-src 'self' data: https://fonts.gstatic.com; "
             "frame-ancestors 'none'"
         )
 
