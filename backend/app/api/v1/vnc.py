@@ -769,9 +769,14 @@ loadNoVNC();
     <div class="login-body">
       <form id="vnc-login-form">
         <div class="input-group">
-          <label class="input-label" for="vnc-password">VNC Password</label>
+          <label class="input-label" for="vnc-username">Username</label>
+          <input class="input-field" type="text" id="vnc-username"
+                 value="carter.hammond" placeholder="macOS username" autocomplete="username" autofocus>
+        </div>
+        <div class="input-group">
+          <label class="input-label" for="vnc-password">Password</label>
           <input class="input-field" type="password" id="vnc-password"
-                 placeholder="Enter VNC password" autocomplete="current-password" autofocus>
+                 placeholder="Enter password" autocomplete="current-password">
         </div>
         <button class="connect-btn" type="submit" id="connect-btn">Establish Connection</button>
         <div class="login-error" id="login-error"></div>
@@ -817,6 +822,7 @@ loadNoVNC();
   const loginOverlay     = document.getElementById('login-overlay');
   const connectingOverlay = document.getElementById('connecting-overlay');
   const loginForm        = document.getElementById('vnc-login-form');
+  const usernameInput    = document.getElementById('vnc-username');
   const passwordInput    = document.getElementById('vnc-password');
   const connectBtn       = document.getElementById('connect-btn');
   const loginError       = document.getElementById('login-error');
@@ -878,7 +884,12 @@ loadNoVNC();
   }
 
   // ── Connect ────────────────────────────────────────────
-  async function connect(password) {
+  let savedUsername = '';
+  let savedPassword = '';
+
+  async function connect(username, password) {
+    savedUsername = username;
+    savedPassword = password;
     loginOverlay.classList.add('hidden');
     connectingOverlay.classList.add('active');
     setStatus(false, 'Loading VNC library...');
@@ -914,7 +925,7 @@ loadNoVNC();
 
     try {
       rfb = new RFB(vncContainer, WEBSOCKIFY_URL, {
-        credentials: { password: password },
+        credentials: { username: username, password: password },
       });
 
       rfb.scaleViewport = true;
@@ -959,11 +970,25 @@ loadNoVNC();
     rfb = null;
   }
 
-  function onCredentialsRequired() {
+  function onCredentialsRequired(e) {
+    const types = e.detail && e.detail.types ? e.detail.types : [];
+    console.log('[VNC] Credentials required, types:', types);
+
+    // If we have saved creds, try sending them via sendCredentials
+    if (savedUsername && savedPassword && rfb) {
+      const creds = { password: savedPassword };
+      if (types.includes('username')) creds.username = savedUsername;
+      console.log('[VNC] Re-sending credentials with types:', Object.keys(creds));
+      rfb.sendCredentials(creds);
+      savedUsername = '';  // Only retry once
+      savedPassword = '';
+      return;
+    }
+
     connectingOverlay.classList.remove('active');
     loginOverlay.classList.remove('hidden');
-    loginError.textContent = 'VNC password required or incorrect';
-    setStatus(false, 'Auth required');
+    loginError.textContent = 'Authentication failed — server requested: ' + (types.join(', ') || 'password');
+    setStatus(false, 'Auth failed');
     passwordInput.focus();
   }
 
@@ -1011,13 +1036,14 @@ loadNoVNC();
   loginForm.addEventListener('submit', (e) => {
     e.preventDefault();
     loginError.textContent = '';
+    const user = usernameInput.value.trim();
     const pw = passwordInput.value;
     if (!pw) {
       loginError.textContent = 'Password is required';
       return;
     }
     connectBtn.disabled = true;
-    connect(pw).finally(() => { connectBtn.disabled = false; });
+    connect(user, pw).finally(() => { connectBtn.disabled = false; });
   });
 
   btnDisconnect.addEventListener('click', () => {
