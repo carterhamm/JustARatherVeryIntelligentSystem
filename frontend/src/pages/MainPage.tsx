@@ -105,7 +105,6 @@ export default function MainPage() {
       </div>
 
       {/* HUD overlays */}
-      <div className="scanline-overlay" />
       <div className="vignette-overlay" />
       <div className="noise-overlay" />
 

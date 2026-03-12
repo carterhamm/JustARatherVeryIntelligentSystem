@@ -21,5 +21,4 @@ backend/dist
 jarvis_voice_training
 *.wav
 *.log
-*.png
 Website
