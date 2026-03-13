@@ -26,6 +26,7 @@ import {
   Landmark as LandmarkIcon,
   Copy,
   ExternalLink,
+  Eye,
 } from 'lucide-react';
 import clsx from 'clsx';
 
@@ -624,6 +625,148 @@ function MapControls({
 }
 
 // ---------------------------------------------------------------------------
+// Look Around Panel
+// ---------------------------------------------------------------------------
+
+function LookAroundPanel({
+  lat,
+  lng,
+  onClose,
+}: {
+  lat: number;
+  lng: number;
+  onClose: () => void;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const lookAroundRef = useRef<any>(null);
+  const [status, setStatus] = useState<'loading' | 'active' | 'unavailable'>('loading');
+
+  useEffect(() => {
+    const mk = window.mapkit;
+    if (!mk || !containerRef.current) {
+      setStatus('unavailable');
+      return;
+    }
+
+    // Try to initialize MapKit JS Look Around
+    try {
+      if (typeof mk.LookAround === 'function') {
+        const coord = new mk.Coordinate(lat, lng);
+        const la = new mk.LookAround(containerRef.current, coord, {
+          showsDialogControl: true,
+          showsCloseControl: false,
+        });
+        lookAroundRef.current = la;
+        // Listen for errors/availability
+        la.addEventListener('error', () => setStatus('unavailable'));
+        la.addEventListener('load', () => setStatus('active'));
+        // If no event fires after 3 seconds, assume it worked or failed silently
+        const timer = setTimeout(() => {
+          setStatus((s) => (s === 'loading' ? 'active' : s));
+        }, 3000);
+        return () => {
+          clearTimeout(timer);
+          if (lookAroundRef.current?.destroy) lookAroundRef.current.destroy();
+        };
+      } else {
+        setStatus('unavailable');
+      }
+    } catch {
+      setStatus('unavailable');
+    }
+  }, [lat, lng]);
+
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', handleEsc);
+    return () => document.removeEventListener('keydown', handleEsc);
+  }, [onClose]);
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center"
+      style={{ background: 'rgba(0,0,0,0.7)' }}
+      onClick={onClose}
+    >
+      <div
+        className="relative w-[90vw] max-w-[900px] h-[70vh] max-h-[600px] rounded-lg overflow-hidden"
+        style={{
+          background: 'rgba(10, 14, 23, 0.95)',
+          border: '1px solid rgba(0, 212, 255, 0.15)',
+          boxShadow: '0 0 40px rgba(0, 212, 255, 0.08), 0 20px 60px rgba(0,0,0,0.6)',
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div
+          className="flex items-center justify-between px-4 py-2.5"
+          style={{
+            background: 'rgba(0, 0, 0, 0.4)',
+            borderBottom: '1px solid rgba(0, 212, 255, 0.08)',
+          }}
+        >
+          <div className="flex items-center gap-2">
+            <Eye size={14} className="text-jarvis-blue/60" />
+            <span className="text-[10px] font-mono tracking-[0.2em] text-jarvis-blue/60 uppercase">
+              Look Around
+            </span>
+            <span className="text-[9px] font-mono text-gray-500">
+              {lat.toFixed(5)}, {lng.toFixed(5)}
+            </span>
+          </div>
+          <button
+            onClick={onClose}
+            className="w-6 h-6 flex items-center justify-center rounded-full hover:bg-white/[0.06] transition-colors"
+          >
+            <X size={14} className="text-jarvis-blue/40" />
+          </button>
+        </div>
+
+        {/* Look Around container */}
+        <div ref={containerRef} className="w-full" style={{ height: 'calc(100% - 40px)' }}>
+          {status === 'loading' && (
+            <div className="w-full h-full flex flex-col items-center justify-center gap-3">
+              <Loader size={24} className="text-jarvis-blue/40 animate-spin" />
+              <span className="text-[10px] font-mono text-gray-500 tracking-wider">
+                LOADING LOOK AROUND...
+              </span>
+            </div>
+          )}
+          {status === 'unavailable' && (
+            <div className="w-full h-full flex flex-col items-center justify-center gap-4">
+              <Eye size={32} className="text-jarvis-blue/20" />
+              <div className="text-center space-y-2">
+                <p className="text-[11px] font-mono text-gray-400">
+                  Look Around not available for this location
+                </p>
+                <p className="text-[9px] font-mono text-gray-600 max-w-sm">
+                  Coverage is limited to select cities. Try a major urban area, or view in Apple Maps
+                  for the full experience.
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  window.open(
+                    `https://maps.apple.com/?ll=${lat},${lng}&z=17&v=2`,
+                    '_blank',
+                  );
+                }}
+                className="mt-2 px-4 py-2 rounded text-[10px] font-mono tracking-wider text-jarvis-blue/70 border border-jarvis-blue/20 hover:bg-jarvis-blue/5 transition-colors"
+              >
+                OPEN IN APPLE MAPS
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Context Menu (glassmorphic, WagevoCRM-inspired)
 // ---------------------------------------------------------------------------
 
@@ -633,6 +776,7 @@ function MapContextMenu({
   onAddLandmark,
   onCopyCoords,
   onOpenInAppleMaps,
+  onLookAround,
   onClose,
 }: {
   x: number;
@@ -640,6 +784,7 @@ function MapContextMenu({
   onAddLandmark: () => void;
   onCopyCoords: () => void;
   onOpenInAppleMaps: () => void;
+  onLookAround: () => void;
   onClose: () => void;
 }) {
   const menuRef = useRef<HTMLDivElement>(null);
@@ -677,6 +822,7 @@ function MapContextMenu({
   }, [onClose]);
 
   const items = [
+    { icon: Eye, label: 'Look Around', onClick: onLookAround, accent: false },
     { icon: LandmarkIcon, label: 'Add Landmark', onClick: onAddLandmark, accent: false },
     { icon: Copy, label: 'Copy Coordinates', onClick: onCopyCoords, accent: false },
     { icon: ExternalLink, label: 'Open in Apple Maps', onClick: onOpenInAppleMaps, accent: false },
@@ -978,6 +1124,7 @@ export default function MapPage() {
   const [gridVisible, setGridVisible] = useState(false);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [landmarkForm, setLandmarkForm] = useState<{ lat: number; lng: number } | null>(null);
+  const [lookAroundCoords, setLookAroundCoords] = useState<{ lat: number; lng: number } | null>(null);
 
   // ---- Load MapKit JS + initialize map ----
   useEffect(() => {
@@ -1176,6 +1323,21 @@ export default function MapPage() {
           map.selectedAnnotation = null;
         });
         callout.appendChild(closeBtn);
+
+        // Add "Look Around" footer button
+        const footer = document.createElement('div');
+        footer.style.cssText = 'margin-top:8px;padding-top:6px;border-top:1px solid rgba(0,212,255,0.06);display:flex;justify-content:flex-end;';
+        const laBtn = document.createElement('button');
+        laBtn.style.cssText = 'display:flex;align-items:center;gap:4px;font-family:monospace;font-size:9px;color:rgba(0,212,255,0.5);background:none;border:none;cursor:pointer;padding:2px 4px;transition:color 0.2s;';
+        laBtn.innerHTML = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>LOOK AROUND`;
+        laBtn.addEventListener('mouseenter', () => { laBtn.style.color = '#00d4ff'; });
+        laBtn.addEventListener('mouseleave', () => { laBtn.style.color = 'rgba(0,212,255,0.5)'; });
+        laBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          setLookAroundCoords({ lat: c.lat, lng: c.lng });
+        });
+        footer.appendChild(laBtn);
+        callout.appendChild(footer);
 
         // Position callout near the annotation
         const mapContainer = mapContainerRef.current;
@@ -1423,6 +1585,12 @@ export default function MapPage() {
     }
   }, [contextMenu]);
 
+  const handleLookAround = useCallback(() => {
+    if (contextMenu) {
+      setLookAroundCoords({ lat: contextMenu.lat, lng: contextMenu.lng });
+    }
+  }, [contextMenu]);
+
   // ---- Filtered contacts for sidebar ----
   const filteredContacts = useMemo(() => {
     if (!searchQuery.trim()) return geocodedContacts;
@@ -1590,6 +1758,7 @@ export default function MapPage() {
           onAddLandmark={handleAddLandmark}
           onCopyCoords={handleCopyCoords}
           onOpenInAppleMaps={handleOpenInAppleMaps}
+          onLookAround={handleLookAround}
           onClose={() => setContextMenu(null)}
         />
       )}
@@ -1601,6 +1770,15 @@ export default function MapPage() {
           lng={landmarkForm.lng}
           onSave={saveLandmark}
           onCancel={() => setLandmarkForm(null)}
+        />
+      )}
+
+      {/* -- Look Around -- */}
+      {lookAroundCoords && (
+        <LookAroundPanel
+          lat={lookAroundCoords.lat}
+          lng={lookAroundCoords.lng}
+          onClose={() => setLookAroundCoords(null)}
         />
       )}
 
