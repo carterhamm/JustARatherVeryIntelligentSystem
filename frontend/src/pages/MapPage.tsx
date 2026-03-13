@@ -1195,12 +1195,16 @@ export default function MapPage() {
           showsZoomControl: true,
           showsMapTypeControl: false,
           showsPointsOfInterest: true,
+          loadPriority: mk.Map.LoadPriorities.LandCover,
           isZoomEnabled: true,
           isScrollEnabled: true,
           isRotationEnabled: true,
           cameraZoomRange: new mk.CameraZoomRange(200, 20000000),
           padding: new mk.Padding(0, 0, 0, 0),
         });
+
+        // Explicitly clear any POI filter to ensure all labels show
+        try { map.pointOfInterestFilter = null; } catch { /* older API */ }
 
         mapRef.current = map;
 
