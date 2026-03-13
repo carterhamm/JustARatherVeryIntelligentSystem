@@ -41,12 +41,14 @@ struct LookupResponse: Codable {
     let exists: Bool
     let userId: String?
     let username: String?
+    let fullName: String?
     let totpEnabled: Bool?
 
     enum CodingKeys: String, CodingKey {
         case exists
         case userId = "user_id"
         case username
+        case fullName = "full_name"
         case totpEnabled = "totp_enabled"
     }
 }

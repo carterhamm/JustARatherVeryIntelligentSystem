@@ -1,26 +1,23 @@
 import SwiftUI
+import AuthenticationServices
 
 struct LoginView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @State private var showGrid = false
     @State private var ringRotation = 0.0
     @State private var bootComplete = false
-    @FocusState private var focusedField: LoginField?
-
-    private enum LoginField { case identifier, password }
+    @FocusState private var identifierFocused: Bool
+    @FocusState private var totpFocused: Bool
 
     var body: some View {
         ZStack {
-            // Background
             Color.jarvisDeepDark.ignoresSafeArea()
 
-            // Subtle grid
             if showGrid {
                 GridBackground()
                     .opacity(0.3)
             }
 
-            // Scanline
             ScanlineOverlay()
 
             ScrollView {
@@ -29,7 +26,6 @@ struct LoginView: View {
 
                     // JARVIS Core Visual
                     ZStack {
-                        // Outer rotating rings
                         ForEach(0..<3, id: \.self) { i in
                             Circle()
                                 .stroke(
@@ -43,7 +39,6 @@ struct LoginView: View {
                                 .rotationEffect(.degrees(ringRotation * (i % 2 == 0 ? 1 : -0.7)))
                         }
 
-                        // Arc segments on outer ring
                         ForEach(0..<6, id: \.self) { i in
                             ArcSegment(startAngle: Double(i) * 60 + 10, endAngle: Double(i) * 60 + 50)
                                 .stroke(Color.jarvisBlue.opacity(0.4), lineWidth: 2)
@@ -51,7 +46,6 @@ struct LoginView: View {
                                 .rotationEffect(.degrees(ringRotation * 0.3))
                         }
 
-                        // Core glow
                         Circle()
                             .fill(
                                 RadialGradient(
@@ -67,12 +61,10 @@ struct LoginView: View {
                             )
                             .frame(width: 120, height: 120)
 
-                        // Inner ring
                         Circle()
                             .stroke(Color.jarvisBlue.opacity(0.5), lineWidth: 1.5)
                             .frame(width: 80, height: 80)
 
-                        // Core
                         Circle()
                             .fill(Color.jarvisBlue.opacity(0.8))
                             .frame(width: 14, height: 14)
@@ -107,131 +99,16 @@ struct LoginView: View {
 
                     Spacer().frame(height: 44)
 
-                    // Login Form
+                    // Login Steps
                     if bootComplete {
                         VStack(spacing: 14) {
-                            // Identifier field
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text("IDENTIFICATION")
-                                    .font(.system(size: 8, weight: .semibold, design: .monospaced))
-                                    .tracking(2)
-                                    .foregroundColor(.jarvisBlue.opacity(0.5))
-
-                                TextField("", text: $authVM.identifier, prompt: Text("Username or email").foregroundColor(Color.white.opacity(0.2)))
-                                    .font(.system(size: 14, design: .monospaced))
-                                    .foregroundColor(.white)
-                                    .textContentType(.username)
-                                    .textInputAutocapitalization(.never)
-                                    .autocorrectionDisabled()
-                                    .focused($focusedField, equals: .identifier)
-                                    .padding(.horizontal, 16)
-                                    .padding(.vertical, 14)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 8)
-                                            .fill(Color.white.opacity(0.03))
-                                            .overlay(
-                                                RoundedRectangle(cornerRadius: 8)
-                                                    .strokeBorder(
-                                                        focusedField == .identifier
-                                                            ? Color.jarvisBlue.opacity(0.5)
-                                                            : Color.jarvisBlue.opacity(0.15),
-                                                        lineWidth: 1
-                                                    )
-                                            )
-                                    )
-                                    .onSubmit { focusedField = .password }
-                            }
-
-                            // Password field
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text("PASSPHRASE")
-                                    .font(.system(size: 8, weight: .semibold, design: .monospaced))
-                                    .tracking(2)
-                                    .foregroundColor(.jarvisBlue.opacity(0.5))
-
-                                SecureField("", text: $authVM.password, prompt: Text("Enter passphrase").foregroundColor(Color.white.opacity(0.2)))
-                                    .font(.system(size: 14, design: .monospaced))
-                                    .foregroundColor(.white)
-                                    .textContentType(.password)
-                                    .focused($focusedField, equals: .password)
-                                    .padding(.horizontal, 16)
-                                    .padding(.vertical, 14)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 8)
-                                            .fill(Color.white.opacity(0.03))
-                                            .overlay(
-                                                RoundedRectangle(cornerRadius: 8)
-                                                    .strokeBorder(
-                                                        focusedField == .password
-                                                            ? Color.jarvisBlue.opacity(0.5)
-                                                            : Color.jarvisBlue.opacity(0.15),
-                                                        lineWidth: 1
-                                                    )
-                                            )
-                                    )
-                                    .onSubmit {
-                                        focusedField = nil
-                                        Task { await authVM.loginWithPassword() }
-                                    }
-                            }
-
-                            Spacer().frame(height: 6)
-
-                            // Sign In Button
-                            Button {
-                                focusedField = nil
-                                Task { await authVM.loginWithPassword() }
-                            } label: {
-                                HStack(spacing: 12) {
-                                    if authVM.isLoading {
-                                        ProgressView()
-                                            .tint(.jarvisBlue)
-                                            .scaleEffect(0.8)
-                                    } else {
-                                        Image(systemName: "shield.checkered")
-                                            .font(.system(size: 16))
-                                        Text("SIGN IN WITH J.A.R.V.I.S.")
-                                            .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                                            .tracking(2)
-                                    }
-                                }
-                                .foregroundColor(.jarvisBlue)
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 52)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .fill(Color.jarvisBlue.opacity(0.1))
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 8)
-                                                .strokeBorder(Color.jarvisBlue.opacity(0.4), lineWidth: 1)
-                                        )
-                                )
-                            }
-                            .disabled(authVM.isLoading)
-                            .cyanGlow(radius: 12, opacity: 0.2)
-
-                            // Passkey alternative
-                            Button {
-                                // Passkey auth — future enhancement
-                            } label: {
-                                HStack(spacing: 8) {
-                                    Image(systemName: "person.badge.key.fill")
-                                        .font(.system(size: 12))
-                                    Text("USE PASSKEY")
-                                        .font(.system(size: 10, weight: .medium, design: .monospaced))
-                                        .tracking(2)
-                                }
-                                .foregroundColor(.jarvisBlue.opacity(0.4))
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 40)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .fill(Color.clear)
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 8)
-                                                .strokeBorder(Color.jarvisBlue.opacity(0.1), lineWidth: 0.5)
-                                        )
-                                )
+                            switch authVM.authStep {
+                            case .identify:
+                                identifyStep
+                            case .totp:
+                                totpStep
+                            case .authenticate:
+                                authenticateStep
                             }
 
                             if let error = authVM.error {
@@ -248,7 +125,6 @@ struct LoginView: View {
 
                     Spacer().frame(height: 40)
 
-                    // Bottom HUD
                     HStack {
                         Text("STARK INDUSTRIES")
                             .hudLabel()
@@ -273,6 +149,234 @@ struct LoginView: View {
                 bootComplete = true
             }
         }
+    }
+
+    // MARK: - Step 1: Identify
+
+    private var identifyStep: some View {
+        VStack(spacing: 14) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("IDENTIFICATION")
+                    .font(.system(size: 8, weight: .semibold, design: .monospaced))
+                    .tracking(2)
+                    .foregroundColor(.jarvisBlue.opacity(0.5))
+
+                TextField(
+                    "",
+                    text: $authVM.identifier,
+                    prompt: Text("Username or email")
+                        .foregroundColor(Color.white.opacity(0.2))
+                )
+                .font(.system(size: 14, design: .monospaced))
+                .foregroundColor(.white)
+                .textContentType(.username)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .focused($identifierFocused)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
+                .background(inputBackground(focused: identifierFocused))
+                .onSubmit {
+                    identifierFocused = false
+                    Task { await authVM.lookupUser() }
+                }
+            }
+
+            Spacer().frame(height: 6)
+
+            Button {
+                identifierFocused = false
+                Task { await authVM.lookupUser() }
+            } label: {
+                HStack(spacing: 12) {
+                    if authVM.isLoading {
+                        ProgressView()
+                            .tint(.jarvisBlue)
+                            .scaleEffect(0.8)
+                    } else {
+                        Image(systemName: "arrow.right.circle")
+                            .font(.system(size: 16))
+                        Text("CONTINUE")
+                            .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                            .tracking(2)
+                    }
+                }
+                .foregroundColor(.jarvisBlue)
+                .frame(maxWidth: .infinity)
+                .frame(height: 52)
+                .background(buttonBackground)
+            }
+            .disabled(authVM.isLoading || authVM.identifier.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            .cyanGlow(radius: 12, opacity: 0.2)
+        }
+    }
+
+    // MARK: - Step 2: TOTP
+
+    private var totpStep: some View {
+        VStack(spacing: 14) {
+            // Back button
+            backButton
+
+            VStack(spacing: 6) {
+                Text("TWO-FACTOR AUTHENTICATION")
+                    .font(.system(size: 8, weight: .semibold, design: .monospaced))
+                    .tracking(2)
+                    .foregroundColor(.jarvisBlue.opacity(0.5))
+
+                Text("Enter the 6-digit code from your authenticator")
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundColor(.jarvisTextDim)
+                    .multilineTextAlignment(.center)
+            }
+
+            TextField(
+                "",
+                text: $authVM.totpCode,
+                prompt: Text("000000")
+                    .foregroundColor(Color.white.opacity(0.15))
+            )
+            .font(.system(size: 28, weight: .medium, design: .monospaced))
+            .foregroundColor(.jarvisBlue)
+            .multilineTextAlignment(.center)
+            .keyboardType(.numberPad)
+            .textContentType(.oneTimeCode)
+            .focused($totpFocused)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+            .background(inputBackground(focused: totpFocused))
+            .onChange(of: authVM.totpCode) { _, newValue in
+                // Limit to 6 digits
+                let filtered = String(newValue.prefix(6).filter(\.isNumber))
+                if filtered != newValue {
+                    authVM.totpCode = filtered
+                }
+                // Auto-advance when 6 digits entered
+                if filtered.count == 6 {
+                    totpFocused = false
+                    authVM.submitTOTP()
+                }
+            }
+            .onAppear { totpFocused = true }
+
+            Spacer().frame(height: 6)
+
+            Button {
+                totpFocused = false
+                authVM.submitTOTP()
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "checkmark.shield")
+                        .font(.system(size: 16))
+                    Text("VERIFY CODE")
+                        .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                        .tracking(2)
+                }
+                .foregroundColor(.jarvisBlue)
+                .frame(maxWidth: .infinity)
+                .frame(height: 52)
+                .background(buttonBackground)
+            }
+            .disabled(authVM.totpCode.count != 6)
+            .cyanGlow(radius: 12, opacity: 0.2)
+        }
+    }
+
+    // MARK: - Step 3: Passkey Authenticate
+
+    private var authenticateStep: some View {
+        VStack(spacing: 14) {
+            // Back button
+            backButton
+
+            VStack(spacing: 8) {
+                if let name = authVM.lookupResult?.fullName {
+                    Text("Welcome, \(name)")
+                        .font(.system(size: 16, weight: .light, design: .monospaced))
+                        .foregroundColor(.jarvisText)
+                } else {
+                    Text("Welcome")
+                        .font(.system(size: 16, weight: .light, design: .monospaced))
+                        .foregroundColor(.jarvisText)
+                }
+
+                Text("Verify your identity to continue")
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundColor(.jarvisTextDim)
+            }
+            .padding(.bottom, 8)
+
+            Button {
+                guard let window = UIApplication.shared.connectedScenes
+                    .compactMap({ $0 as? UIWindowScene })
+                    .flatMap(\.windows)
+                    .first(where: \.isKeyWindow) else { return }
+                Task { await authVM.beginPasskeyAuth(anchor: window) }
+            } label: {
+                HStack(spacing: 12) {
+                    if authVM.isLoading {
+                        ProgressView()
+                            .tint(.jarvisBlue)
+                            .scaleEffect(0.8)
+                    } else {
+                        Image(systemName: "person.badge.key.fill")
+                            .font(.system(size: 18))
+                        Text("VERIFY IDENTITY")
+                            .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                            .tracking(2)
+                    }
+                }
+                .foregroundColor(.jarvisBlue)
+                .frame(maxWidth: .infinity)
+                .frame(height: 52)
+                .background(buttonBackground)
+            }
+            .disabled(authVM.isLoading)
+            .cyanGlow(radius: 12, opacity: 0.2)
+        }
+    }
+
+    // MARK: - Shared Components
+
+    private var backButton: some View {
+        HStack {
+            Button {
+                authVM.goBack()
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 10, weight: .bold))
+                    Text("BACK")
+                        .font(.system(size: 9, weight: .medium, design: .monospaced))
+                        .tracking(1)
+                }
+                .foregroundColor(.jarvisBlue.opacity(0.5))
+            }
+            Spacer()
+        }
+    }
+
+    private func inputBackground(focused: Bool) -> some View {
+        RoundedRectangle(cornerRadius: 8)
+            .fill(Color.white.opacity(0.03))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .strokeBorder(
+                        focused
+                            ? Color.jarvisBlue.opacity(0.5)
+                            : Color.jarvisBlue.opacity(0.15),
+                        lineWidth: 1
+                    )
+            )
+    }
+
+    private var buttonBackground: some View {
+        RoundedRectangle(cornerRadius: 8)
+            .fill(Color.jarvisBlue.opacity(0.1))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .strokeBorder(Color.jarvisBlue.opacity(0.4), lineWidth: 1)
+            )
     }
 }
 
@@ -302,7 +406,6 @@ struct GridBackground: View {
         Canvas { context, size in
             let spacing: CGFloat = 40
 
-            // Vertical lines
             var x: CGFloat = 0
             while x < size.width {
                 var path = Path()
@@ -312,7 +415,6 @@ struct GridBackground: View {
                 x += spacing
             }
 
-            // Horizontal lines
             var y: CGFloat = 0
             while y < size.height {
                 var path = Path()

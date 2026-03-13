@@ -23,20 +23,22 @@ actor AuthService {
         )
     }
 
-    func loginWithPasskey(
+    // Step 1: Get passkey challenge from server
+    func beginLogin(identifier: String) async throws -> PasskeyChallenge {
+        struct Req: Encodable { let identifier: String }
+        return try await api.request(
+            JARVISConfig.Auth.loginBegin,
+            method: "POST",
+            body: Req(identifier: identifier),
+            authenticated: false
+        )
+    }
+
+    // Step 2: Complete login with passkey credential
+    func completeLogin(
         identifier: String,
         credential: ASAuthorizationPlatformPublicKeyCredentialAssertion
     ) async throws -> AuthResponse {
-        // Step 1: Begin login to get challenge
-        struct BeginReq: Encodable { let identifier: String }
-        let _: [String: AnyCodable] = try await api.request(
-            JARVISConfig.Auth.loginBegin,
-            method: "POST",
-            body: BeginReq(identifier: identifier),
-            authenticated: false
-        )
-
-        // Step 2: Complete login with credential
         let credentialData = PasskeyCredentialData(
             id: credential.credentialID.base64URLEncodedString(),
             rawId: credential.credentialID.base64URLEncodedString(),
@@ -103,28 +105,6 @@ actor AuthService {
         return response
     }
 
-    // Password-based login fallback
-    func loginWithPassword(username: String, password: String) async throws -> AuthResponse {
-        struct Req: Encodable {
-            let username: String
-            let password: String
-        }
-
-        // Try the standard login endpoint
-        let response: AuthResponse = try await api.request(
-            JARVISConfig.Auth.loginComplete,
-            method: "POST",
-            body: Req(username: username, password: password),
-            authenticated: false
-        )
-
-        if response.needsTotp != true {
-            await api.setTokens(access: response.accessToken, refresh: response.refreshToken)
-        }
-
-        return response
-    }
-
     func getProfile() async throws -> UserResponse {
         try await api.request(JARVISConfig.Auth.me)
     }
@@ -165,7 +145,22 @@ struct PasskeyAssertionResponse: Encodable {
     let signature: String
 }
 
-// MARK: - Base64URL
+// MARK: - Passkey Challenge (from /login/begin)
+
+struct PasskeyChallenge: Codable {
+    let challenge: String
+    let rpId: String?
+    let timeout: Int?
+    let allowCredentials: [PasskeyChallengeCredential]?
+    let userVerification: String?
+}
+
+struct PasskeyChallengeCredential: Codable {
+    let id: String
+    let type: String?
+}
+
+// MARK: - Base64URL Encoding
 
 extension Data {
     func base64URLEncodedString() -> String {

@@ -8,10 +8,12 @@
 
 /* Begin PBXBuildFile section */
 		06C1040AD96D4E8C4ACBE009 /* AuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBB74C0965F0962BFFAB863A /* AuthService.swift */; };
+		0D5239D7BE14DC800046807B /* HealthSyncService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7092C549F2BC65265FB98AE4 /* HealthSyncService.swift */; };
 		12591532333C6399E247D2CE /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 4A70B28CBDA5404EBBA3CD91 /* Assets.xcassets */; };
 		146BE332599945DA72EA57D9 /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90EFF2D19BD0F9E00E3134B7 /* ChatView.swift */; };
 		3FB5866079C80D3A154539D0 /* AuthViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C5BF3B2D7A294B2A3AFB1F1 /* AuthViewModel.swift */; };
 		44C96CDDF87F06F1499FC39B /* MessageBubbleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD039DCF61C8F20AB5CD41AC /* MessageBubbleView.swift */; };
+		45B70F7D2E996C8D12D919E2 /* ParticleCloudView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCB9A7797E63B745F5E28FFF /* ParticleCloudView.swift */; };
 		4C8CA818AA7C5B395BF67CA1 /* ChatInputBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 189A48245F121078F9F5C00E /* ChatInputBar.swift */; };
 		4E168C64109E9B9572A6F19F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = CDF88FBCBCF62B1D565F4590 /* Assets.xcassets */; };
 		5406C9399ABCAD02DF2D5549 /* WatchContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 60AFA8C7C6324E5996605BD7 /* WatchContentView.swift */; };
@@ -26,9 +28,7 @@
 		876DFE9589035A10935C5BA5 /* ChatViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E10E292651467F3ED3878E7 /* ChatViewModel.swift */; };
 		9C12BEDE673ED0E72CB9848E /* SharedModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B215189D99E50707332B87D /* SharedModels.swift */; };
 		9C4DD8A87CAE66E72E87142E /* KeychainService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7AE01E6649045BD1D4A9F5A /* KeychainService.swift */; };
-		A1B2C3D4E5F6071829304150 /* HealthSyncService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F607182930AABB /* HealthSyncService.swift */; };
-		B110C109B1A2966FB583A226 /* ParticleCloudView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 822FE6D5BF4E30DD0D0BCD67 /* ParticleCloudView.swift */; };
-		B2C3D4E5F6A7081930415061 /* LocationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C3D4E5F6A708193041BBCC /* LocationService.swift */; };
+		AD9A0153BCF6A82B3719DCD5 /* LocationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 130485CC118DA150232F5A4E /* LocationService.swift */; };
 		B6B6C0994BDB3571B1994C39 /* TOTPVerifyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2850A95382DE6AF7B57E78BE /* TOTPVerifyView.swift */; };
 		B8C7F9F7F3CCF4EA527A4972 /* JARVISApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EEE19D2BF51B9712E900275 /* JARVISApp.swift */; };
 		BB2C89BFB04E54F07380940D /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F55A50A51BD792770F36AE43 /* LoginView.swift */; };
@@ -42,6 +42,7 @@
 
 /* Begin PBXFileReference section */
 		0B215189D99E50707332B87D /* SharedModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedModels.swift; sourceTree = "<group>"; };
+		130485CC118DA150232F5A4E /* LocationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationService.swift; sourceTree = "<group>"; };
 		189A48245F121078F9F5C00E /* ChatInputBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatInputBar.swift; sourceTree = "<group>"; };
 		2850A95382DE6AF7B57E78BE /* TOTPVerifyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TOTPVerifyView.swift; sourceTree = "<group>"; };
 		2C5BF3B2D7A294B2A3AFB1F1 /* AuthViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthViewModel.swift; sourceTree = "<group>"; };
@@ -55,14 +56,12 @@
 		60AFA8C7C6324E5996605BD7 /* WatchContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchContentView.swift; sourceTree = "<group>"; };
 		6A4347E38FD41C2BA6958E56 /* JARVIS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = JARVIS.entitlements; sourceTree = "<group>"; };
 		6EEE19D2BF51B9712E900275 /* JARVISApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JARVISApp.swift; sourceTree = "<group>"; };
-		822FE6D5BF4E30DD0D0BCD67 /* ParticleCloudView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ParticleCloudView.swift; sourceTree = "<group>"; };
+		7092C549F2BC65265FB98AE4 /* HealthSyncService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthSyncService.swift; sourceTree = "<group>"; };
 		82FC9755029F260E81BF67AC /* JARVISConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JARVISConfig.swift; sourceTree = "<group>"; };
 		838EE18A7762C31C81F58C11 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		90EFF2D19BD0F9E00E3134B7 /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
 		9377103CACA02555884EA1E6 /* ConversationListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationListView.swift; sourceTree = "<group>"; };
 		9613A7F55A8E00CFDC84AF00 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
-		A1B2C3D4E5F607182930AABB /* HealthSyncService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthSyncService.swift; sourceTree = "<group>"; };
-		B2C3D4E5F6A708193041BBCC /* LocationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationService.swift; sourceTree = "<group>"; };
 		BC57BDC1AD7F2121361BDECD /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		C23F1A4BB6396E675D7FBEBE /* ChatService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatService.swift; sourceTree = "<group>"; };
 		C7BC74A5E793248AC8DF3A7A /* JARVISEnergyOrb.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JARVISEnergyOrb.swift; sourceTree = "<group>"; };
@@ -70,11 +69,12 @@
 		CDF88FBCBCF62B1D565F4590 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		D7AE01E6649045BD1D4A9F5A /* KeychainService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainService.swift; sourceTree = "<group>"; };
 		DA4EA3083D6EB08FB251D809 /* MainView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainView.swift; sourceTree = "<group>"; };
-		DBE6CDFF2E6B3AEAFD720F34 /* JARVIS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = JARVIS.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		DBE6CDFF2E6B3AEAFD720F34 /* JARVIS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = JARVIS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		E597386B40A8FC0AB71471E2 /* VoiceModeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceModeView.swift; sourceTree = "<group>"; };
 		E95CF9676072BE2DAE5495EC /* JARVISWatch Watch App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "JARVISWatch Watch App.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		EBB74C0965F0962BFFAB863A /* AuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthService.swift; sourceTree = "<group>"; };
 		F55A50A51BD792770F36AE43 /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
+		FCB9A7797E63B745F5E28FFF /* ParticleCloudView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParticleCloudView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -188,9 +188,9 @@
 				42BFE650DB5C491D697F47C2 /* APIClient.swift */,
 				EBB74C0965F0962BFFAB863A /* AuthService.swift */,
 				C23F1A4BB6396E675D7FBEBE /* ChatService.swift */,
-				A1B2C3D4E5F607182930AABB /* HealthSyncService.swift */,
+				7092C549F2BC65265FB98AE4 /* HealthSyncService.swift */,
 				D7AE01E6649045BD1D4A9F5A /* KeychainService.swift */,
-				B2C3D4E5F6A708193041BBCC /* LocationService.swift */,
+				130485CC118DA150232F5A4E /* LocationService.swift */,
 				36BA9152D43204B6A619BD45 /* VoiceService.swift */,
 			);
 			path = Services;
@@ -207,7 +207,7 @@
 		B6DB41DF25215B05062CE032 /* HUD */ = {
 			isa = PBXGroup;
 			children = (
-				822FE6D5BF4E30DD0D0BCD67 /* ParticleCloudView.swift */,
+				FCB9A7797E63B745F5E28FFF /* ParticleCloudView.swift */,
 			);
 			path = HUD;
 			sourceTree = "<group>";
@@ -285,6 +285,8 @@
 			dependencies = (
 			);
 			name = JARVIS;
+			packageProductDependencies = (
+			);
 			productName = JARVIS;
 			productReference = DBE6CDFF2E6B3AEAFD720F34 /* JARVIS.app */;
 			productType = "com.apple.product-type.application";
@@ -301,6 +303,8 @@
 			dependencies = (
 			);
 			name = "JARVISWatch Watch App";
+			packageProductDependencies = (
+			);
 			productName = "JARVISWatch Watch App";
 			productReference = E95CF9676072BE2DAE5495EC /* JARVISWatch Watch App.app */;
 			productType = "com.apple.product-type.application";
@@ -314,8 +318,11 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1600;
 				TargetAttributes = {
+					0F6CA2CF9091CE89DFF72E1D = {
+						DevelopmentTeam = HKM8P29B68;
+					};
 					F7203EC9A42B465CA5D94821 = {
-						DevelopmentTeam = "";
+						DevelopmentTeam = HKM8P29B68;
 					};
 				};
 			};
@@ -368,24 +375,24 @@
 				3FB5866079C80D3A154539D0 /* AuthViewModel.swift in Sources */,
 				4C8CA818AA7C5B395BF67CA1 /* ChatInputBar.swift in Sources */,
 				5B4B794EDF4E177385F4AAC6 /* ChatService.swift in Sources */,
-				A1B2C3D4E5F6071829304150 /* HealthSyncService.swift in Sources */,
 				146BE332599945DA72EA57D9 /* ChatView.swift in Sources */,
 				876DFE9589035A10935C5BA5 /* ChatViewModel.swift in Sources */,
 				F44C02F690A029629227E9B5 /* ConversationListView.swift in Sources */,
+				0D5239D7BE14DC800046807B /* HealthSyncService.swift in Sources */,
 				B8C7F9F7F3CCF4EA527A4972 /* JARVISApp.swift in Sources */,
 				610ECED3F3228D681EBCADD7 /* JARVISConfig.swift in Sources */,
 				ED36D820CBB05421D318B538 /* JARVISTheme.swift in Sources */,
 				9C4DD8A87CAE66E72E87142E /* KeychainService.swift in Sources */,
-				B2C3D4E5F6A7081930415061 /* LocationService.swift in Sources */,
+				AD9A0153BCF6A82B3719DCD5 /* LocationService.swift in Sources */,
 				BB2C89BFB04E54F07380940D /* LoginView.swift in Sources */,
 				5B7D04F69A21759D923906EE /* MainView.swift in Sources */,
 				44C96CDDF87F06F1499FC39B /* MessageBubbleView.swift in Sources */,
+				45B70F7D2E996C8D12D919E2 /* ParticleCloudView.swift in Sources */,
 				5ABAB9F8F0A18F1AF5BC727D /* SettingsView.swift in Sources */,
 				80E16166B4AF83CF882625AD /* SharedModels.swift in Sources */,
 				B6B6C0994BDB3571B1994C39 /* TOTPVerifyView.swift in Sources */,
 				FD80A2D76DD27A8DE7E83C61 /* VoiceModeView.swift in Sources */,
 				E0F0C766AEC4B188CA81B16D /* VoiceService.swift in Sources */,
-				B110C109B1A2966FB583A226 /* ParticleCloudView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -468,7 +475,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = dwarf;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = HKM8P29B68;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
@@ -504,7 +511,6 @@
 				CODE_SIGN_ENTITLEMENTS = JARVIS/JARVIS.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = HKM8P29B68;
 				INFOPLIST_FILE = JARVIS/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -553,7 +559,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = HKM8P29B68;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
@@ -582,7 +588,6 @@
 				CODE_SIGN_ENTITLEMENTS = JARVIS/JARVIS.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = HKM8P29B68;
 				INFOPLIST_FILE = JARVIS/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
