@@ -61,14 +61,18 @@ class WebSocketManager {
     // Don't reconnect if auth already failed
     if (this._authFailed) return;
 
-    const url = this.config.token
-      ? `${this.config.url}?token=${this.config.token}`
-      : this.config.url;
+    // Connect without token in URL (security: tokens in URLs get logged)
+    // Send token as first JSON message after connection opens
+    const url = this.config.url;
 
     try {
       this.ws = new WebSocket(url);
 
       this.ws.onopen = () => {
+        // Send auth token as first message (backend expects this within 10s)
+        if (this.config?.token && this.ws?.readyState === WebSocket.OPEN) {
+          this.ws.send(JSON.stringify({ token: this.config.token }));
+        }
         this._isConnected = true;
         this.reconnectAttempts = 0;
         this.reconnectDelay = 1000;

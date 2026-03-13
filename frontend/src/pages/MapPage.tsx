@@ -1190,9 +1190,7 @@ export default function MapPage() {
         const map = new mk.Map(mapContainerRef.current, {
           center: new mk.Coordinate(40.2969, -111.6946), // Orem, Utah
           mapType: mk.Map.MapTypes.Standard,
-          // Use Light scheme so labels (roads, cities, countries) render visibly,
-          // then darken the container with CSS filter for the HUD aesthetic.
-          colorScheme: mk.Map.ColorSchemes.Light,
+          colorScheme: mk.Map.ColorSchemes.Dark,
           showsCompass: mk.FeatureVisibility.Hidden,
           showsZoomControl: true,
           showsMapTypeControl: false,
@@ -1720,11 +1718,7 @@ export default function MapPage() {
   return (
     <div className="h-screen w-screen overflow-hidden relative" style={{ background: '#0A0E17' }}>
       {/* ---- Map container ---- */}
-      <div
-        ref={mapContainerRef}
-        className="absolute inset-0 z-0"
-        style={{ filter: 'brightness(0.55) saturate(1.4) contrast(1.1)' }}
-      />
+      <div ref={mapContainerRef} className="absolute inset-0 z-0" />
 
       {/* ---- HUD grid overlay ---- */}
       {gridVisible && (
