@@ -718,7 +718,7 @@ _TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "properties": {
                 "to": {
                     "type": "string",
-                    "description": "Recipient phone number (E.164 format like '+17192136213') or Apple ID email.",
+                    "description": "Recipient phone number (E.164 format like '+15551234567') or Apple ID email.",
                 },
                 "text": {
                     "type": "string",
