@@ -139,6 +139,7 @@ def _decrypt_contact(contact: Contact) -> dict[str, Any]:
         result[f] = decrypt_message(val, contact.user_id) if val else None
     # photo_content_type stored unencrypted (not PII)
     result["photo_content_type"] = getattr(contact, "photo_content_type", None)
+    _normalize_address(result)
     return result
 
 
@@ -386,6 +387,66 @@ def _parse_csv(content: str) -> list[dict[str, Any]]:
     return contacts
 
 
+_STATE_ABBREVS: dict[str, str] = {
+    "alabama": "AL", "alaska": "AK", "arizona": "AZ", "arkansas": "AR",
+    "california": "CA", "colorado": "CO", "connecticut": "CT", "delaware": "DE",
+    "florida": "FL", "georgia": "GA", "hawaii": "HI", "idaho": "ID",
+    "illinois": "IL", "indiana": "IN", "iowa": "IA", "kansas": "KS",
+    "kentucky": "KY", "louisiana": "LA", "maine": "ME", "maryland": "MD",
+    "massachusetts": "MA", "michigan": "MI", "minnesota": "MN", "mississippi": "MS",
+    "missouri": "MO", "montana": "MT", "nebraska": "NE", "nevada": "NV",
+    "new hampshire": "NH", "new jersey": "NJ", "new mexico": "NM", "new york": "NY",
+    "north carolina": "NC", "north dakota": "ND", "ohio": "OH", "oklahoma": "OK",
+    "oregon": "OR", "pennsylvania": "PA", "rhode island": "RI", "south carolina": "SC",
+    "south dakota": "SD", "tennessee": "TN", "texas": "TX", "utah": "UT",
+    "vermont": "VT", "virginia": "VA", "washington": "WA", "west virginia": "WV",
+    "wisconsin": "WI", "wyoming": "WY", "district of columbia": "DC",
+}
+
+
+def _normalize_address(data: dict[str, Any]) -> dict[str, Any]:
+    """Normalize state names to 2-letter abbreviations and title-case cities."""
+    state = data.get("state")
+    if state and isinstance(state, str):
+        s = state.strip()
+        abbrev = _STATE_ABBREVS.get(s.lower())
+        if abbrev:
+            data["state"] = abbrev
+        elif len(s) == 2:
+            data["state"] = s.upper()
+        elif len(s) > 2:
+            # Try matching anyway (handles partial matches like "Ut" → "UT")
+            abbrev = _STATE_ABBREVS.get(s.lower())
+            if abbrev:
+                data["state"] = abbrev
+
+    city = data.get("city")
+    if city and isinstance(city, str):
+        data["city"] = city.strip().title()
+
+    country = data.get("country")
+    if country and isinstance(country, str):
+        c = country.strip()
+        # Common normalizations
+        if c.lower() in ("us", "usa", "united states", "united states of america"):
+            data["country"] = "US"
+        elif len(c) == 2:
+            data["country"] = c.upper()
+        else:
+            data["country"] = c.title()
+
+    # Rebuild combined address from components if components exist
+    parts = []
+    for f in ("street", "city", "state", "postal_code", "country"):
+        v = data.get(f)
+        if v and isinstance(v, str) and v.strip():
+            parts.append(v.strip())
+    if parts:
+        data["address"] = ", ".join(parts)
+
+    return data
+
+
 def _is_duplicate(raw: dict[str, Any], existing: list[dict[str, Any]]) -> bool:
     """Check if a contact matches any existing contact by name + phone/email."""
     first = (raw.get("first_name") or "").strip().lower()
@@ -446,6 +507,7 @@ async def upload_contacts(
 
         for raw in parsed:
             try:
+                _normalize_address(raw)
                 if _is_duplicate(raw, existing_decrypted):
                     skipped += 1
                     continue
@@ -479,7 +541,9 @@ async def create_contact(
     db: AsyncSession = Depends(get_db),
 ):
     """Create a single contact."""
-    encrypted = _encrypt_contact(body.model_dump(), current_user.id)
+    data = body.model_dump()
+    _normalize_address(data)
+    encrypted = _encrypt_contact(data, current_user.id)
     contact = Contact(user_id=current_user.id, **encrypted)
     db.add(contact)
     await db.commit()

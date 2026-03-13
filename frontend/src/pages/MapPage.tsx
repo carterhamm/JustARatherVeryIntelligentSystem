@@ -381,7 +381,7 @@ function createCalloutElement(contact: Contact): HTMLDivElement {
   const photo = getPhotoDataUri(contact);
   const el = document.createElement('div');
   el.style.cssText =
-    "font-family:'JetBrains Mono','Fira Code',monospace;min-width:200px;max-width:280px;padding:14px 16px;background:rgba(10,14,23,0.95);border:1px solid rgba(0,212,255,0.15);border-radius:6px;box-shadow:0 0 24px rgba(0,212,255,0.08),0 12px 40px rgba(0,0,0,0.6);color:#e0e0e0;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);";
+    "font-family:'JetBrains Mono','Fira Code',monospace;min-width:200px;max-width:280px;padding:14px 16px;background:linear-gradient(135deg,rgba(10,14,23,0.95),rgba(8,12,20,0.98));border:1px solid rgba(0,212,255,0.12);clip-path:polygon(0 0,calc(100% - 12px) 0,100% 12px,100% 100%,12px 100%,0 calc(100% - 12px));box-shadow:0 0 24px rgba(0,212,255,0.08),0 12px 40px rgba(0,0,0,0.6);color:#e0e0e0;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);";
 
   const lines: string[] = [];
 
@@ -1150,6 +1150,7 @@ export default function MapPage() {
   const landmarkAnnotationsRef = useRef<any[]>([]);
   const calloutOverlayRef = useRef<HTMLDivElement | null>(null);
   const calloutLayerRef = useRef<HTMLDivElement>(null);
+  const initialFitDoneRef = useRef(false);
 
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [geocodedContacts, setGeocodedContacts] = useState<GeocodedContact[]>([]);
@@ -1438,8 +1439,9 @@ export default function MapPage() {
     map.addAnnotations(newAnnotations);
     annotationsRef.current = newAnnotations;
 
-    // Fit bounds
-    if (geocodedContacts.length > 0) {
+    // Fit bounds only on first load — don't steal the user's view on refresh
+    if (geocodedContacts.length > 0 && !initialFitDoneRef.current) {
+      initialFitDoneRef.current = true;
       const region = regionFromContacts(geocodedContacts);
       map.setRegionAnimated(region, true);
     }
@@ -1556,7 +1558,9 @@ export default function MapPage() {
   // Helper: compute region from contacts
   function regionFromContacts(contacts: GeocodedContact[]) {
     const mk = window.mapkit;
-    if (contacts.length === 0) {
+    // Filter out (0,0) — failed geocodes that would drag center to Africa
+    const valid = contacts.filter((c) => !(Math.abs(c.lat) < 0.1 && Math.abs(c.lng) < 0.1));
+    if (valid.length === 0) {
       return new mk.CoordinateRegion(
         new mk.Coordinate(40.2969, -111.6946),
         new mk.CoordinateSpan(5, 5),
@@ -1567,7 +1571,7 @@ export default function MapPage() {
       maxLat = -90,
       minLng = 180,
       maxLng = -180;
-    contacts.forEach((c) => {
+    valid.forEach((c) => {
       if (c.lat < minLat) minLat = c.lat;
       if (c.lat > maxLat) maxLat = c.lat;
       if (c.lng < minLng) minLng = c.lng;
@@ -1714,12 +1718,15 @@ export default function MapPage() {
       )}
 
       {/* -- Top Bar -- */}
-      <div className="absolute top-0 left-0 right-0 z-20 pointer-events-none">
+      <div
+        className="absolute top-0 left-0 right-0 z-20 pointer-events-none"
+        style={{
+          height: '80px',
+          background: 'linear-gradient(to bottom, rgba(5, 5, 16, 0.95) 0%, rgba(5, 5, 16, 0.6) 40%, transparent 100%)',
+        }}
+      >
         <div
           className="flex items-center justify-between px-3 h-11 pointer-events-auto"
-          style={{
-            background: 'linear-gradient(to bottom, rgba(5, 5, 16, 0.95), rgba(5, 5, 16, 0.7), transparent)',
-          }}
         >
           <button
             onClick={() => navigate('/')}
