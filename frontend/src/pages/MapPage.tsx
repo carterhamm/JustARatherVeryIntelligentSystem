@@ -502,6 +502,12 @@ function LookAroundPanel({
         // Ring 4: ~500m
         [0.005, 0], [-0.005, 0], [0, 0.005], [0, -0.005],
         [0.004, 0.003], [-0.004, 0.003], [0.004, -0.003], [-0.004, -0.003],
+        // Ring 5: ~750m
+        [0.007, 0], [-0.007, 0], [0, 0.007], [0, -0.007],
+        [0.005, 0.005], [-0.005, 0.005], [0.005, -0.005], [-0.005, -0.005],
+        // Ring 6: ~1km
+        [0.01, 0], [-0.01, 0], [0, 0.01], [0, -0.01],
+        [0.007, 0.007], [-0.007, 0.007], [0.007, -0.007], [-0.007, -0.007],
       ];
 
       const tryLookAround = (latOff: number, lngOff: number): Promise<boolean> => {
@@ -521,7 +527,7 @@ function LookAroundPanel({
           });
           setTimeout(() => {
             if (!settled) { settled = true; la.destroy(); resolve(false); }
-          }, 2000);
+          }, 4000);
         });
       };
 
@@ -1437,7 +1443,7 @@ export default function MapPage() {
           c.address?.trim() ||
           [c.street, c.city, c.state, c.postal_code].filter(Boolean).join(', ');
         const coords = await geocodeAddress(addrToGeocode, cache);
-        if (coords) {
+        if (coords && !(Math.abs(coords.lat) < 10 && Math.abs(coords.lng) < 10)) {
           results.push({ ...c, lat: coords.lat, lng: coords.lng });
         }
         if (!cancelled) {
@@ -1551,10 +1557,9 @@ export default function MapPage() {
           let left = point.x - containerRect.left - cw / 2;
           let top = point.y - containerRect.top - ch - 24;
 
-          // Keep callout clear of the left floating panel (~400px wide)
-          const leftPanelEdge = 410;
-          left = Math.max(leftPanelEdge, Math.min(left, containerRect.width - cw - pad));
-          top = Math.max(pad + 70, Math.min(top, containerRect.height - ch - pad));
+          // Clamp within map bounds, keeping clear of top bar (70px) and edges
+          left = Math.max(pad, Math.min(left, containerRect.width - cw - pad));
+          top = Math.max(74, Math.min(top, containerRect.height - ch - pad));
 
           if (point.y - containerRect.top - ch - 24 < pad) {
             top = point.y - containerRect.top + 30;
@@ -1730,7 +1735,8 @@ export default function MapPage() {
   function regionFromContacts(contacts: GeocodedContact[]) {
     const mk = window.mapkit;
     // Filter out (0,0) region — failed geocodes that would drag view to Africa
-    const valid = contacts.filter((c) => !(Math.abs(c.lat) < 1 && Math.abs(c.lng) < 1));
+    // Aggressively filter out anything near the equator/prime meridian (failed geocodes)
+    const valid = contacts.filter((c) => !(Math.abs(c.lat) < 10 && Math.abs(c.lng) < 10));
     if (valid.length === 0) {
       // Default: Orem, Utah area — never Africa
       return new mk.CoordinateRegion(
@@ -1748,7 +1754,7 @@ export default function MapPage() {
     });
     landmarks.forEach((lm) => {
       // Skip landmarks near (0,0) — same Africa guard
-      if (Math.abs(lm.latitude) < 1 && Math.abs(lm.longitude) < 1) return;
+      if (Math.abs(lm.latitude) < 10 && Math.abs(lm.longitude) < 10) return;
       if (lm.latitude < minLat) minLat = lm.latitude;
       if (lm.latitude > maxLat) maxLat = lm.latitude;
       if (lm.longitude < minLng) minLng = lm.longitude;
@@ -1987,10 +1993,7 @@ export default function MapPage() {
             className="h-8 px-2.5 flex items-center gap-1.5 transition-colors hover:bg-white/[0.05]"
             style={{ clipPath: 'polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px))' }}
           >
-            <ArrowLeft size={13} className="text-jarvis-blue/50" />
-            <span className="text-[9px] font-mono tracking-widest text-jarvis-blue/40 uppercase hidden sm:inline">
-              Back
-            </span>
+            <ArrowLeft size={15} className="text-jarvis-blue/50" />
           </button>
 
           {/* Search bar */}
@@ -2160,7 +2163,7 @@ export default function MapPage() {
         {leftPanelView === 'rows' ? (
           <>
             {/* ---- Contacts Row ---- */}
-            <div className="p-3 pb-2">
+            <div className="px-3 pt-4 pb-2">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
                   <span className="text-[9px] font-mono tracking-[0.2em] text-jarvis-blue/50 uppercase">
