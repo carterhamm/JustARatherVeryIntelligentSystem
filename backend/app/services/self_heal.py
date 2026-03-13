@@ -22,19 +22,14 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
+from app.config import settings
+
 logger = logging.getLogger("jarvis.self_heal")
 
 _MTN = ZoneInfo("America/Denver")
 
-# Owner phone (for iMessage notifications)
-_OWNER_PHONE = "+17192136213"
-
 # Railway API constants
 _RAILWAY_GQL_URL = "https://backboard.railway.com/graphql/v2"
-_RAILWAY_PROJECT_ID = "db91f313-470d-40d0-85b1-a652f2bcdd7d"
-_RAILWAY_SERVICE_ID = "adb6b312-0380-40aa-91e5-39c047a52ee2"
-_RAILWAY_ENV_ID = "67600b40-eef5-4b9c-9819-ce98b370d2f9"
-_RAILWAY_TOKEN = "90e04bb8-a13d-46b5-b1d9-abc8641d70f0"
 
 # Backend base URL
 _BACKEND_URL = "https://app.malibupoint.dev"
@@ -99,7 +94,7 @@ async def _check_widgets_status() -> dict[str, Any]:
 async def _railway_graphql(query: str, variables: dict | None = None) -> dict[str, Any]:
     """Execute a Railway GraphQL query."""
     headers = {
-        "Authorization": f"Bearer {_RAILWAY_TOKEN}",
+        "Authorization": f"Bearer {settings.RAILWAY_API_TOKEN}",
         "Content-Type": "application/json",
         "User-Agent": "JARVIS/1.0",
     }
@@ -137,8 +132,8 @@ async def _check_railway_deploy_status() -> dict[str, Any]:
     """
     try:
         result = await _railway_graphql(query, {
-            "serviceId": _RAILWAY_SERVICE_ID,
-            "environmentId": _RAILWAY_ENV_ID,
+            "serviceId": settings.RAILWAY_SERVICE_ID,
+            "environmentId": settings.RAILWAY_ENV_ID,
         })
 
         edges = result.get("data", {}).get("deployments", {}).get("edges", [])
@@ -213,8 +208,8 @@ async def _get_railway_deploy_logs() -> dict[str, Any]:
             }
             """
             result = await _railway_graphql(env_query, {
-                "environmentId": _RAILWAY_ENV_ID,
-                "serviceId": _RAILWAY_SERVICE_ID,
+                "environmentId": settings.RAILWAY_ENV_ID,
+                "serviceId": settings.RAILWAY_SERVICE_ID,
             })
             logs = result.get("data", {}).get("environmentLogs", [])
 
@@ -409,7 +404,7 @@ async def _notify_owner(
     message = "\n".join(lines)
 
     try:
-        result = await send_imessage(to=_OWNER_PHONE, text=message)
+        result = await send_imessage(to=settings.OWNER_PHONE, text=message)
         return {"sent": result.get("success", False), "detail": result}
     except Exception as exc:
         logger.warning("Self-heal notification failed: %s", exc)

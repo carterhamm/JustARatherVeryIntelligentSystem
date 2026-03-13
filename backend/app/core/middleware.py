@@ -44,15 +44,26 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
-    """Token-bucket rate limiter keyed by client IP.
+    """Token-bucket rate limiter keyed by client IP with path-based limits.
+
+    Path-specific limits:
+      - /api/v1/auth/*  -> 5 req/min  (login/register brute-force protection)
+      - /api/v1/cron/*  -> 10 req/min (cron endpoints)
+      - everything else -> 120 req/60s (default)
 
     Parameters
     ----------
     max_requests:
-        Maximum number of requests allowed inside *window_seconds*.
+        Default maximum requests inside *window_seconds*.
     window_seconds:
         Sliding-window duration in seconds.
     """
+
+    # Path prefix -> (max_requests, window_seconds)
+    _PATH_LIMITS: dict[str, tuple[int, int]] = {
+        "/api/v1/auth": (5, 60),
+        "/api/v1/cron": (10, 60),
+    }
 
     def __init__(self, app: Callable, max_requests: int = 120, window_seconds: int = 60) -> None:  # type: ignore[override]
         super().__init__(app)
@@ -60,25 +71,44 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self.window_seconds = window_seconds
         self._buckets: dict[str, list[float]] = defaultdict(list)
 
-    def _clean_bucket(self, bucket: list[float], now: float) -> list[float]:
+    def _get_limits(self, path: str) -> tuple[int, int]:
+        """Return (max_requests, window_seconds) for the given request path."""
+        for prefix, limits in self._PATH_LIMITS.items():
+            if path.startswith(prefix):
+                return limits
+        return self.max_requests, self.window_seconds
+
+    @staticmethod
+    def _clean_bucket(bucket: list[float], now: float, window: int) -> list[float]:
         """Remove timestamps older than the current window."""
-        cutoff = now - self.window_seconds
+        cutoff = now - window
         return [ts for ts in bucket if ts > cutoff]
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         client_ip = request.client.host if request.client else "unknown"
+        path = request.url.path
         now = time.time()
 
-        self._buckets[client_ip] = self._clean_bucket(self._buckets[client_ip], now)
+        max_req, window = self._get_limits(path)
+        # Bucket key includes the path-limit tier so different limits don't share buckets
+        bucket_key = f"{client_ip}:{max_req}:{window}"
 
-        if len(self._buckets[client_ip]) >= self.max_requests:
-            logger.warning("rate_limit_exceeded", client=client_ip)
+        self._buckets[bucket_key] = self._clean_bucket(self._buckets[bucket_key], now, window)
+
+        if len(self._buckets[bucket_key]) >= max_req:
+            logger.warning(
+                "rate_limit_exceeded",
+                client=client_ip,
+                path=path,
+                limit=max_req,
+                window=window,
+            )
             return JSONResponse(
                 status_code=429,
                 content={"detail": "Too many requests. Please slow down."},
             )
 
-        self._buckets[client_ip].append(now)
+        self._buckets[bucket_key].append(now)
         return await call_next(request)
 
 
@@ -118,10 +148,10 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         # Content Security Policy — restrict resource loading
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline' https://esm.sh https://cdn.skypack.dev https://cdn.apple-mapkit.com; "
+            "script-src 'self' https://cdn.apple-mapkit.com; "
             "style-src 'self' 'unsafe-inline'; "
             "img-src 'self' data: blob: https://*.apple-mapkit.com https://*.apple.com https://*.ls.apple.com https://*.ssl.mzstatic.com; "
-            "connect-src 'self' wss: ws: https://esm.sh https://cdn.skypack.dev https://cdn.apple-mapkit.com https://*.apple-mapkit.com https://*.apple.com https://*.ls.apple.com; "
+            "connect-src 'self' wss: ws: https://cdn.apple-mapkit.com https://*.apple-mapkit.com https://*.apple.com https://*.ls.apple.com; "
             "font-src 'self' data:; "
             "frame-ancestors 'none'"
         )

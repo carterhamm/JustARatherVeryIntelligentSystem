@@ -31,12 +31,11 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
+
 logger = logging.getLogger("jarvis.heartbeat")
 
 _MTN = ZoneInfo("America/Denver")
-
-# Owner phone in E.164
-_OWNER_PHONE = "+17192136213"
 
 # Schedule transition date
 _SCHEDULE_SWITCH = date(2026, 3, 13)
@@ -956,7 +955,7 @@ async def _send_text(message: str) -> dict[str, Any]:
         logger.warning("Mac Mini agent not configured -- cannot send heartbeat text")
         return {"success": False, "method": "text", "error": "Mac Mini not configured"}
 
-    result = await send_imessage(to=_OWNER_PHONE, text=message)
+    result = await send_imessage(to=settings.OWNER_PHONE, text=message)
     logger.info("Heartbeat iMessage sent: %s", result.get("success"))
     return {"success": result.get("success", False), "method": "text", "detail": result}
 

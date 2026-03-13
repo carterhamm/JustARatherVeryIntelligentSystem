@@ -346,8 +346,6 @@ async def get_railway_deploy_status() -> dict[str, Any]:
     Returns deployment info including status, creator, and timestamp.
     """
     _RAILWAY_GRAPHQL = "https://backboard.railway.com/graphql/v2"
-    _TOKEN = "90e04bb8-a13d-46b5-b1d9-abc8641d70f0"
-    _SERVICE_ID = "adb6b312-0380-40aa-91e5-39c047a52ee2"
 
     query = """
     query GetLatestDeployment($serviceId: String!) {
@@ -375,9 +373,9 @@ async def get_railway_deploy_status() -> dict[str, Any]:
         async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.post(
                 _RAILWAY_GRAPHQL,
-                json={"query": query, "variables": {"serviceId": _SERVICE_ID}},
+                json={"query": query, "variables": {"serviceId": settings.RAILWAY_SERVICE_ID}},
                 headers={
-                    "Authorization": f"Bearer {_TOKEN}",
+                    "Authorization": f"Bearer {settings.RAILWAY_API_TOKEN}",
                     "Content-Type": "application/json",
                     "User-Agent": "JARVIS/1.0",
                 },

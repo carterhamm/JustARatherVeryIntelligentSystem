@@ -10,23 +10,79 @@ from __future__ import annotations
 import base64
 import csv
 import io
+import ipaddress
 import json
 import logging
+import re
 import uuid
 from typing import Any, Optional
+from urllib.parse import urlparse
 
 import vobject
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.audit import log_audit
 from app.core.dependencies import get_current_active_user_or_service, get_db
 from app.core.encryption import decrypt_message, encrypt_message
 from app.models.contact import Contact
 from app.models.user import User
 
 logger = logging.getLogger(__name__)
+
+
+def _is_internal_url(url: str) -> bool:
+    """Check if a URL points to an internal/private address (SSRF protection)."""
+    try:
+        parsed = urlparse(url)
+        hostname = (parsed.hostname or "").lower()
+    except Exception:
+        return True  # Reject unparseable URLs
+
+    # Block malibupoint.dev subdomains
+    if hostname.endswith(".malibupoint.dev") or hostname == "malibupoint.dev":
+        return True
+
+    # Block localhost variants
+    if hostname in ("localhost", "127.0.0.1", "0.0.0.0", "::1", "[::1]"):
+        return True
+
+    # Block private/reserved IP ranges
+    try:
+        ip = ipaddress.ip_address(hostname)
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
+            return True
+    except ValueError:
+        pass  # Not an IP -- that's fine, it's a hostname
+
+    # Block common internal hostnames
+    if hostname.endswith(".local") or hostname.endswith(".internal"):
+        return True
+
+    return False
+
+
+_MAX_FIELD_SIZES = {
+    "first_name": 200, "last_name": 200, "phone": 50, "email": 254,
+    "company": 200, "title": 200, "address": 500, "notes": 5000,
+    "photo": 5 * 1024 * 1024, "street": 300, "city": 100, "state": 50,
+    "postal_code": 20, "country": 100, "birthday": 20, "url": 2048,
+}
+
+
+def _check_field_sizes(raw: dict[str, Any]) -> bool:
+    """Return True if all fields are within size limits, False otherwise."""
+    for field, max_size in _MAX_FIELD_SIZES.items():
+        val = raw.get(field)
+        if val and isinstance(val, str) and len(val) > max_size:
+            logger.warning(
+                "Contact field %s exceeds max size (%d > %d) for contact %s",
+                field, len(val), max_size, raw.get("first_name", "unknown"),
+            )
+            return False
+    return True
 
 router = APIRouter(tags=["Contacts"])
 
@@ -262,7 +318,10 @@ def _parse_vcard(content: str) -> list[dict[str, Any]]:
                 elif encoding in ("B", "BASE64"):
                     c["photo"] = photo_val.replace("\n", "").replace("\r", "").replace(" ", "")
                 elif isinstance(photo_val, str) and photo_val.startswith(("http://", "https://")):
-                    c["photo"] = photo_val  # URI — frontend handles http URLs
+                    if _is_internal_url(photo_val):
+                        logger.warning("Blocked internal photo URL: %s", photo_val[:100])
+                    else:
+                        c["photo"] = photo_val  # External URI — frontend handles display
                 elif isinstance(photo_val, str) and len(photo_val) > 50:
                     # Likely raw base64 without explicit encoding param
                     c["photo"] = photo_val.replace("\n", "").replace("\r", "").replace(" ", "")
@@ -480,6 +539,7 @@ def _normalize_phone(p: str) -> str:
 
 @router.post("/upload", response_model=UploadResponse)
 async def upload_contacts(
+    request: Request,
     file: list[UploadFile] = File(...),
     current_user: User = Depends(get_current_active_user_or_service),
     db: AsyncSession = Depends(get_db),
@@ -508,6 +568,9 @@ async def upload_contacts(
         for raw in parsed:
             try:
                 _normalize_address(raw)
+                if not _check_field_sizes(raw):
+                    errors += 1
+                    continue
                 if _is_duplicate(raw, existing_decrypted):
                     skipped += 1
                     continue
@@ -523,6 +586,14 @@ async def upload_contacts(
 
     if imported > 0:
         await db.commit()
+
+    log_audit(
+        "contacts_bulk_import",
+        "completed",
+        user_id=str(current_user.id),
+        ip=request.client.host if request.client else "",
+        details=f"imported={imported} skipped={skipped} errors={errors}",
+    )
 
     return UploadResponse(
         imported=imported,
@@ -582,7 +653,7 @@ async def search_contacts(
     add a search index column.
     """
     result = await db.execute(
-        select(Contact).where(Contact.user_id == current_user.id)
+        select(Contact).where(Contact.user_id == current_user.id).limit(1000)
     )
     contacts = result.scalars().all()
     query_lower = q.lower()
@@ -669,6 +740,7 @@ async def update_contact(
 @router.delete("/{contact_id}")
 async def delete_contact(
     contact_id: uuid.UUID,
+    request: Request,
     current_user: User = Depends(get_current_active_user_or_service),
     db: AsyncSession = Depends(get_db),
 ):
@@ -681,6 +753,13 @@ async def delete_contact(
         raise HTTPException(status_code=404, detail="Contact not found")
     await db.delete(contact)
     await db.commit()
+    log_audit(
+        "contact_delete",
+        "success",
+        user_id=str(current_user.id),
+        ip=request.client.host if request.client else "",
+        details=f"contact_id={contact_id}",
+    )
     return {"deleted": True}
 
 

@@ -76,18 +76,22 @@ def create_totp_pending_token(subject: str | UUID) -> str:
     return jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
 
 
-def create_device_trust_token(subject: str | UUID) -> str:
+def create_device_trust_token(subject: str | UUID, user_agent: str = "") -> str:
     """Create a long-lived device trust token (14 days).
 
     After successful TOTP verification, this token is returned to the client.
     On subsequent logins from the same device, the client sends this token
     to skip the TOTP step.
+
+    Includes a SHA-256 hash of the user-agent for device fingerprinting.
     """
     expire = datetime.now(timezone.utc) + timedelta(days=14)
+    device_hash = hashlib.sha256(user_agent.encode()).hexdigest()
     payload: dict[str, Any] = {
         "sub": str(subject),
         "exp": expire,
         "type": "device_trust",
+        "dh": device_hash,
     }
     return jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
 

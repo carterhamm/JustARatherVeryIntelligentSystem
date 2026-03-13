@@ -47,9 +47,25 @@ def create_app() -> FastAPI:
     )
 
     # -- CORS -----------------------------------------------------------------
+    cors_origins = list(settings.CORS_ORIGINS)
+
+    # Block wildcard origins in production (credential-sharing risk)
+    if not settings.DEBUG and "*" in cors_origins:
+        raise RuntimeError(
+            "CORS wildcard '*' is not allowed in production. "
+            "Set CORS_ORIGINS to explicit origins."
+        )
+
+    # Strip localhost origins in production
+    if not settings.DEBUG:
+        cors_origins = [
+            o for o in cors_origins
+            if "localhost" not in o and "127.0.0.1" not in o
+        ]
+
     application.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.CORS_ORIGINS,
+        allow_origins=cors_origins,
         allow_credentials=True,
         allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
         allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With", "X-Device-Trust"],

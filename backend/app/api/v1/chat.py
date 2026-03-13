@@ -8,8 +8,10 @@ via ``get_current_active_user`` (provided by the core.dependencies module).
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import uuid
+from collections import defaultdict
 from typing import Any
 
 from fastapi import (
@@ -43,6 +45,10 @@ from app.schemas.chat import (
 from app.services.chat_service import ChatService
 
 logger = logging.getLogger("jarvis.api.chat")
+
+# Per-user WebSocket connection tracking
+_ws_connections: dict[uuid.UUID, int] = defaultdict(int)
+_WS_MAX_PER_USER = 5
 
 router = APIRouter(tags=["Chat"])
 
@@ -376,16 +382,17 @@ async def chat_stream_sse(
 @router.websocket("/ws/chat")
 async def chat_websocket(
     websocket: WebSocket,
-    token: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
 ) -> None:
     """
     WebSocket endpoint for real-time streaming chat.
 
-    **Authentication** is performed via:
-    1. A ``token`` query parameter on the connection URL, or
-    2. The first JSON message sent over the socket, which must include
-       a ``"token"`` field.
+    **Authentication** is performed via the first JSON message sent over
+    the socket, which must include a ``"token"`` field.  Token via query
+    parameter is not accepted (prevents logging/caching of credentials).
+
+    A 10-second timeout applies to the initial auth message.  Each user
+    may have at most 5 concurrent WebSocket connections.
 
     Subsequent JSON messages must conform to the :class:`ChatRequest`
     schema.  The server streams back :class:`ChatStreamChunk` objects as
@@ -393,45 +400,51 @@ async def chat_websocket(
     """
     await websocket.accept()
 
-    # ── Authenticate ─────────────────────────────────────────────────
+    # ── Authenticate via first JSON message (10s timeout) ────────────
     current_user: User | None = None
 
-    if token:
-        try:
-            current_user = await _authenticate_ws_token(token, db)
-        except Exception:
-            await websocket.send_json(
-                ChatStreamChunk(type="error", error="Invalid token").model_dump(
-                    mode="json"
-                )
-            )
-            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
-            return
-
-    if current_user is None:
-        # Wait for authentication message
-        try:
-            auth_data = await websocket.receive_json()
-            auth_token = auth_data.get("token")
-            if not auth_token:
-                await websocket.send_json(
-                    ChatStreamChunk(
-                        type="error", error="Token required"
-                    ).model_dump(mode="json")
-                )
-                await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
-                return
-            current_user = await _authenticate_ws_token(auth_token, db)
-        except WebSocketDisconnect:
-            return
-        except Exception:
+    try:
+        auth_data = await asyncio.wait_for(websocket.receive_json(), timeout=10.0)
+        auth_token = auth_data.get("token")
+        if not auth_token:
             await websocket.send_json(
                 ChatStreamChunk(
-                    type="error", error="Authentication failed"
+                    type="error", error="Token required in first message"
                 ).model_dump(mode="json")
             )
             await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
             return
+        current_user = await _authenticate_ws_token(auth_token, db)
+    except asyncio.TimeoutError:
+        await websocket.send_json(
+            ChatStreamChunk(
+                type="error", error="Authentication timeout"
+            ).model_dump(mode="json")
+        )
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+    except WebSocketDisconnect:
+        return
+    except Exception:
+        await websocket.send_json(
+            ChatStreamChunk(
+                type="error", error="Authentication failed"
+            ).model_dump(mode="json")
+        )
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+
+    # ── Per-user connection limit ────────────────────────────────────
+    if _ws_connections[current_user.id] >= _WS_MAX_PER_USER:
+        await websocket.send_json(
+            ChatStreamChunk(
+                type="error", error="Too many concurrent connections"
+            ).model_dump(mode="json")
+        )
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+
+    _ws_connections[current_user.id] += 1
 
     # ── Build service dependencies ───────────────────────────────────
     llm_client = _get_llm_client()
@@ -541,3 +554,5 @@ async def chat_websocket(
             await websocket.close(code=status.WS_1011_INTERNAL_ERROR)
         except Exception:
             pass
+    finally:
+        _ws_connections[current_user.id] = max(0, _ws_connections[current_user.id] - 1)

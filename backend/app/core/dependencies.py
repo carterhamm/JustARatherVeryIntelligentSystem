@@ -1,6 +1,8 @@
 """Reusable FastAPI dependencies for database sessions, caching, and auth."""
 
+import hmac
 import logging
+from datetime import datetime, timezone
 from typing import AsyncGenerator
 
 from fastapi import Depends, HTTPException, Request, status
@@ -10,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.security import decode_token, get_current_user
 from app.db.postgres import get_session
 from app.db.redis import get_redis_client, RedisClient
+from app.models.session import Session
 from app.models.user import User
 from app.schemas.auth import TokenPayload
 
@@ -73,6 +76,20 @@ async def get_current_active_user(
             detail="Account is deactivated",
         )
 
+    # Verify user has at least one active, non-expired session
+    result_session = await db.execute(
+        select(Session).where(
+            Session.user_id == user.id,
+            Session.is_active.is_(True),
+            Session.expires_at > datetime.now(timezone.utc),
+        ).limit(1)
+    )
+    if result_session.scalar_one_or_none() is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="All sessions revoked",
+        )
+
     return user
 
 
@@ -131,7 +148,11 @@ async def get_current_active_user_or_service(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Service key auth not configured on server",
             )
-        if service_key != settings.SERVICE_API_KEY:
+        if not hmac.compare_digest(service_key, settings.SERVICE_API_KEY):
+            logger.warning(
+                "Failed service key attempt from IP=%s",
+                request.headers.get("x-forwarded-for", request.client.host if request.client else "unknown"),
+            )
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid service key",

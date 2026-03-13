@@ -13,6 +13,7 @@ Includes:
 
 from __future__ import annotations
 
+import hmac
 import json
 import logging
 from datetime import datetime
@@ -20,11 +21,12 @@ from typing import Any
 
 import zoneinfo
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.core.audit import log_audit
 from app.core.dependencies import get_current_active_user_or_service, get_db
 from app.db.redis import get_redis_client
 from app.integrations.llm.factory import get_llm_client
@@ -33,6 +35,23 @@ from app.schemas.chat import ChatRequest
 from app.services.chat_service import ChatService
 
 logger = logging.getLogger("jarvis.cron")
+
+
+async def require_service_key(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    """Only accept X-Service-Key for cron endpoints. Reject JWT."""
+    service_key = request.headers.get("x-service-key")
+    if not service_key:
+        raise HTTPException(status_code=401, detail="Service key required")
+    if not hmac.compare_digest(service_key, settings.SERVICE_API_KEY):
+        raise HTTPException(status_code=401, detail="Invalid service key")
+    result = await db.execute(select(User).where(User.is_active.is_(True)).limit(1))
+    owner = result.scalar_one_or_none()
+    if not owner:
+        raise HTTPException(status_code=500, detail="No active owner")
+    return owner
 
 router = APIRouter(prefix="/cron", tags=["Cron"])
 
@@ -127,7 +146,8 @@ Write ONLY the spoken script, nothing else."""
 
 @router.post("/morning-routine")
 async def morning_routine(
-    current_user: User = Depends(get_current_active_user_or_service),
+    request: Request,
+    current_user: User = Depends(require_service_key),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """Execute the JARVIS morning routine (enhanced).
@@ -144,6 +164,7 @@ async def morning_routine(
     )
 
     logger.info("Morning routine triggered")
+    log_audit("cron_morning_routine", "triggered", user_id=str(current_user.id), ip=request.client.host if request.client else "")
 
     # 1. Gather data -- try enhanced first, fall back to legacy
     owner = await _get_owner(db)
@@ -294,7 +315,8 @@ async def set_morning_config(
 
 @router.post("/research-cycle")
 async def research_cycle(
-    current_user: User = Depends(get_current_active_user_or_service),
+    request: Request,
+    current_user: User = Depends(require_service_key),
 ) -> dict[str, Any]:
     """Execute one iteration of the JARVIS research daemon.
 
@@ -306,6 +328,7 @@ async def research_cycle(
     from app.services.research_daemon import run_research_cycle
 
     logger.info("Research cycle triggered by user=%s", current_user.username)
+    log_audit("cron_research_cycle", "triggered", user_id=str(current_user.id), ip=request.client.host if request.client else "")
     result = await run_research_cycle()
     return result
 
@@ -341,7 +364,8 @@ async def research_findings(
 
 @router.post("/check-reminders")
 async def check_reminders_cron(
-    current_user: User = Depends(get_current_active_user_or_service),
+    request: Request,
+    current_user: User = Depends(require_service_key),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """Deliver due reminders via iMessage (or call as fallback).
@@ -350,11 +374,12 @@ async def check_reminders_cron(
     delivered immediately, even during DND.  Runs every 5 minutes for
     precise timing.
 
-    Protected by SERVICE_API_KEY or JWT — meant to be called by Railway cron.
+    Protected by SERVICE_API_KEY — meant to be called by Railway cron.
     """
     from app.services.heartbeat import check_and_deliver_reminders
 
     logger.info("Reminder check triggered by user=%s", current_user.username)
+    log_audit("cron_check_reminders", "triggered", user_id=str(current_user.id), ip=request.client.host if request.client else "")
     try:
         result = await check_and_deliver_reminders(db)
     except Exception as exc:
@@ -370,7 +395,8 @@ async def check_reminders_cron(
 
 @router.post("/heartbeat")
 async def heartbeat_cron(
-    current_user: User = Depends(get_current_active_user_or_service),
+    request: Request,
+    current_user: User = Depends(require_service_key),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """Execute a single JARVIS heartbeat cycle.
@@ -379,12 +405,13 @@ async def heartbeat_cron(
     Contacts the owner via iMessage (work hours), Twilio call (off hours),
     or silently logs (nighttime DND).
 
-    Protected by SERVICE_API_KEY or JWT — meant to be called by Railway cron
+    Protected by SERVICE_API_KEY — meant to be called by Railway cron
     every 15 minutes.
     """
     from app.services.heartbeat import run_heartbeat
 
     logger.info("Heartbeat triggered by user=%s", current_user.username)
+    log_audit("cron_heartbeat", "triggered", user_id=str(current_user.id), ip=request.client.host if request.client else "")
     try:
         result = await run_heartbeat(db)
     except Exception as exc:
@@ -456,7 +483,7 @@ async def heartbeat_status(
 @router.post("/focus/start")
 async def start_focus(
     payload: dict[str, Any],
-    current_user: User = Depends(get_current_active_user_or_service),
+    current_user: User = Depends(require_service_key),
 ) -> dict[str, Any]:
     """Start a focus session for the current user.
 
@@ -483,7 +510,7 @@ async def start_focus(
 
 @router.post("/focus/end")
 async def end_focus(
-    current_user: User = Depends(get_current_active_user_or_service),
+    current_user: User = Depends(require_service_key),
 ) -> dict[str, Any]:
     """End the current focus session and deliver queued notifications.
 
@@ -602,7 +629,8 @@ async def record_engagement_response(
 
 @router.post("/mcp-scan")
 async def mcp_scan(
-    current_user: User = Depends(get_current_active_user_or_service),
+    request: Request,
+    current_user: User = Depends(require_service_key),
 ) -> dict[str, Any]:
     """Run a full MCP server discovery scan and cache the results.
 
@@ -615,6 +643,7 @@ async def mcp_scan(
     from app.services.mcp_discovery import run_mcp_scan
 
     logger.info("MCP scan triggered by user=%s", current_user.username)
+    log_audit("cron_mcp_scan", "triggered", user_id=str(current_user.id), ip=request.client.host if request.client else "")
     try:
         result = await run_mcp_scan()
     except Exception as exc:
@@ -666,7 +695,8 @@ async def mcp_scan_status(
 
 @router.post("/self-heal")
 async def self_heal(
-    current_user: User = Depends(get_current_active_user_or_service),
+    request: Request,
+    current_user: User = Depends(require_service_key),
 ) -> dict[str, Any]:
     """Execute a single self-healing cycle.
 
@@ -675,12 +705,13 @@ async def self_heal(
     3. If errors detected, dispatch Claude Code on Mac Mini to fix
     4. Notify owner via iMessage with detection/fix report
 
-    Protected by SERVICE_API_KEY or JWT — meant to be called by Railway cron
+    Protected by SERVICE_API_KEY — meant to be called by Railway cron
     every 15 minutes.
     """
     from app.services.self_heal import run_self_heal
 
     logger.info("Self-heal triggered by user=%s", current_user.username)
+    log_audit("cron_self_heal", "triggered", user_id=str(current_user.id), ip=request.client.host if request.client else "")
     try:
         result = await run_self_heal()
     except Exception as exc:

@@ -185,6 +185,19 @@ class Settings(BaseSettings):
     # -- Service API Key (machine-to-machine auth for daemons) ----------------
     SERVICE_API_KEY: str = ""
 
+    # -- Railway API (deployment monitoring / self-heal) ---------------------
+    RAILWAY_API_TOKEN: str = ""
+    RAILWAY_PROJECT_ID: str = ""
+    RAILWAY_SERVICE_ID: str = ""
+    RAILWAY_ENV_ID: str = ""
+
+    # -- Owner contact -------------------------------------------------------
+    OWNER_PHONE: str = ""
+
+    # -- Login lockout -------------------------------------------------------
+    LOGIN_MAX_ATTEMPTS: int = 3
+    LOGIN_LOCKOUT_MINUTES: int = 30
+
     @field_validator("JWT_SECRET_KEY", mode="before")
     @classmethod
     def _ensure_jwt_secret(cls, v: object) -> str:

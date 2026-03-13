@@ -41,8 +41,8 @@ from app.models.user import User
 from app.schemas.auth import AuthResponse, Token, UserCreate, UserResponse, UserUpdate
 
 
-_LOGIN_MAX_ATTEMPTS = 5
-_LOGIN_LOCKOUT_SECONDS = 900  # 15 minutes
+_LOGIN_MAX_ATTEMPTS = settings.LOGIN_MAX_ATTEMPTS  # default 3
+_LOGIN_LOCKOUT_SECONDS = settings.LOGIN_LOCKOUT_MINUTES * 60  # default 30 min
 
 
 class AuthService:
@@ -60,9 +60,13 @@ class AuthService:
             key = f"login_attempts:{email.lower()}"
             attempts = await redis.cache_get(key)
             if attempts and int(attempts) >= _LOGIN_MAX_ATTEMPTS:
+                logger.warning(
+                    "Login lockout triggered: account=%s attempts=%s",
+                    email.lower(), attempts,
+                )
                 raise HTTPException(
                     status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                    detail="Too many login attempts. Account temporarily locked — try again in 15 minutes.",
+                    detail=f"Too many login attempts. Account temporarily locked — try again in {settings.LOGIN_LOCKOUT_MINUTES} minutes.",
                 )
         except HTTPException:
             raise
@@ -70,7 +74,7 @@ class AuthService:
             pass  # If Redis is down, don't block login — fail open
 
     @staticmethod
-    async def _record_failed_login(email: str) -> None:
+    async def _record_failed_login(email: str, ip_address: str = "unknown") -> None:
         """Increment failed login counter for the email."""
         try:
             redis = await get_redis_client()
@@ -78,6 +82,10 @@ class AuthService:
             current = await redis.cache_get(key)
             count = int(current) + 1 if current else 1
             await redis.cache_set(key, str(count), ttl=_LOGIN_LOCKOUT_SECONDS)
+            logger.warning(
+                "Failed login attempt: account=%s ip=%s attempt=%d/%d",
+                email.lower(), ip_address, count, _LOGIN_MAX_ATTEMPTS,
+            )
         except Exception:
             pass  # Best-effort — don't crash if Redis is down
 
@@ -163,18 +171,18 @@ class AuthService:
     # ------------------------------------------------------------------
 
     @staticmethod
-    async def login(db: AsyncSession, email: str, password: str) -> AuthResponse:
+    async def login(db: AsyncSession, email: str, password: str, ip_address: str = "unknown") -> AuthResponse:
         """Verify credentials and return a JWT token pair with user data.
 
         Raises ``401 Unauthorized`` on bad credentials.
-        Enforces brute-force protection: 5 failed attempts = 15 min lockout.
+        Enforces brute-force protection: 3 failed attempts = 30 min lockout.
         """
         await AuthService._check_login_rate_limit(email)
 
         user = await AuthService.get_user_by_email(db, email)
 
         if user is None or not verify_password(password, user.hashed_password):
-            await AuthService._record_failed_login(email)
+            await AuthService._record_failed_login(email, ip_address=ip_address)
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Incorrect email or password",

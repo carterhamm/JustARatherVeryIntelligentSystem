@@ -1,5 +1,6 @@
 """Async Redis client with caching helpers."""
 
+import ssl
 from typing import Any, Optional
 
 import redis.asyncio as aioredis
@@ -11,9 +12,16 @@ class RedisClient:
     """Thin wrapper around an async Redis connection with convenience methods."""
 
     def __init__(self) -> None:
+        kwargs: dict[str, Any] = {
+            "decode_responses": True,
+        }
+        # Use TLS when the URL scheme is rediss://
+        if settings.REDIS_URL.startswith("rediss://"):
+            ssl_ctx = ssl.create_default_context()
+            kwargs["ssl"] = ssl_ctx
         self.client: aioredis.Redis = aioredis.from_url(
             settings.REDIS_URL,
-            decode_responses=True,
+            **kwargs,
         )
 
     async def cache_get(self, key: str) -> Optional[str]:

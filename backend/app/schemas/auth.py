@@ -66,6 +66,7 @@ class TokenPayload(BaseModel):
     sub: str
     exp: Optional[int] = None
     type: str = "access"
+    dh: Optional[str] = None  # device hash for device_trust tokens
 
 
 # -- Passkey / WebAuthn schemas -----------------------------------------------

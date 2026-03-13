@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import logging
 import os
 from functools import lru_cache
 from typing import Optional
@@ -22,6 +23,8 @@ from uuid import UUID
 from cryptography.fernet import Fernet
 
 from app.config import settings
+
+logger = logging.getLogger("jarvis.encryption")
 
 _PBKDF2_ITERATIONS = 480_000
 _PBKDF2_KEY_LENGTH = 32  # 256 bits
@@ -68,7 +71,11 @@ def decrypt_message(stored: str, user_id: UUID) -> str:
         salt = base64.urlsafe_b64decode(salt_b64)
         key = _derive_key(user_id, salt)
         return Fernet(key).decrypt(cipher_text.encode()).decode()
-    except Exception:
-        # If decryption fails (bad key, corrupted data), return as-is
-        # rather than crashing the entire conversation
-        return stored
+    except Exception as exc:
+        # If decryption fails (bad key, corrupted data), return a safe
+        # placeholder rather than leaking ciphertext to the frontend
+        logger.warning(
+            "Decryption failed for user_id=%s: %s (returning placeholder)",
+            user_id, type(exc).__name__,
+        )
+        return "[encrypted]"

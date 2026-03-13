@@ -4,6 +4,7 @@ JARVIS is a single-owner system. Registration requires the Secure Handshake
 Token (SETUP_TOKEN) and is locked after the first user is created.
 """
 
+import hashlib
 import logging
 from typing import Any
 
@@ -18,6 +19,7 @@ from sqlalchemy.orm.attributes import flag_modified
 from app.config import settings
 from app.core.dependencies import get_current_active_user, get_current_active_user_or_service, get_db
 from app.core.security import create_access_token, create_device_trust_token, create_refresh_token, create_totp_pending_token, decode_token, hash_password, verify_password
+from app.db.redis import get_redis_client
 from app.models.user import User
 from app.schemas.auth import (
     AuthResponse,
@@ -42,6 +44,50 @@ from app.schemas.auth import (
 from app.services.auth_service import AuthService
 
 router = APIRouter()
+
+_TOTP_MAX_ATTEMPTS = 5
+_TOTP_WINDOW_SECONDS = 900  # 15 minutes
+
+
+async def _check_totp_rate_limit(user_id: str) -> None:
+    """Block TOTP verification after too many failed attempts (5 per 15 min)."""
+    try:
+        redis = await get_redis_client()
+        key = f"totp_attempts:{user_id}"
+        attempts = await redis.cache_get(key)
+        if attempts and int(attempts) >= _TOTP_MAX_ATTEMPTS:
+            logger.warning("TOTP rate limit exceeded for user_id=%s", user_id)
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Too many TOTP attempts. Try again in 15 minutes.",
+            )
+    except HTTPException:
+        raise
+    except Exception:
+        pass  # If Redis is down, fail open
+
+
+async def _record_failed_totp(user_id: str) -> None:
+    """Increment failed TOTP counter."""
+    try:
+        redis = await get_redis_client()
+        key = f"totp_attempts:{user_id}"
+        current = await redis.cache_get(key)
+        count = int(current) + 1 if current else 1
+        await redis.cache_set(key, str(count), ttl=_TOTP_WINDOW_SECONDS)
+        logger.warning("Failed TOTP attempt for user_id=%s (attempt %d)", user_id, count)
+    except Exception:
+        pass
+
+
+async def _clear_totp_attempts(user_id: str) -> None:
+    """Clear TOTP attempt counter on success."""
+    try:
+        redis = await get_redis_client()
+        key = f"totp_attempts:{user_id}"
+        await redis.cache_delete(key)
+    except Exception:
+        pass
 
 
 # -- Setup status (no auth required) --------------------------------------
@@ -98,7 +144,10 @@ async def register(
 @router.post("/login", response_model=AuthResponse)
 async def login(payload: UserLogin, request: Request, db: AsyncSession = Depends(get_db)) -> AuthResponse:
     """Authenticate with email and password, receive JWT tokens with user data."""
-    response = await AuthService.login(db, payload.email, payload.password)
+    client_ip = request.headers.get("x-forwarded-for", "").split(",")[0].strip() or (
+        request.client.host if request.client else "unknown"
+    )
+    response = await AuthService.login(db, payload.email, payload.password, ip_address=client_ip)
 
     # Track session (best-effort, don't block login if this fails)
     try:
@@ -115,6 +164,21 @@ async def login(payload: UserLogin, request: Request, db: AsyncSession = Depends
 @router.post("/refresh", response_model=Token)
 async def refresh(refresh_token: str, db: AsyncSession = Depends(get_db)) -> Token:
     """Exchange a valid refresh token for a new token pair."""
+    # Rate limit: max 1 refresh per 30 seconds per token
+    token_hash = hashlib.sha256(refresh_token.encode()).hexdigest()
+    try:
+        redis = await get_redis_client()
+        rate_key = f"refresh_rate:{token_hash}"
+        if await redis.cache_get(rate_key):
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Token refresh rate limit exceeded. Try again in 30 seconds.",
+            )
+        await redis.cache_set(rate_key, "1", ttl=30)
+    except HTTPException:
+        raise
+    except Exception:
+        pass  # If Redis is down, fail open
     return await AuthService.refresh_token(db, refresh_token)
 
 
@@ -188,11 +252,19 @@ async def passkey_login_complete(
                     trust_data = decode_token(device_trust)
                     logger.info("Device trust decoded: type=%s, sub=%s, user=%s",
                                 trust_data.type, trust_data.sub, user.id)
-                    if trust_data.type == "device_trust" and trust_data.sub == str(user.id):
+                    # Validate type, subject, AND device fingerprint
+                    current_ua = request.headers.get("user-agent", "")
+                    current_dh = hashlib.sha256(current_ua.encode()).hexdigest()
+                    if (
+                        trust_data.type == "device_trust"
+                        and trust_data.sub == str(user.id)
+                        and trust_data.dh == current_dh
+                    ):
                         logger.info("Device trust valid — skipping TOTP for user %s", user.id)
                         return auth_response
-                    logger.warning("Device trust token mismatch: type=%s, sub=%s vs user=%s",
-                                   trust_data.type, trust_data.sub, user.id)
+                    logger.warning("Device trust token mismatch: type=%s, sub=%s vs user=%s, dh_match=%s",
+                                   trust_data.type, trust_data.sub, user.id,
+                                   trust_data.dh == current_dh)
                 except Exception as exc:
                     logger.warning("Device trust token invalid/expired: %s", exc)
             totp_token = create_totp_pending_token(user.id)
@@ -337,9 +409,12 @@ async def totp_enable(
 ) -> dict[str, str]:
     """Verify a TOTP code and permanently enable 2FA for this account."""
     import pyotp
+    await _check_totp_rate_limit(str(current_user.id))
     totp = pyotp.TOTP(secret)
     if not totp.verify(payload.code, valid_window=1):
+        await _record_failed_totp(str(current_user.id))
         raise HTTPException(status_code=400, detail="Invalid TOTP code.")
+    await _clear_totp_attempts(str(current_user.id))
     prefs = dict(current_user.preferences or {})
     prefs["totp_secret"] = secret
     prefs["totp_enabled"] = True
@@ -357,13 +432,16 @@ async def totp_disable(
 ) -> dict[str, str]:
     """Disable TOTP 2FA. Requires a valid code to confirm."""
     import pyotp
+    await _check_totp_rate_limit(str(current_user.id))
     prefs = current_user.preferences or {}
     secret = prefs.get("totp_secret", "")
     if not secret:
         raise HTTPException(status_code=400, detail="TOTP not enabled.")
     totp = pyotp.TOTP(secret)
     if not totp.verify(payload.code, valid_window=1):
+        await _record_failed_totp(str(current_user.id))
         raise HTTPException(status_code=400, detail="Invalid TOTP code.")
+    await _clear_totp_attempts(str(current_user.id))
     prefs = dict(prefs)
     prefs.pop("totp_secret", None)
     prefs.pop("totp_enabled", None)
@@ -421,6 +499,7 @@ async def totp_secret(
 @router.post("/login/totp-verify")
 async def totp_login_verify(
     payload: TOTPLoginRequest,
+    request: Request,
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """Complete login with TOTP code after initial auth returned needs_totp.
@@ -446,6 +525,7 @@ async def totp_login_verify(
         raise HTTPException(status_code=403, detail="Access denied.")
 
     import pyotp
+    await _check_totp_rate_limit(str(user.id))
     prefs = user.preferences or {}
     secret = prefs.get("totp_secret", "")
     if not secret:
@@ -453,7 +533,9 @@ async def totp_login_verify(
 
     totp = pyotp.TOTP(secret)
     if not totp.verify(payload.code, valid_window=1):
+        await _record_failed_totp(str(user.id))
         raise HTTPException(status_code=403, detail="Invalid TOTP code.")
+    await _clear_totp_attempts(str(user.id))
 
     auth = AuthResponse(
         access_token=create_access_token(user.id),
@@ -461,9 +543,10 @@ async def totp_login_verify(
         user=UserResponse.model_validate(user),
     )
     # Include a device trust token so they don't have to TOTP again for 14 days
+    ua = request.headers.get("user-agent", "")
     return {
         **auth.model_dump(),
-        "device_trust_token": create_device_trust_token(user.id),
+        "device_trust_token": create_device_trust_token(user.id, user_agent=ua),
     }
 
 
