@@ -1199,7 +1199,13 @@ export default function MapPage() {
           const map = mapRef.current;
           const mk = window.mapkit;
           if (map && mk && !initialFitDoneRef.current) {
-            map.setCenterAnimated(new mk.Coordinate(loc.latitude, loc.longitude), true);
+            try {
+              const region = new mk.CoordinateRegion(
+                new mk.Coordinate(loc.latitude, loc.longitude),
+                new mk.CoordinateSpan(0.5, 0.5),
+              );
+              map.setRegionAnimated(region, true);
+            } catch { /* method unavailable */ }
           }
         }
       } catch { /* no location data available */ }
@@ -1293,77 +1299,7 @@ export default function MapPage() {
     return () => container.removeEventListener('contextmenu', handler);
   }, [mapReady]);
 
-  // ---- POI tap handler (single-tap on map) ----
-  useEffect(() => {
-    const map = mapRef.current;
-    const mk = window.mapkit;
-    if (!map || !mk || !mapReady) return;
-
-    const handler = (event: any) => {
-      // Don't trigger if a custom annotation was just selected
-      if (annotationJustSelectedRef.current) return;
-
-      const coord = map.convertPointOnPageToCoordinate(event.pointOnPage);
-      if (!coord) return;
-
-      // Reverse geocode to get location info
-      const geocoder = new mk.Geocoder({ language: 'en' });
-      geocoder.reverseLookup(new mk.Coordinate(coord.latitude, coord.longitude), (error: any, data: any) => {
-        if (error || !data?.results?.length) return;
-        const r = data.results[0];
-        const name = r.name || '';
-        // Only show panel if we got a meaningful name (not just coordinates)
-        if (!name || /^\d/.test(name)) return;
-
-        // Search for full details using the name
-        const search = mapSearchObjRef.current || new mk.Search({ language: 'en' });
-        search.search(
-          name,
-          (searchErr: any, searchData: any) => {
-            if (searchErr || !searchData?.places?.length) {
-              // Fallback: show reverse geocode result
-              setSelectedPlace({
-                name,
-                latitude: coord.latitude,
-                longitude: coord.longitude,
-                formattedAddress: [r.name, r.locality, r.administrativeArea, r.postCode].filter(Boolean).join(', '),
-              });
-              return;
-            }
-            // Find the closest place to the tap coordinate
-            let bestPlace = searchData.places[0];
-            let bestDist = Infinity;
-            for (const p of searchData.places) {
-              const dist = Math.hypot(
-                p.coordinate.latitude - coord.latitude,
-                p.coordinate.longitude - coord.longitude,
-              );
-              if (dist < bestDist) {
-                bestDist = dist;
-                bestPlace = p;
-              }
-            }
-            // Only show if reasonably close (<500m)
-            if (bestDist < 0.005) {
-              setSelectedPlace({
-                name: bestPlace.name || name,
-                latitude: bestPlace.coordinate.latitude,
-                longitude: bestPlace.coordinate.longitude,
-                formattedAddress: bestPlace.formattedAddress || '',
-                phone: bestPlace.telephone || '',
-                url: bestPlace.urls?.[0] || '',
-                category: formatPOICategory(bestPlace.pointOfInterestCategory) || '',
-              });
-            }
-          },
-          { region: map.region },
-        );
-      });
-    };
-
-    map.addEventListener('single-tap', handler);
-    return () => map.removeEventListener('single-tap', handler);
-  }, [mapReady]);
+  // POI tap handler removed — use search bar to find places instead
 
   // ---- Fetch contacts + landmarks ----
   const fetchMapData = useCallback(async () => {
@@ -1698,15 +1634,15 @@ export default function MapPage() {
     };
   }, [mapSearchQuery]);
 
-  // ---- Add/remove native MapKit pin for selected place ----
+  // ---- Add/remove pin for selected place ----
   useEffect(() => {
     const map = mapRef.current;
     const mk = window.mapkit;
     if (!map || !mk) return;
 
-    // Remove previous selected place annotation
+    // Remove previous
     if (selectedPlaceAnnotationRef.current) {
-      try { map.removeAnnotation(selectedPlaceAnnotationRef.current); } catch { /* already removed */ }
+      try { map.removeAnnotation(selectedPlaceAnnotationRef.current); } catch { /* noop */ }
       selectedPlaceAnnotationRef.current = null;
     }
 
@@ -1714,39 +1650,16 @@ export default function MapPage() {
 
     try {
       const coord = new mk.Coordinate(selectedPlace.latitude, selectedPlace.longitude);
-
-      // Try MarkerAnnotation (native Apple Maps pin) first, fallback to custom
-      let annotation: any;
-      if (typeof mk.MarkerAnnotation === 'function') {
-        annotation = new mk.MarkerAnnotation(coord, {
-          title: selectedPlace.name,
-          subtitle: selectedPlace.formattedAddress || '',
-          color: '#00d4ff',
-          glyphColor: '#0A0E17',
-        });
-      } else {
-        // Fallback: custom annotation with a pin icon
-        const el = document.createElement('div');
-        el.style.cssText = 'width:28px;height:28px;background:#00d4ff;border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:2px solid #0A0E17;box-shadow:0 0 12px rgba(0,212,255,0.4);';
-        annotation = new mk.Annotation(coord, () => el, {
-          title: selectedPlace.name,
-          anchorOffset: new DOMPoint(0, -14),
-        });
-      }
-
+      const el = document.createElement('div');
+      el.style.cssText = 'width:24px;height:24px;background:#00d4ff;border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:2px solid #0A0E17;box-shadow:0 0 12px rgba(0,212,255,0.4);';
+      const annotation = new mk.Annotation(coord, () => el, {
+        anchorOffset: new DOMPoint(0, -12),
+        calloutEnabled: false,
+      });
       map.addAnnotation(annotation);
       selectedPlaceAnnotationRef.current = annotation;
-    } catch (err) {
-      console.warn('[Map] Failed to add place annotation:', err);
-    }
-
-    return () => {
-      if (selectedPlaceAnnotationRef.current && mapRef.current) {
-        try { mapRef.current.removeAnnotation(selectedPlaceAnnotationRef.current); } catch { /* noop */ }
-        selectedPlaceAnnotationRef.current = null;
-      }
-    };
-  }, [selectedPlace]);
+    } catch { /* annotation creation failed — non-fatal */ }
+  }, [selectedPlace, mapReady]);
 
   // ---- Helper: region from contacts ----
   function regionFromContacts(contacts: GeocodedContact[]) {

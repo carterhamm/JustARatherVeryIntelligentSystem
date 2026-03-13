@@ -258,7 +258,8 @@ function WeatherWidget() {
 
   const fetchWeather = useCallback(async () => {
     try {
-      setLoading(true);
+      // Only show skeleton on first load, not refetches
+      if (!data) setLoading(true);
       const params = new URLSearchParams();
       if (coordsRef.current) {
         params.set('lat', coordsRef.current.lat.toFixed(4));
@@ -272,7 +273,7 @@ function WeatherWidget() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [data]);
 
   useEffect(() => {
     const timer = setTimeout(fetchWeather, 1500);
@@ -381,7 +382,7 @@ function CalendarWidget() {
 
   const fetchCalendar = useCallback(async () => {
     try {
-      setLoading(true);
+      if (!data) setLoading(true);
       const res = await api.get<CalendarData>('/widgets/calendar');
       setData(res);
     } catch {
@@ -389,7 +390,7 @@ function CalendarWidget() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [data]);
 
   useEffect(() => { fetchCalendar(); }, [fetchCalendar]);
   useAutoRefresh(fetchCalendar, 5 * 60 * 1000); // 5 min + visibility refetch
@@ -566,15 +567,15 @@ function HealthWidget() {
 
   const fetchHealth = useCallback(async () => {
     try {
-      setLoading(true);
+      if (!data) setLoading(true);
       const res = await api.get<HealthSummary>('/health/summary');
       setData(res);
     } catch {
-      setData(null);
+      if (!data) setData(null);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [data]);
 
   useEffect(() => { fetchHealth(); }, [fetchHealth]);
   useAutoRefresh(fetchHealth, 10 * 60 * 1000);
@@ -645,15 +646,15 @@ function EmailWidget() {
 
   const fetchEmail = useCallback(async () => {
     try {
-      setLoading(true);
+      if (!data) setLoading(true);
       const res = await api.get<EmailData>('/widgets/email');
       setData(res);
     } catch {
-      setData(null);
+      if (!data) setData(null);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [data]);
 
   useEffect(() => { fetchEmail(); }, [fetchEmail]);
   useAutoRefresh(fetchEmail, 10 * 60 * 1000);
@@ -714,15 +715,15 @@ function RemindersWidget() {
 
   const fetchReminders = useCallback(async () => {
     try {
-      setLoading(true);
+      if (!data) setLoading(true);
       const res = await api.get<RemindersData>('/widgets/reminders');
       setData(res);
     } catch {
-      setData(null);
+      if (!data) setData(null);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [data]);
 
   useEffect(() => { fetchReminders(); }, [fetchReminders]);
   useAutoRefresh(fetchReminders, 2 * 60 * 1000);
@@ -930,15 +931,15 @@ function HabitsWidget() {
 
   const fetchHabits = useCallback(async () => {
     try {
-      setLoading(true);
+      if (!data) setLoading(true);
       const res = await api.get<HabitsData>('/widgets/habits');
       setData(res);
     } catch {
-      setData(null);
+      if (!data) setData(null);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [data]);
 
   useEffect(() => { fetchHabits(); }, [fetchHabits]);
   useAutoRefresh(fetchHabits, 5 * 60 * 1000);
