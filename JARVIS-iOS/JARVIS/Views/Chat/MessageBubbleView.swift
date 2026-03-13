@@ -63,25 +63,25 @@ struct MessageBubbleView: View {
                 .padding(.vertical, 10)
                 .background {
                     if isUser {
-                        RoundedRectangle(cornerRadius: 14)
+                        HexCornerShape(cutSize: 10)
                             .fill(.ultraThinMaterial)
                             .overlay {
-                                RoundedRectangle(cornerRadius: 14)
+                                HexCornerShape(cutSize: 10)
                                     .fill(Color.jarvisGold.opacity(0.06))
                             }
                             .overlay {
-                                RoundedRectangle(cornerRadius: 14)
+                                HexCornerShape(cutSize: 10)
                                     .strokeBorder(Color.jarvisGold.opacity(0.12), lineWidth: 0.5)
                             }
                     } else {
-                        RoundedRectangle(cornerRadius: 14)
+                        HexCornerShape(cutSize: 10)
                             .fill(.ultraThinMaterial)
                             .overlay {
-                                RoundedRectangle(cornerRadius: 14)
+                                HexCornerShape(cutSize: 10)
                                     .fill(Color.jarvisBlue.opacity(0.04))
                             }
                             .overlay {
-                                RoundedRectangle(cornerRadius: 14)
+                                HexCornerShape(cutSize: 10)
                                     .strokeBorder(Color.jarvisBlue.opacity(0.1), lineWidth: 0.5)
                             }
                     }

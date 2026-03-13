@@ -14,7 +14,7 @@ struct TOTPVerifyView: View {
 
                 // Lock icon
                 ZStack {
-                    Circle()
+                    HexCornerShape(cutSize: 12)
                         .stroke(Color.jarvisBlue.opacity(0.3), lineWidth: 1)
                         .frame(width: 80, height: 80)
 
@@ -51,10 +51,10 @@ struct TOTPVerifyView: View {
                                 .foregroundColor(.jarvisBlue)
                                 .frame(width: 40, height: 52)
                                 .background {
-                                    RoundedRectangle(cornerRadius: 8)
+                                    HexCornerShape(cutSize: 6)
                                         .fill(Color.jarvisBlue.opacity(0.05))
                                         .overlay {
-                                            RoundedRectangle(cornerRadius: 8)
+                                            HexCornerShape(cutSize: 6)
                                                 .strokeBorder(
                                                     index == authVM.totpCode.count
                                                         ? Color.jarvisBlue.opacity(0.5)
@@ -101,10 +101,10 @@ struct TOTPVerifyView: View {
                         .frame(maxWidth: .infinity)
                         .frame(height: 48)
                         .background {
-                            RoundedRectangle(cornerRadius: 8)
+                            HexCornerShape(cutSize: 8)
                                 .fill(Color.jarvisBlue.opacity(0.08))
                                 .overlay {
-                                    RoundedRectangle(cornerRadius: 8)
+                                    HexCornerShape(cutSize: 8)
                                         .strokeBorder(Color.jarvisBlue.opacity(0.3), lineWidth: 1)
                                 }
                         }

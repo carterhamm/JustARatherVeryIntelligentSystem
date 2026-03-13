@@ -177,10 +177,10 @@ struct HUDStatusBar: View {
                 .padding(.horizontal, 8)
                 .padding(.vertical, 3)
                 .background {
-                    Capsule()
+                    HexCornerShape(cutSize: 4)
                         .fill(providerColor.opacity(0.06))
                         .overlay {
-                            Capsule()
+                            HexCornerShape(cutSize: 4)
                                 .strokeBorder(providerColor.opacity(0.15), lineWidth: 0.5)
                         }
                 }

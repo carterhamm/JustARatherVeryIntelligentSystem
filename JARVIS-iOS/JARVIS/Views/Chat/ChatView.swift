@@ -132,7 +132,7 @@ struct ToolUseIndicator: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
-        .glassBackground(opacity: 0.3, cornerRadius: 12)
+        .glassBackground(opacity: 0.3, cutSize: 8)
         .frame(maxWidth: .infinity, alignment: .leading)
         .onAppear {
             Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { _ in

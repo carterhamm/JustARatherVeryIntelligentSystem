@@ -44,14 +44,14 @@ struct ChatInputBar: View {
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
                 .background {
-                    RoundedRectangle(cornerRadius: 20)
+                    HexCornerShape(cutSize: 10)
                         .fill(.ultraThinMaterial)
                         .overlay {
-                            RoundedRectangle(cornerRadius: 20)
+                            HexCornerShape(cutSize: 10)
                                 .fill(Color.jarvisPanelBg.opacity(0.5))
                         }
                         .overlay {
-                            RoundedRectangle(cornerRadius: 20)
+                            HexCornerShape(cutSize: 10)
                                 .strokeBorder(
                                     isFocused
                                         ? Color.jarvisBlue.opacity(0.3)
@@ -66,10 +66,10 @@ struct ChatInputBar: View {
                     Task { await chatVM.sendMessage() }
                 } label: {
                     ZStack {
-                        Circle()
+                        HexCornerShape(cutSize: 6)
                             .fill(canSend ? Color.jarvisBlue.opacity(0.15) : Color.clear)
                             .overlay {
-                                Circle()
+                                HexCornerShape(cutSize: 6)
                                     .strokeBorder(
                                         canSend
                                             ? Color.jarvisBlue.opacity(0.4)

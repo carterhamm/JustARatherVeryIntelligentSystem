@@ -102,10 +102,10 @@ struct SettingsView: View {
                                     .padding(.horizontal, 12)
                                     .padding(.vertical, 8)
                                     .background {
-                                        RoundedRectangle(cornerRadius: 6)
+                                        HexCornerShape(cutSize: 6)
                                             .fill(Color.jarvisBlue.opacity(0.03))
                                             .overlay {
-                                                RoundedRectangle(cornerRadius: 6)
+                                                HexCornerShape(cutSize: 6)
                                                     .strokeBorder(Color.jarvisBlue.opacity(0.1), lineWidth: 0.5)
                                             }
                                     }
@@ -146,7 +146,7 @@ struct SettingsView: View {
                                             .padding(.horizontal, 10)
                                             .padding(.vertical, 5)
                                             .background {
-                                                Capsule()
+                                                HexCornerShape(cutSize: 4)
                                                     .strokeBorder(Color.jarvisBlue.opacity(0.3), lineWidth: 0.5)
                                             }
                                     }
@@ -187,7 +187,7 @@ struct SettingsView: View {
                                             .padding(.horizontal, 10)
                                             .padding(.vertical, 5)
                                             .background {
-                                                Capsule()
+                                                HexCornerShape(cutSize: 4)
                                                     .strokeBorder(Color.jarvisBlue.opacity(0.3), lineWidth: 0.5)
                                             }
                                     }
@@ -221,10 +221,10 @@ struct SettingsView: View {
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 44)
                                 .background {
-                                    RoundedRectangle(cornerRadius: 8)
+                                    HexCornerShape(cutSize: 6)
                                         .fill(Color.jarvisError.opacity(0.05))
                                         .overlay {
-                                            RoundedRectangle(cornerRadius: 8)
+                                            HexCornerShape(cutSize: 6)
                                                 .strokeBorder(Color.jarvisError.opacity(0.2), lineWidth: 0.5)
                                         }
                                 }
@@ -269,7 +269,8 @@ struct SettingsSection<Content: View>: View {
                 content
             }
             .padding(12)
-            .glassBackground(opacity: 0.3, cornerRadius: 10)
+            .glassBackground(opacity: 0.3, cutSize: 8)
+            .hudAccentCorners(cutSize: 8, opacity: 0.25, lineLength: 10)
         }
     }
 }

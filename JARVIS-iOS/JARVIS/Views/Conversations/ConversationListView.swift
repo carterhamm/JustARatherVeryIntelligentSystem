@@ -181,7 +181,7 @@ struct ConversationRow: View {
         .padding(.vertical, 8)
         .background {
             if isSelected {
-                RoundedRectangle(cornerRadius: 6)
+                HexCornerShape(cutSize: 6)
                     .fill(Color.jarvisBlue.opacity(0.06))
             }
         }

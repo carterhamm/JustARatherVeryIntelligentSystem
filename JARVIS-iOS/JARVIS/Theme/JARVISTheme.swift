@@ -49,24 +49,23 @@ extension Color {
     }
 }
 
-// MARK: - Glass Morphism Modifiers
+// MARK: - Angular Glass Modifiers
 
 struct GlassBackground: ViewModifier {
     var opacity: Double = 0.45
-    var blurRadius: CGFloat = 24
-    var cornerRadius: CGFloat = 16
+    var cutSize: CGFloat = 10
 
     func body(content: Content) -> some View {
         content
             .background {
-                RoundedRectangle(cornerRadius: cornerRadius)
+                HexCornerShape(cutSize: cutSize)
                     .fill(.ultraThinMaterial)
                     .overlay {
-                        RoundedRectangle(cornerRadius: cornerRadius)
+                        HexCornerShape(cutSize: cutSize)
                             .fill(Color.jarvisPanelBg.opacity(opacity))
                     }
                     .overlay {
-                        RoundedRectangle(cornerRadius: cornerRadius)
+                        HexCornerShape(cutSize: cutSize)
                             .strokeBorder(Color.jarvisGlassBorder, lineWidth: 0.5)
                     }
             }
@@ -79,14 +78,14 @@ struct GlassCapsule: ViewModifier {
     func body(content: Content) -> some View {
         content
             .background {
-                Capsule()
+                HexCornerShape(cutSize: 6)
                     .fill(.ultraThinMaterial)
                     .overlay {
-                        Capsule()
+                        HexCornerShape(cutSize: 6)
                             .fill(Color.jarvisPanelBg.opacity(opacity))
                     }
                     .overlay {
-                        Capsule()
+                        HexCornerShape(cutSize: 6)
                             .strokeBorder(Color.jarvisGlassBorder, lineWidth: 0.5)
                     }
             }
@@ -106,10 +105,9 @@ struct CyanGlow: ViewModifier {
 extension View {
     func glassBackground(
         opacity: Double = 0.45,
-        blur: CGFloat = 24,
-        cornerRadius: CGFloat = 16
+        cutSize: CGFloat = 10
     ) -> some View {
-        modifier(GlassBackground(opacity: opacity, blurRadius: blur, cornerRadius: cornerRadius))
+        modifier(GlassBackground(opacity: opacity, cutSize: cutSize))
     }
 
     func glassCapsule(opacity: Double = 0.5) -> some View {
@@ -130,6 +128,20 @@ extension View {
             .textCase(.uppercase)
             .tracking(1.5)
             .foregroundColor(.jarvisBlue.opacity(0.7))
+    }
+
+    func hudAccentCorners(
+        cutSize: CGFloat = 8,
+        color: Color = .jarvisBlue,
+        opacity: Double = 0.35,
+        lineLength: CGFloat = 14
+    ) -> some View {
+        self.overlay {
+            HUDCornerAccents(
+                cutSize: cutSize, color: color,
+                opacity: opacity, lineLength: lineLength
+            )
+        }
     }
 }
 
@@ -166,23 +178,82 @@ struct ScanlineOverlay: View {
     }
 }
 
-// MARK: - Hex Corner Clip
+// MARK: - Hex Corner Clip (Angular Shape)
 
-struct HexCornerShape: Shape {
+struct HexCornerShape: InsettableShape {
     var cutSize: CGFloat = 8
+    var insetAmount: CGFloat = 0
 
     func path(in rect: CGRect) -> Path {
-        Path { p in
-            p.move(to: CGPoint(x: rect.minX + cutSize, y: rect.minY))
-            p.addLine(to: CGPoint(x: rect.maxX - cutSize, y: rect.minY))
-            p.addLine(to: CGPoint(x: rect.maxX, y: rect.minY + cutSize))
-            p.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - cutSize))
-            p.addLine(to: CGPoint(x: rect.maxX - cutSize, y: rect.maxY))
-            p.addLine(to: CGPoint(x: rect.minX + cutSize, y: rect.maxY))
-            p.addLine(to: CGPoint(x: rect.minX, y: rect.maxY - cutSize))
-            p.addLine(to: CGPoint(x: rect.minX, y: rect.minY + cutSize))
+        let r = rect.insetBy(dx: insetAmount, dy: insetAmount)
+        let c = max(0, cutSize - insetAmount)
+        return Path { p in
+            p.move(to: CGPoint(x: r.minX + c, y: r.minY))
+            p.addLine(to: CGPoint(x: r.maxX - c, y: r.minY))
+            p.addLine(to: CGPoint(x: r.maxX, y: r.minY + c))
+            p.addLine(to: CGPoint(x: r.maxX, y: r.maxY - c))
+            p.addLine(to: CGPoint(x: r.maxX - c, y: r.maxY))
+            p.addLine(to: CGPoint(x: r.minX + c, y: r.maxY))
+            p.addLine(to: CGPoint(x: r.minX, y: r.maxY - c))
+            p.addLine(to: CGPoint(x: r.minX, y: r.minY + c))
             p.closeSubpath()
         }
+    }
+
+    func inset(by amount: CGFloat) -> HexCornerShape {
+        var shape = self
+        shape.insetAmount += amount
+        return shape
+    }
+}
+
+// MARK: - HUD Corner Accent Overlay
+
+struct HUDCornerAccents: View {
+    var cutSize: CGFloat = 8
+    var color: Color = .jarvisBlue
+    var opacity: Double = 0.35
+    var lineLength: CGFloat = 14
+
+    var body: some View {
+        Canvas { ctx, size in
+            let w = size.width
+            let h = size.height
+            let c = cutSize
+
+            // Top-left
+            var tl = Path()
+            tl.move(to: CGPoint(x: 0, y: c + lineLength))
+            tl.addLine(to: CGPoint(x: 0, y: c))
+            tl.addLine(to: CGPoint(x: c, y: 0))
+            tl.addLine(to: CGPoint(x: c + lineLength, y: 0))
+            ctx.stroke(tl, with: .color(color.opacity(opacity)), lineWidth: 1)
+
+            // Top-right
+            var tr = Path()
+            tr.move(to: CGPoint(x: w - c - lineLength, y: 0))
+            tr.addLine(to: CGPoint(x: w - c, y: 0))
+            tr.addLine(to: CGPoint(x: w, y: c))
+            tr.addLine(to: CGPoint(x: w, y: c + lineLength))
+            ctx.stroke(tr, with: .color(color.opacity(opacity)), lineWidth: 1)
+
+            // Bottom-right
+            var br = Path()
+            br.move(to: CGPoint(x: w, y: h - c - lineLength))
+            br.addLine(to: CGPoint(x: w, y: h - c))
+            br.addLine(to: CGPoint(x: w - c, y: h))
+            br.addLine(to: CGPoint(x: w - c - lineLength, y: h))
+            ctx.stroke(br, with: .color(color.opacity(opacity)), lineWidth: 1)
+
+            // Bottom-left
+            var bl = Path()
+            bl.move(to: CGPoint(x: c + lineLength, y: h))
+            bl.addLine(to: CGPoint(x: c, y: h))
+            bl.addLine(to: CGPoint(x: 0, y: h - c))
+            bl.addLine(to: CGPoint(x: 0, y: h - c - lineLength))
+            ctx.stroke(bl, with: .color(color.opacity(opacity)), lineWidth: 1)
+        }
+        .allowsHitTesting(false)
     }
 }
 

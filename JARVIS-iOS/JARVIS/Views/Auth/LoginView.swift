@@ -336,10 +336,10 @@ struct LoginView: View {
     }
 
     private func inputBackground(focused: Bool) -> some View {
-        RoundedRectangle(cornerRadius: 8)
+        HexCornerShape(cutSize: 8)
             .fill(Color.white.opacity(0.03))
             .overlay(
-                RoundedRectangle(cornerRadius: 8)
+                HexCornerShape(cutSize: 8)
                     .strokeBorder(
                         focused
                             ? Color.jarvisBlue.opacity(0.5)
@@ -350,12 +350,15 @@ struct LoginView: View {
     }
 
     private var buttonBackground: some View {
-        RoundedRectangle(cornerRadius: 8)
-            .fill(Color.jarvisBlue.opacity(0.1))
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .strokeBorder(Color.jarvisBlue.opacity(0.4), lineWidth: 1)
-            )
+        ZStack {
+            HexCornerShape(cutSize: 8)
+                .fill(Color.jarvisBlue.opacity(0.1))
+                .overlay(
+                    HexCornerShape(cutSize: 8)
+                        .strokeBorder(Color.jarvisBlue.opacity(0.4), lineWidth: 1)
+                )
+            HUDCornerAccents(cutSize: 8, color: .jarvisBlue, opacity: 0.4, lineLength: 10)
+        }
     }
 }
 

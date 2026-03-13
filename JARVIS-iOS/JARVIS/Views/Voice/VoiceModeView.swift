@@ -32,10 +32,10 @@ struct VoiceModeView: View {
                             .foregroundColor(.jarvisBlue.opacity(0.5))
                             .frame(width: 36, height: 36)
                             .background {
-                                Circle()
+                                HexCornerShape(cutSize: 6)
                                     .fill(Color.jarvisBlue.opacity(0.05))
                                     .overlay {
-                                        Circle()
+                                        HexCornerShape(cutSize: 6)
                                             .strokeBorder(Color.jarvisBlue.opacity(0.15), lineWidth: 0.5)
                                     }
                             }
@@ -95,11 +95,11 @@ struct VoiceModeView: View {
                     handleMicTap()
                 } label: {
                     ZStack {
-                        Circle()
+                        HexCornerShape(cutSize: 12)
                             .fill(phase == .listening ? Color.jarvisBlue.opacity(0.15) : Color.clear)
                             .frame(width: 72, height: 72)
                             .overlay {
-                                Circle()
+                                HexCornerShape(cutSize: 12)
                                     .strokeBorder(
                                         phase == .listening
                                             ? Color.jarvisBlue.opacity(0.5)
