@@ -185,3 +185,121 @@ struct HexCornerShape: Shape {
         }
     }
 }
+
+// MARK: - Vignette Overlay
+
+struct VignetteOverlay: View {
+    var body: some View {
+        RadialGradient(
+            colors: [
+                .clear,
+                .clear,
+                Color.black.opacity(0.3),
+                Color.black.opacity(0.7)
+            ],
+            center: .center,
+            startRadius: 100,
+            endRadius: UIScreen.main.bounds.height * 0.7
+        )
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
+    }
+}
+
+// MARK: - HUD Frame Corners
+
+struct HUDCorner: View {
+    let position: CornerPosition
+    enum CornerPosition { case topLeft, topRight, bottomLeft, bottomRight }
+
+    var body: some View {
+        Canvas { context, size in
+            let len: CGFloat = 24
+            let color = Color.jarvisBlue.opacity(0.12)
+
+            var path = Path()
+            switch position {
+            case .topLeft:
+                path.move(to: CGPoint(x: 0, y: len))
+                path.addLine(to: .zero)
+                path.addLine(to: CGPoint(x: len, y: 0))
+            case .topRight:
+                path.move(to: CGPoint(x: size.width - len, y: 0))
+                path.addLine(to: CGPoint(x: size.width, y: 0))
+                path.addLine(to: CGPoint(x: size.width, y: len))
+            case .bottomLeft:
+                path.move(to: CGPoint(x: 0, y: size.height - len))
+                path.addLine(to: CGPoint(x: 0, y: size.height))
+                path.addLine(to: CGPoint(x: len, y: size.height))
+            case .bottomRight:
+                path.move(to: CGPoint(x: size.width, y: size.height - len))
+                path.addLine(to: CGPoint(x: size.width, y: size.height))
+                path.addLine(to: CGPoint(x: size.width - len, y: size.height))
+            }
+            context.stroke(path, with: .color(color), lineWidth: 1)
+        }
+        .frame(width: 36, height: 36)
+        .allowsHitTesting(false)
+    }
+}
+
+// MARK: - HUD Edge Lines
+
+struct HUDEdgeLines: View {
+    var body: some View {
+        GeometryReader { geo in
+            // Top
+            Rectangle()
+                .fill(
+                    LinearGradient(
+                        colors: [.clear, Color.jarvisBlue.opacity(0.08), .clear],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .frame(height: 0.5)
+                .offset(y: 0)
+                .padding(.horizontal, 44)
+
+            // Bottom
+            Rectangle()
+                .fill(
+                    LinearGradient(
+                        colors: [.clear, Color.jarvisBlue.opacity(0.06), .clear],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .frame(height: 0.5)
+                .offset(y: geo.size.height - 0.5)
+                .padding(.horizontal, 44)
+
+            // Left
+            Rectangle()
+                .fill(
+                    LinearGradient(
+                        colors: [.clear, Color.jarvisBlue.opacity(0.06), .clear],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .frame(width: 0.5)
+                .offset(x: 0)
+                .padding(.vertical, 44)
+
+            // Right
+            Rectangle()
+                .fill(
+                    LinearGradient(
+                        colors: [.clear, Color.jarvisBlue.opacity(0.06), .clear],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .frame(width: 0.5)
+                .offset(x: geo.size.width - 0.5)
+                .padding(.vertical, 44)
+        }
+        .allowsHitTesting(false)
+    }
+}

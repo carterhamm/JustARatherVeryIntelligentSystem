@@ -49,110 +49,48 @@ struct ChatView: View {
     }
 }
 
-// MARK: - Empty State (Arc Reactor)
+// MARK: - Empty State (3D Particle Cloud)
 
 struct EmptyStateView: View {
-    @State private var rotation1 = 0.0
-    @State private var rotation2 = 0.0
-    @State private var coreScale = 0.8
     @State private var opacity = 0.0
 
     var body: some View {
-        VStack(spacing: 24) {
-            Spacer()
+        ZStack {
+            // 3D SceneKit particle cloud
+            ParticleCloudView(allowsCameraControl: true)
+                .opacity(opacity * 0.85)
 
-            ZStack {
-                // Outer ring 3
-                Circle()
-                    .stroke(Color.jarvisBlue.opacity(0.08), lineWidth: 1)
-                    .frame(width: 180, height: 180)
+            // Overlay text
+            VStack(spacing: 24) {
+                Spacer()
+                Spacer()
+                Spacer()
 
-                // Segmented ring 2
-                ForEach(0..<8, id: \.self) { i in
-                    ArcSegment(
-                        startAngle: Double(i) * 45 + 5,
-                        endAngle: Double(i) * 45 + 35
-                    )
-                    .stroke(Color.jarvisBlue.opacity(0.15), lineWidth: 1.5)
-                    .frame(width: 150, height: 150)
-                    .rotationEffect(.degrees(rotation1))
+                VStack(spacing: 6) {
+                    Text("SYSTEMS ONLINE")
+                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                        .tracking(3)
+                        .foregroundColor(.jarvisBlue.opacity(0.5))
+
+                    Text("How may I assist you, Sir?")
+                        .font(.system(size: 15, weight: .light, design: .monospaced))
+                        .foregroundColor(.jarvisBlue.opacity(0.7))
                 }
 
-                // Inner segmented ring
-                ForEach(0..<6, id: \.self) { i in
-                    ArcSegment(
-                        startAngle: Double(i) * 60 + 10,
-                        endAngle: Double(i) * 60 + 45
-                    )
-                    .stroke(Color.jarvisBlue.opacity(0.25), lineWidth: 1)
-                    .frame(width: 100, height: 100)
-                    .rotationEffect(.degrees(rotation2))
+                // Status indicators
+                HStack(spacing: 24) {
+                    StatusDot(label: "CORE", active: true)
+                    StatusDot(label: "UPLINK", active: true)
+                    StatusDot(label: "VOICE", active: true)
                 }
 
-                // Core glow
-                Circle()
-                    .fill(
-                        RadialGradient(
-                            colors: [
-                                Color.jarvisBlue.opacity(0.4),
-                                Color.jarvisBlue.opacity(0.05),
-                                .clear
-                            ],
-                            center: .center,
-                            startRadius: 5,
-                            endRadius: 50
-                        )
-                    )
-                    .frame(width: 100, height: 100)
-                    .scaleEffect(coreScale)
-
-                // Inner ring
-                Circle()
-                    .stroke(Color.jarvisBlue.opacity(0.3), lineWidth: 1)
-                    .frame(width: 50, height: 50)
-
-                // Core dot
-                Circle()
-                    .fill(Color.jarvisBlue)
-                    .frame(width: 8, height: 8)
-                    .shadow(color: .jarvisBlue, radius: 10)
-                    .shadow(color: .jarvisBlue, radius: 20)
+                Spacer()
+                    .frame(height: 80)
             }
             .opacity(opacity)
-
-            VStack(spacing: 6) {
-                Text("SYSTEMS ONLINE")
-                    .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .tracking(3)
-                    .foregroundColor(.jarvisBlue.opacity(0.5))
-
-                Text("How may I assist you, Sir?")
-                    .font(.system(size: 15, weight: .light, design: .monospaced))
-                    .foregroundColor(.jarvisBlue.opacity(0.7))
-            }
-            .opacity(opacity)
-
-            // Status indicators
-            HStack(spacing: 24) {
-                StatusDot(label: "CORE", active: true)
-                StatusDot(label: "UPLINK", active: true)
-                StatusDot(label: "VOICE", active: true)
-            }
-            .opacity(opacity)
-
-            Spacer()
         }
         .onAppear {
-            withAnimation(.linear(duration: 30).repeatForever(autoreverses: false)) {
-                rotation1 = 360
-            }
-            withAnimation(.linear(duration: 20).repeatForever(autoreverses: false)) {
-                rotation2 = -360
-            }
-            withAnimation(.easeInOut(duration: 2).repeatForever(autoreverses: true)) {
-                coreScale = 1.1
-            }
-            withAnimation(.easeOut(duration: 1)) {
+            withAnimation(.easeOut(duration: 1.5)) {
                 opacity = 1
             }
         }

@@ -38,11 +38,13 @@ struct MessageBubbleView: View {
                 HStack {
                     if isUser { Spacer(minLength: 0) }
 
-                    Text(attributedContent)
-                        .font(.system(size: 14, weight: .regular))
-                        .foregroundColor(.jarvisText)
-                        .textSelection(.enabled)
-                        .lineSpacing(3)
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(parsedContent)
+                            .font(.system(size: 14, weight: .regular))
+                            .foregroundColor(.jarvisText)
+                            .textSelection(.enabled)
+                            .lineSpacing(3)
+                    }
 
                     if !isUser {
                         Spacer(minLength: 0)
@@ -61,7 +63,6 @@ struct MessageBubbleView: View {
                 .padding(.vertical, 10)
                 .background {
                     if isUser {
-                        // User message - gold tinted glass
                         RoundedRectangle(cornerRadius: 14)
                             .fill(.ultraThinMaterial)
                             .overlay {
@@ -73,7 +74,6 @@ struct MessageBubbleView: View {
                                     .strokeBorder(Color.jarvisGold.opacity(0.12), lineWidth: 0.5)
                             }
                     } else {
-                        // Assistant message - cyan tinted glass
                         RoundedRectangle(cornerRadius: 14)
                             .fill(.ultraThinMaterial)
                             .overlay {
@@ -97,14 +97,105 @@ struct MessageBubbleView: View {
         }
     }
 
-    // MARK: - Attributed Content (basic markdown-like)
+    // MARK: - Markdown-like Attributed Content
 
-    private var attributedContent: AttributedString {
-        let result = AttributedString(message.content)
-        // Apply monospace to code blocks
-        if let range = result.range(of: "`") {
-            _ = range // Simple fallback
+    private var parsedContent: AttributedString {
+        var text = message.content
+        var result = AttributedString()
+
+        // Process line by line for code blocks
+        let lines = text.components(separatedBy: "\n")
+        var inCodeBlock = false
+        var codeBuffer: [String] = []
+
+        for (i, line) in lines.enumerated() {
+            if line.hasPrefix("```") {
+                if inCodeBlock {
+                    // End code block — render buffered code
+                    let code = codeBuffer.joined(separator: "\n")
+                    var codeAttr = AttributedString(code)
+                    codeAttr.font = .system(size: 12, weight: .regular, design: .monospaced)
+                    codeAttr.foregroundColor = Color.jarvisCyan.opacity(0.85)
+                    result += codeAttr
+                    codeBuffer = []
+                    inCodeBlock = false
+                } else {
+                    inCodeBlock = true
+                }
+                continue
+            }
+
+            if inCodeBlock {
+                codeBuffer.append(line)
+                continue
+            }
+
+            // Process inline markdown
+            result += parseInlineMarkdown(line)
+
+            if i < lines.count - 1 {
+                result += AttributedString("\n")
+            }
         }
+
+        // Handle unclosed code block
+        if inCodeBlock && !codeBuffer.isEmpty {
+            let code = codeBuffer.joined(separator: "\n")
+            var codeAttr = AttributedString(code)
+            codeAttr.font = .system(size: 12, weight: .regular, design: .monospaced)
+            codeAttr.foregroundColor = Color.jarvisCyan.opacity(0.85)
+            result += codeAttr
+        }
+
+        return result
+    }
+
+    private func parseInlineMarkdown(_ line: String) -> AttributedString {
+        var result = AttributedString()
+        var remaining = line[line.startIndex...]
+
+        while !remaining.isEmpty {
+            // Inline code: `code`
+            if remaining.hasPrefix("`"),
+               let endIdx = remaining.dropFirst().firstIndex(of: "`") {
+                let codeText = String(remaining[remaining.index(after: remaining.startIndex)..<endIdx])
+                var attr = AttributedString(codeText)
+                attr.font = .system(size: 13, weight: .medium, design: .monospaced)
+                attr.foregroundColor = Color.jarvisCyan
+                result += attr
+                remaining = remaining[remaining.index(after: endIdx)...]
+                continue
+            }
+
+            // Bold: **text**
+            if remaining.hasPrefix("**"),
+               let endRange = remaining.dropFirst(2).range(of: "**") {
+                let boldText = String(remaining[remaining.index(remaining.startIndex, offsetBy: 2)..<endRange.lowerBound])
+                var attr = AttributedString(boldText)
+                attr.font = .system(size: 14, weight: .semibold)
+                result += attr
+                remaining = remaining[endRange.upperBound...]
+                continue
+            }
+
+            // Italic: *text*
+            if remaining.hasPrefix("*"),
+               !remaining.hasPrefix("**"),
+               let endIdx = remaining.dropFirst().firstIndex(of: "*") {
+                let italicText = String(remaining[remaining.index(after: remaining.startIndex)..<endIdx])
+                var attr = AttributedString(italicText)
+                attr.font = .system(size: 14).italic()
+                result += attr
+                remaining = remaining[remaining.index(after: endIdx)...]
+                continue
+            }
+
+            // Regular character
+            let ch = remaining[remaining.startIndex]
+            result += AttributedString(String(ch))
+            remaining = remaining[remaining.index(after: remaining.startIndex)...]
+        }
+
         return result
     }
 

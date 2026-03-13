@@ -13,6 +13,26 @@ struct MainView: View {
             Color.jarvisDeepDark.ignoresSafeArea()
             GridBackground().opacity(0.15)
 
+            // HUD frame elements
+            HUDEdgeLines().ignoresSafeArea()
+
+            // Corners
+            VStack {
+                HStack {
+                    HUDCorner(position: .topLeft)
+                    Spacer()
+                    HUDCorner(position: .topRight)
+                }
+                Spacer()
+                HStack {
+                    HUDCorner(position: .bottomLeft)
+                    Spacer()
+                    HUDCorner(position: .bottomRight)
+                }
+            }
+            .padding(6)
+            .allowsHitTesting(false)
+
             VStack(spacing: 0) {
                 // Status Bar
                 HUDStatusBar(
@@ -28,7 +48,8 @@ struct MainView: View {
                     .environmentObject(chatVM)
             }
 
-            // Scanline overlay
+            // Vignette + Scanline overlays
+            VignetteOverlay()
             ScanlineOverlay()
                 .allowsHitTesting(false)
 
@@ -72,12 +93,25 @@ struct HUDStatusBar: View {
     let isStreaming: Bool
 
     @State private var time = ""
+    @State private var date = ""
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+
+    private var status: String {
+        isStreaming ? "PROCESSING" : "STANDBY"
+    }
+
+    private var providerColor: Color {
+        switch provider {
+        case "claude": return Color(hex: "ff8c00")
+        case "gemini": return Color(hex: "4285F4")
+        default: return .jarvisBlue
+        }
+    }
 
     var body: some View {
         HStack(spacing: 0) {
-            // Left: Menu + Logo
-            HStack(spacing: 12) {
+            // Left: Menu + Logo + Status
+            HStack(spacing: 10) {
                 Button {
                     showConversations.toggle()
                 } label: {
@@ -88,14 +122,31 @@ struct HUDStatusBar: View {
 
                 HStack(spacing: 6) {
                     Circle()
-                        .fill(Color.jarvisOnline)
+                        .fill(isStreaming ? Color.jarvisBlue : Color.jarvisOnline)
                         .frame(width: 5, height: 5)
-                        .shadow(color: .jarvisOnline, radius: 4)
+                        .shadow(color: isStreaming ? .jarvisBlue : .jarvisOnline, radius: 4)
 
                     Text("JARVIS")
                         .font(.system(size: 11, weight: .semibold, design: .monospaced))
                         .tracking(2)
                         .foregroundColor(.jarvisBlue)
+                }
+
+                // Divider
+                Rectangle()
+                    .fill(Color.white.opacity(0.06))
+                    .frame(width: 0.5, height: 14)
+
+                // Status label
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(isStreaming ? Color.jarvisBlue : Color.jarvisOnline)
+                        .frame(width: 4, height: 4)
+
+                    Text(status)
+                        .font(.system(size: 8, weight: .medium, design: .monospaced))
+                        .tracking(1)
+                        .foregroundColor(.jarvisTextDim)
                 }
 
                 if isStreaming {
@@ -109,23 +160,35 @@ struct HUDStatusBar: View {
 
             Spacer()
 
-            // Right: Provider + Voice + Time + Settings
-            HStack(spacing: 14) {
-                // Provider badge
-                Text(provider.uppercased())
-                    .font(.system(size: 8, weight: .bold, design: .monospaced))
-                    .tracking(1)
-                    .foregroundColor(.jarvisBlue.opacity(0.6))
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background {
-                        Capsule()
-                            .fill(Color.jarvisBlue.opacity(0.08))
-                            .overlay {
-                                Capsule()
-                                    .strokeBorder(Color.jarvisBlue.opacity(0.15), lineWidth: 0.5)
-                            }
-                    }
+            // Right: Provider + Voice + Date/Time + Security + Settings
+            HStack(spacing: 10) {
+                // Provider badge — colored dot + label
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(providerColor)
+                        .frame(width: 4, height: 4)
+                        .shadow(color: providerColor.opacity(0.5), radius: 3)
+
+                    Text(provider.uppercased())
+                        .font(.system(size: 8, weight: .bold, design: .monospaced))
+                        .tracking(1)
+                        .foregroundColor(providerColor.opacity(0.8))
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background {
+                    Capsule()
+                        .fill(providerColor.opacity(0.06))
+                        .overlay {
+                            Capsule()
+                                .strokeBorder(providerColor.opacity(0.15), lineWidth: 0.5)
+                        }
+                }
+
+                // Divider
+                Rectangle()
+                    .fill(Color.white.opacity(0.06))
+                    .frame(width: 0.5, height: 14)
 
                 // Voice button
                 Button {
@@ -136,10 +199,25 @@ struct HUDStatusBar: View {
                         .foregroundColor(.jarvisBlue.opacity(0.7))
                 }
 
-                // Time
-                Text(time)
-                    .font(.system(size: 9, weight: .medium, design: .monospaced))
-                    .foregroundColor(.jarvisBlue.opacity(0.5))
+                // Date + Time stacked
+                VStack(alignment: .trailing, spacing: 1) {
+                    Text(date)
+                        .font(.system(size: 7, weight: .medium, design: .monospaced))
+                        .foregroundColor(.jarvisTextDim.opacity(0.5))
+                    Text(time)
+                        .font(.system(size: 9, weight: .medium, design: .monospaced))
+                        .foregroundColor(.jarvisTextDim)
+                }
+
+                // Security badge
+                HStack(spacing: 3) {
+                    Image(systemName: "lock.shield.fill")
+                        .font(.system(size: 8))
+                        .foregroundColor(.jarvisOnline.opacity(0.4))
+                    Text("SEC")
+                        .font(.system(size: 7, weight: .bold, design: .monospaced))
+                        .foregroundColor(.jarvisOnline.opacity(0.3))
+                }
 
                 // Settings
                 Button {
@@ -151,21 +229,23 @@ struct HUDStatusBar: View {
                 }
             }
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .glassCapsule(opacity: 0.6)
         .padding(.horizontal, 8)
         .padding(.top, 4)
-        .onReceive(timer) { _ in
-            let formatter = DateFormatter()
-            formatter.dateFormat = "HH:mm"
-            time = formatter.string(from: Date())
-        }
-        .onAppear {
-            let formatter = DateFormatter()
-            formatter.dateFormat = "HH:mm"
-            time = formatter.string(from: Date())
-        }
+        .onReceive(timer) { _ in updateTime() }
+        .onAppear { updateTime() }
+    }
+
+    private func updateTime() {
+        let now = Date()
+        let tf = DateFormatter()
+        tf.dateFormat = "HH:mm:ss"
+        time = tf.string(from: now)
+        let df = DateFormatter()
+        df.dateFormat = "MMM d"
+        date = df.string(from: now).uppercased()
     }
 }
 

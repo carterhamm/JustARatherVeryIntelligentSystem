@@ -26,6 +26,9 @@
 		876DFE9589035A10935C5BA5 /* ChatViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E10E292651467F3ED3878E7 /* ChatViewModel.swift */; };
 		9C12BEDE673ED0E72CB9848E /* SharedModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B215189D99E50707332B87D /* SharedModels.swift */; };
 		9C4DD8A87CAE66E72E87142E /* KeychainService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7AE01E6649045BD1D4A9F5A /* KeychainService.swift */; };
+		A1B2C3D4E5F6071829304150 /* HealthSyncService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F607182930AABB /* HealthSyncService.swift */; };
+		B110C109B1A2966FB583A226 /* ParticleCloudView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 822FE6D5BF4E30DD0D0BCD67 /* ParticleCloudView.swift */; };
+		B2C3D4E5F6A7081930415061 /* LocationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C3D4E5F6A708193041BBCC /* LocationService.swift */; };
 		B6B6C0994BDB3571B1994C39 /* TOTPVerifyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2850A95382DE6AF7B57E78BE /* TOTPVerifyView.swift */; };
 		B8C7F9F7F3CCF4EA527A4972 /* JARVISApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EEE19D2BF51B9712E900275 /* JARVISApp.swift */; };
 		BB2C89BFB04E54F07380940D /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F55A50A51BD792770F36AE43 /* LoginView.swift */; };
@@ -35,8 +38,6 @@
 		FA1779FE2E05C62AC3595F60 /* WatchVoiceManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C5D5161A0ACBEA13FDE591C /* WatchVoiceManager.swift */; };
 		FC1411AB91DD85D53D4F48C4 /* JARVISWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 366131BF98CEBD234A1B3EAC /* JARVISWatchApp.swift */; };
 		FD80A2D76DD27A8DE7E83C61 /* VoiceModeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E597386B40A8FC0AB71471E2 /* VoiceModeView.swift */; };
-		A1B2C3D4E5F6071829304150 /* HealthSyncService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F607182930AABB /* HealthSyncService.swift */; };
-		B2C3D4E5F6A7081930415061 /* LocationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C3D4E5F6A708193041BBCC /* LocationService.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -54,11 +55,14 @@
 		60AFA8C7C6324E5996605BD7 /* WatchContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchContentView.swift; sourceTree = "<group>"; };
 		6A4347E38FD41C2BA6958E56 /* JARVIS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = JARVIS.entitlements; sourceTree = "<group>"; };
 		6EEE19D2BF51B9712E900275 /* JARVISApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JARVISApp.swift; sourceTree = "<group>"; };
+		822FE6D5BF4E30DD0D0BCD67 /* ParticleCloudView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ParticleCloudView.swift; sourceTree = "<group>"; };
 		82FC9755029F260E81BF67AC /* JARVISConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JARVISConfig.swift; sourceTree = "<group>"; };
 		838EE18A7762C31C81F58C11 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		90EFF2D19BD0F9E00E3134B7 /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
 		9377103CACA02555884EA1E6 /* ConversationListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationListView.swift; sourceTree = "<group>"; };
 		9613A7F55A8E00CFDC84AF00 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		A1B2C3D4E5F607182930AABB /* HealthSyncService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthSyncService.swift; sourceTree = "<group>"; };
+		B2C3D4E5F6A708193041BBCC /* LocationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationService.swift; sourceTree = "<group>"; };
 		BC57BDC1AD7F2121361BDECD /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		C23F1A4BB6396E675D7FBEBE /* ChatService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatService.swift; sourceTree = "<group>"; };
 		C7BC74A5E793248AC8DF3A7A /* JARVISEnergyOrb.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JARVISEnergyOrb.swift; sourceTree = "<group>"; };
@@ -71,8 +75,6 @@
 		E95CF9676072BE2DAE5495EC /* JARVISWatch Watch App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "JARVISWatch Watch App.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		EBB74C0965F0962BFFAB863A /* AuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthService.swift; sourceTree = "<group>"; };
 		F55A50A51BD792770F36AE43 /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
-		A1B2C3D4E5F607182930AABB /* HealthSyncService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthSyncService.swift; sourceTree = "<group>"; };
-		B2C3D4E5F6A708193041BBCC /* LocationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationService.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -205,6 +207,7 @@
 		B6DB41DF25215B05062CE032 /* HUD */ = {
 			isa = PBXGroup;
 			children = (
+				822FE6D5BF4E30DD0D0BCD67 /* ParticleCloudView.swift */,
 			);
 			path = HUD;
 			sourceTree = "<group>";
@@ -282,8 +285,6 @@
 			dependencies = (
 			);
 			name = JARVIS;
-			packageProductDependencies = (
-			);
 			productName = JARVIS;
 			productReference = DBE6CDFF2E6B3AEAFD720F34 /* JARVIS.app */;
 			productType = "com.apple.product-type.application";
@@ -300,8 +301,6 @@
 			dependencies = (
 			);
 			name = "JARVISWatch Watch App";
-			packageProductDependencies = (
-			);
 			productName = "JARVISWatch Watch App";
 			productReference = E95CF9676072BE2DAE5495EC /* JARVISWatch Watch App.app */;
 			productType = "com.apple.product-type.application";
@@ -386,6 +385,7 @@
 				B6B6C0994BDB3571B1994C39 /* TOTPVerifyView.swift in Sources */,
 				FD80A2D76DD27A8DE7E83C61 /* VoiceModeView.swift in Sources */,
 				E0F0C766AEC4B188CA81B16D /* VoiceService.swift in Sources */,
+				B110C109B1A2966FB583A226 /* ParticleCloudView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -412,7 +412,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				INFOPLIST_FILE = JARVISWatch/Info.plist;
 				MARKETING_VERSION = 1.0.0;
-				PRODUCT_BUNDLE_IDENTIFIER = dev.malibupoint.jarvis.watchkitapp;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.jarvis.malibupoint.watchkitapp;
 				SDKROOT = watchos;
 				SKIP_INSTALL = YES;
 				TARGETED_DEVICE_FAMILY = 4;
@@ -426,7 +426,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				INFOPLIST_FILE = JARVISWatch/Info.plist;
 				MARKETING_VERSION = 1.0.0;
-				PRODUCT_BUNDLE_IDENTIFIER = dev.malibupoint.jarvis.watchkitapp;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.jarvis.malibupoint.watchkitapp;
 				SDKROOT = watchos;
 				SKIP_INSTALL = YES;
 				TARGETED_DEVICE_FAMILY = 4;
@@ -504,14 +504,14 @@
 				CODE_SIGN_ENTITLEMENTS = JARVIS/JARVIS.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = M89Y628V4Q;
+				DEVELOPMENT_TEAM = HKM8P29B68;
 				INFOPLIST_FILE = JARVIS/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0.0;
-				PRODUCT_BUNDLE_IDENTIFIER = dev.malibupoint.jarvis;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.jarvis.malibupoint;
 				SDKROOT = iphoneos;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				TARGETED_DEVICE_FAMILY = 1;
@@ -582,14 +582,14 @@
 				CODE_SIGN_ENTITLEMENTS = JARVIS/JARVIS.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = M89Y628V4Q;
+				DEVELOPMENT_TEAM = HKM8P29B68;
 				INFOPLIST_FILE = JARVIS/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0.0;
-				PRODUCT_BUNDLE_IDENTIFIER = dev.malibupoint.jarvis;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.jarvis.malibupoint;
 				SDKROOT = iphoneos;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				TARGETED_DEVICE_FAMILY = 1;

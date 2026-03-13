@@ -15,6 +15,7 @@ class AuthViewModel: ObservableObject {
 
     // Login
     @Published var identifier = ""
+    @Published var password = ""
 
     private let auth = AuthService.shared
 
@@ -53,6 +54,35 @@ class AuthViewModel: ObservableObject {
             }
         } catch {
             self.error = error.localizedDescription
+        }
+
+        isLoading = false
+    }
+
+    func loginWithPassword() async {
+        guard !identifier.isEmpty, !password.isEmpty else {
+            error = "Enter your email and password"
+            return
+        }
+
+        isLoading = true
+        error = nil
+
+        do {
+            let response = try await auth.loginWithPassword(
+                username: identifier,
+                password: password
+            )
+
+            if response.needsTotp == true {
+                totpToken = response.totpToken
+                needsTOTP = true
+            } else {
+                user = response.user
+                isAuthenticated = true
+            }
+        } catch let err {
+            self.error = err.localizedDescription
         }
 
         isLoading = false

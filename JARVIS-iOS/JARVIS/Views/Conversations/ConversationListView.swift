@@ -3,6 +3,14 @@ import SwiftUI
 struct ConversationListView: View {
     @Binding var isShowing: Bool
     @EnvironmentObject var chatVM: ChatViewModel
+    @State private var searchText = ""
+
+    private var filteredConversations: [ConversationResponse] {
+        if searchText.isEmpty { return chatVM.conversations }
+        return chatVM.conversations.filter {
+            ($0.title ?? "").localizedCaseInsensitiveContains(searchText)
+        }
+    }
 
     var body: some View {
         ZStack(alignment: .leading) {
@@ -29,23 +37,11 @@ struct ConversationListView: View {
                     Spacer()
 
                     Button {
-                        Task {
-                            await chatVM.createConversation()
-                            isShowing = false
-                        }
+                        isShowing = false
                     } label: {
-                        Image(systemName: "plus")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.jarvisBlue)
-                            .frame(width: 32, height: 32)
-                            .background {
-                                Circle()
-                                    .fill(Color.jarvisBlue.opacity(0.1))
-                                    .overlay {
-                                        Circle()
-                                            .strokeBorder(Color.jarvisBlue.opacity(0.2), lineWidth: 0.5)
-                                    }
-                            }
+                        Image(systemName: "xmark")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(.jarvisBlue.opacity(0.5))
                     }
                 }
                 .padding(.horizontal, 16)
@@ -55,10 +51,57 @@ struct ConversationListView: View {
                     .fill(Color.jarvisBlue.opacity(0.1))
                     .frame(height: 0.5)
 
+                // Search
+                HStack(spacing: 8) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 11))
+                        .foregroundColor(.jarvisBlue.opacity(0.3))
+
+                    TextField("", text: $searchText, prompt: Text("Search conversations").foregroundColor(.jarvisTextDim.opacity(0.4)))
+                        .font(.system(size: 12, design: .monospaced))
+                        .foregroundColor(.jarvisText)
+                        .tint(.jarvisBlue)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color.jarvisBlue.opacity(0.03))
+
+                Rectangle()
+                    .fill(Color.jarvisBlue.opacity(0.06))
+                    .frame(height: 0.5)
+
                 // Conversation List
                 ScrollView {
                     LazyVStack(spacing: 2) {
-                        ForEach(chatVM.conversations) { conv in
+                        // New conversation button
+                        Button {
+                            Task {
+                                await chatVM.createConversation()
+                                isShowing = false
+                            }
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "plus.circle")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(.jarvisBlue.opacity(0.6))
+
+                                Text("NEW CONVERSATION")
+                                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                    .tracking(1)
+                                    .foregroundColor(.jarvisBlue.opacity(0.6))
+
+                                Spacer()
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
+                        }
+
+                        Rectangle()
+                            .fill(Color.jarvisBlue.opacity(0.06))
+                            .frame(height: 0.5)
+                            .padding(.horizontal, 16)
+
+                        ForEach(filteredConversations) { conv in
                             ConversationRow(
                                 conversation: conv,
                                 isSelected: chatVM.currentConversation?.id == conv.id

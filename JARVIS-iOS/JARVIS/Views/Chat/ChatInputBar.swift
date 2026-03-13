@@ -25,6 +25,10 @@ struct ChatInputBar: View {
             HStack(spacing: 10) {
                 // Text input
                 HStack(spacing: 8) {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .foregroundColor(.jarvisBlue.opacity(isFocused ? 0.5 : 0.2))
+
                     TextField("Message JARVIS...", text: $chatVM.inputText, axis: .vertical)
                         .font(.system(size: 14))
                         .foregroundColor(.jarvisText)
@@ -37,17 +41,17 @@ struct ChatInputBar: View {
                             }
                         }
                 }
-                .padding(.horizontal, 16)
+                .padding(.horizontal, 14)
                 .padding(.vertical, 10)
                 .background {
-                    Capsule()
+                    RoundedRectangle(cornerRadius: 20)
                         .fill(.ultraThinMaterial)
                         .overlay {
-                            Capsule()
+                            RoundedRectangle(cornerRadius: 20)
                                 .fill(Color.jarvisPanelBg.opacity(0.5))
                         }
                         .overlay {
-                            Capsule()
+                            RoundedRectangle(cornerRadius: 20)
                                 .strokeBorder(
                                     isFocused
                                         ? Color.jarvisBlue.opacity(0.3)
@@ -87,6 +91,7 @@ struct ChatInputBar: View {
                         }
                     }
                     .frame(width: 36, height: 36)
+                    .animation(.easeInOut(duration: 0.2), value: canSend)
                 }
                 .disabled(!canSend)
                 .cyanGlow(radius: canSend ? 8 : 0, opacity: canSend ? 0.2 : 0)
