@@ -69,6 +69,16 @@ def create_app() -> FastAPI:
     async def health_check() -> HealthResponse:
         return HealthResponse(status="healthy", version="0.1.0")
 
+    @application.get("/health/services", tags=["health"])
+    async def health_services() -> JSONResponse:
+        """Return per-service availability.  Never fails -- always 200."""
+        try:
+            from app.services.health import ServiceHealth
+            status = await ServiceHealth.check_all()
+        except Exception as exc:
+            status = {"_error": {"ok": False, "error": f"Health check itself failed: {exc}"}}
+        return JSONResponse(content=status)
+
     # -- Serve frontend static files (production) -----------------------------
     index_html = STATIC_DIR / "index.html"
     if STATIC_DIR.is_dir() and index_html.is_file():

@@ -3923,85 +3923,110 @@ class CameraLookTool(BaseTool):
 _registry: Optional[dict[str, BaseTool]] = None
 
 
+def _safe_instantiate(tool_classes: list[type]) -> list[BaseTool]:
+    """Instantiate each tool class, skipping any that raise on construction.
+
+    This prevents a single broken tool (e.g. missing optional dependency)
+    from crashing the entire registry.
+    """
+    tools: list[BaseTool] = []
+    for cls in tool_classes:
+        try:
+            tools.append(cls())
+        except Exception as exc:
+            logger.error(
+                "Failed to instantiate tool %s: %s — skipping",
+                getattr(cls, "__name__", cls),
+                exc,
+            )
+    return tools
+
+
 def get_tool_registry() -> dict[str, BaseTool]:
-    """Return the singleton tool registry mapping name -> BaseTool instance."""
+    """Return the singleton tool registry mapping name -> BaseTool instance.
+
+    Each tool is instantiated inside a try/except so that a single
+    broken tool class never prevents the rest of the registry from loading.
+    """
     global _registry
     if _registry is None:
-        tools: list[BaseTool] = [
-            SearchKnowledgeTool(),
-            SendEmailTool(),
-            ReadEmailTool(),
-            ReadICloudEmailTool(),
-            SendJarvisEmailTool(),
-            CreateCalendarEventTool(),
-            ListCalendarEventsTool(),
-            SetReminderTool(),
-            SmartHomeControlTool(),
-            WebSearchTool(),
-            WeatherTool(),
-            NewsTool(),
-            SpotifyTool(),
-            CalculatorTool(),
-            DateTimeTool(),
+        tool_classes: list[type] = [
+            SearchKnowledgeTool,
+            SendEmailTool,
+            ReadEmailTool,
+            ReadICloudEmailTool,
+            SendJarvisEmailTool,
+            CreateCalendarEventTool,
+            ListCalendarEventsTool,
+            SetReminderTool,
+            SmartHomeControlTool,
+            WebSearchTool,
+            WeatherTool,
+            NewsTool,
+            SpotifyTool,
+            CalculatorTool,
+            DateTimeTool,
             # iMCP — native macOS tools (no API keys, all local)
-            IMCPCalendarListTool(),
-            IMCPEventsFetchTool(),
-            IMCPEventsCreateTool(),
-            IMCPContactsMeTool(),
-            IMCPContactsSearchTool(),
-            IMCPContactsCreateTool(),
-            IMCPMessagesFetchTool(),
-            IMCPRemindersListsTool(),
-            IMCPRemindersFetchTool(),
-            IMCPRemindersCreateTool(),
-            IMCPLocationCurrentTool(),
-            IMCPLocationGeocodeTool(),
-            IMCPMapsSearchTool(),
-            IMCPMapsDirectionsTool(),
-            IMCPMapsETATool(),
-            IMCPWeatherCurrentTool(),
-            IMCPWeatherForecastTool(),
+            IMCPCalendarListTool,
+            IMCPEventsFetchTool,
+            IMCPEventsCreateTool,
+            IMCPContactsMeTool,
+            IMCPContactsSearchTool,
+            IMCPContactsCreateTool,
+            IMCPMessagesFetchTool,
+            IMCPRemindersListsTool,
+            IMCPRemindersFetchTool,
+            IMCPRemindersCreateTool,
+            IMCPLocationCurrentTool,
+            IMCPLocationGeocodeTool,
+            IMCPMapsSearchTool,
+            IMCPMapsDirectionsTool,
+            IMCPMapsETATool,
+            IMCPWeatherCurrentTool,
+            IMCPWeatherForecastTool,
             # MCP integrations (Google Drive, Slack, GitHub)
-            GoogleDriveTool(),
-            SlackTool(),
-            GitHubTool(),
+            GoogleDriveTool,
+            SlackTool,
+            GitHubTool,
             # External API integrations
-            WolframAlphaTool(),
-            PerplexityResearchTool(),
-            FinancialDataTool(),
-            FlightTrackerTool(),
-            GoogleMapsTool(),
-            NutritionRecipeTool(),
+            WolframAlphaTool,
+            PerplexityResearchTool,
+            FinancialDataTool,
+            FlightTrackerTool,
+            GoogleMapsTool,
+            NutritionRecipeTool,
             # Morning routine
-            SetWakeTimeTool(),
+            SetWakeTimeTool,
             # Mac Mini agent
-            SendIMessageTool(),
+            SendIMessageTool,
             # Quick-win integrations (free, no API key)
-            SportsTool(),
-            ScriptureLookupTool(),
+            SportsTool,
+            ScriptureLookupTool,
             # Navigation (Find My + Google Maps)
-            NavigateTool(),
+            NavigateTool,
             # Mac Mini remote control
-            MacMiniExecTool(),
-            MacMiniClaudeCodeTool(),
-            MacMiniScreenshotTool(),
+            MacMiniExecTool,
+            MacMiniClaudeCodeTool,
+            MacMiniScreenshotTool,
             # Health
-            HealthSummaryTool(),
+            HealthSummaryTool,
             # Research daemon
-            ResearchBriefingTool(),
+            ResearchBriefingTool,
             # Contacts
-            SearchContactsTool(),
+            SearchContactsTool,
             # System health monitoring
-            SystemHealthTool(),
+            SystemHealthTool,
             # MCP discovery
-            MCPDiscoveryTool(),
+            MCPDiscoveryTool,
             # Focus / deep work sessions
-            FocusSessionTool(),
+            FocusSessionTool,
             # Habit tracking
-            HabitTool(),
+            HabitTool,
             # Camera / security vision
-            CameraLookTool(),
+            CameraLookTool,
         ]
+        tools = _safe_instantiate(tool_classes)
+        logger.info("Tool registry loaded: %d/%d tools available", len(tools), len(tool_classes))
         _registry = {t.name: t for t in tools}
     return _registry
 

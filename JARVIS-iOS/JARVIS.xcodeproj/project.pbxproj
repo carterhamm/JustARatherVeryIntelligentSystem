@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		06C1040AD96D4E8C4ACBE009 /* AuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBB74C0965F0962BFFAB863A /* AuthService.swift */; };
+		0899E647A077EC6C7964810A /* EventKitService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD766E5299F0708F0E1C12BC /* EventKitService.swift */; };
 		0D5239D7BE14DC800046807B /* HealthSyncService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7092C549F2BC65265FB98AE4 /* HealthSyncService.swift */; };
 		12591532333C6399E247D2CE /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 4A70B28CBDA5404EBBA3CD91 /* Assets.xcassets */; };
 		146BE332599945DA72EA57D9 /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90EFF2D19BD0F9E00E3134B7 /* ChatView.swift */; };
@@ -70,6 +71,7 @@
 		D7AE01E6649045BD1D4A9F5A /* KeychainService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainService.swift; sourceTree = "<group>"; };
 		DA4EA3083D6EB08FB251D809 /* MainView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainView.swift; sourceTree = "<group>"; };
 		DBE6CDFF2E6B3AEAFD720F34 /* JARVIS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = JARVIS.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		DD766E5299F0708F0E1C12BC /* EventKitService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventKitService.swift; sourceTree = "<group>"; };
 		E597386B40A8FC0AB71471E2 /* VoiceModeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceModeView.swift; sourceTree = "<group>"; };
 		E95CF9676072BE2DAE5495EC /* JARVISWatch Watch App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "JARVISWatch Watch App.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		EBB74C0965F0962BFFAB863A /* AuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthService.swift; sourceTree = "<group>"; };
@@ -188,6 +190,7 @@
 				42BFE650DB5C491D697F47C2 /* APIClient.swift */,
 				EBB74C0965F0962BFFAB863A /* AuthService.swift */,
 				C23F1A4BB6396E675D7FBEBE /* ChatService.swift */,
+				DD766E5299F0708F0E1C12BC /* EventKitService.swift */,
 				7092C549F2BC65265FB98AE4 /* HealthSyncService.swift */,
 				D7AE01E6649045BD1D4A9F5A /* KeychainService.swift */,
 				130485CC118DA150232F5A4E /* LocationService.swift */,
@@ -378,6 +381,7 @@
 				146BE332599945DA72EA57D9 /* ChatView.swift in Sources */,
 				876DFE9589035A10935C5BA5 /* ChatViewModel.swift in Sources */,
 				F44C02F690A029629227E9B5 /* ConversationListView.swift in Sources */,
+				0899E647A077EC6C7964810A /* EventKitService.swift in Sources */,
 				0D5239D7BE14DC800046807B /* HealthSyncService.swift in Sources */,
 				B8C7F9F7F3CCF4EA527A4972 /* JARVISApp.swift in Sources */,
 				610ECED3F3228D681EBCADD7 /* JARVISConfig.swift in Sources */,

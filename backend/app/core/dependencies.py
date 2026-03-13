@@ -1,5 +1,6 @@
 """Reusable FastAPI dependencies for database sessions, caching, and auth."""
 
+import logging
 from typing import AsyncGenerator
 
 from fastapi import Depends, HTTPException, Request, status
@@ -12,15 +13,43 @@ from app.db.redis import get_redis_client, RedisClient
 from app.models.user import User
 from app.schemas.auth import TokenPayload
 
+logger = logging.getLogger("jarvis.dependencies")
+
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
-    """Yield an async SQLAlchemy session, rolling back on error."""
-    async for session in get_session():
-        yield session
+    """Yield an async SQLAlchemy session, rolling back on error.
+
+    If the database is unreachable, raises HTTP 503 instead of letting
+    the raw connection error propagate as an unhandled 500.
+    """
+    try:
+        async for session in get_session():
+            yield session
+    except OSError as exc:
+        logger.error("Database connection failed: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database temporarily unavailable. Please try again shortly.",
+        )
+    except Exception as exc:
+        # Catch SQLAlchemy connection errors, asyncpg errors, etc.
+        exc_name = type(exc).__name__
+        if any(kw in exc_name.lower() for kw in ("connect", "timeout", "refused", "unavailable")):
+            logger.error("Database connection failed (%s): %s", exc_name, exc)
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Database temporarily unavailable. Please try again shortly.",
+            )
+        raise
 
 
 async def get_redis() -> RedisClient:
-    """Return the shared Redis client."""
+    """Return the shared Redis client.
+
+    Returns the client even if Redis is down -- callers should handle
+    redis errors themselves.  This prevents the dependency from blocking
+    endpoints that don't strictly need caching.
+    """
     return await get_redis_client()
 
 

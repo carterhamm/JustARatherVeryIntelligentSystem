@@ -34,6 +34,14 @@
 	<string>JARVIS uses your location in the background to provide proactive contextual updates.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>JARVIS uses your location to provide contextual assistance and navigation.</string>
+	<key>NSRemindersUsageDescription</key>
+	<string>JARVIS needs access to your reminders to help manage your tasks.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>JARVIS needs access to your calendar to help manage your schedule.</string>
+	<key>NSRemindersFullAccessUsageDescription</key>
+	<string>JARVIS needs full access to reminders to create, read, and complete tasks for you.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>JARVIS needs full access to your calendar to create and manage events for you.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>JARVIS needs microphone access for voice commands and voice chat.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>

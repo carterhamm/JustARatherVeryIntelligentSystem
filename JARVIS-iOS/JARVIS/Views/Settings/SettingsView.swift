@@ -4,6 +4,7 @@ struct SettingsView: View {
     @Binding var isShowing: Bool
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var chatVM: ChatViewModel
+    @StateObject private var eventKit = EventKitService.shared
     @State private var serverURL = JARVISConfig.baseURL
 
     var body: some View {
@@ -112,6 +113,91 @@ struct SettingsView: View {
                                         UserDefaults.standard.set(serverURL, forKey: "jarvis_base_url")
                                     }
                             }
+                        }
+
+                        // Device Integrations
+                        SettingsSection(title: "DEVICE INTEGRATIONS") {
+                            // Reminders
+                            HStack {
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text("Reminders")
+                                        .font(.system(size: 12, weight: .medium, design: .monospaced))
+                                        .foregroundColor(.jarvisText)
+
+                                    Text(EventKitService.statusText(for: eventKit.reminderAuthStatus).uppercased())
+                                        .font(.system(size: 9, weight: .medium, design: .monospaced))
+                                        .foregroundColor(
+                                            EventKitService.isAuthorized(eventKit.reminderAuthStatus)
+                                                ? .jarvisOnline
+                                                : .jarvisTextDim
+                                        )
+                                }
+
+                                Spacer()
+
+                                if !EventKitService.isAuthorized(eventKit.reminderAuthStatus) {
+                                    Button {
+                                        Task { await eventKit.requestReminderAccess() }
+                                    } label: {
+                                        Text("CONNECT")
+                                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                                            .tracking(1)
+                                            .foregroundColor(.jarvisBlue)
+                                            .padding(.horizontal, 10)
+                                            .padding(.vertical, 5)
+                                            .background {
+                                                Capsule()
+                                                    .strokeBorder(Color.jarvisBlue.opacity(0.3), lineWidth: 0.5)
+                                            }
+                                    }
+                                } else {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .font(.system(size: 14))
+                                        .foregroundColor(.jarvisOnline)
+                                }
+                            }
+                            .padding(.vertical, 2)
+
+                            // Calendar
+                            HStack {
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text("Calendar")
+                                        .font(.system(size: 12, weight: .medium, design: .monospaced))
+                                        .foregroundColor(.jarvisText)
+
+                                    Text(EventKitService.statusText(for: eventKit.calendarAuthStatus).uppercased())
+                                        .font(.system(size: 9, weight: .medium, design: .monospaced))
+                                        .foregroundColor(
+                                            EventKitService.isAuthorized(eventKit.calendarAuthStatus)
+                                                ? .jarvisOnline
+                                                : .jarvisTextDim
+                                        )
+                                }
+
+                                Spacer()
+
+                                if !EventKitService.isAuthorized(eventKit.calendarAuthStatus) {
+                                    Button {
+                                        Task { await eventKit.requestCalendarAccess() }
+                                    } label: {
+                                        Text("CONNECT")
+                                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                                            .tracking(1)
+                                            .foregroundColor(.jarvisBlue)
+                                            .padding(.horizontal, 10)
+                                            .padding(.vertical, 5)
+                                            .background {
+                                                Capsule()
+                                                    .strokeBorder(Color.jarvisBlue.opacity(0.3), lineWidth: 0.5)
+                                            }
+                                    }
+                                } else {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .font(.system(size: 14))
+                                        .foregroundColor(.jarvisOnline)
+                                }
+                            }
+                            .padding(.vertical, 2)
                         }
 
                         // About
