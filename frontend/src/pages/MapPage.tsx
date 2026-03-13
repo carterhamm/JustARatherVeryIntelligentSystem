@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
+import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 import { api } from '@/services/api';
 import {
   ArrowLeft,
@@ -1048,27 +1049,26 @@ export default function MapPage() {
   }, [mapReady]);
 
   // ---- Fetch contacts + landmarks ----
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setIsLoading(true);
-      try {
-        const [contactResult, landmarkResult] = await Promise.allSettled([
-          api.get<Contact[]>('/contacts', { offset: 0, limit: 200 }),
-          api.get<LandmarkData[]>('/landmarks'),
-        ]);
-        if (!cancelled) {
-          if (contactResult.status === 'fulfilled') setContacts(contactResult.value);
-          if (landmarkResult.status === 'fulfilled') setLandmarks(landmarkResult.value);
-        }
-      } catch {
-        // silently fail
-      } finally {
-        if (!cancelled) setIsLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
+  const fetchMapData = useCallback(async () => {
+    try {
+      const [contactResult, landmarkResult] = await Promise.allSettled([
+        api.get<Contact[]>('/contacts', { offset: 0, limit: 200 }),
+        api.get<LandmarkData[]>('/landmarks'),
+      ]);
+      if (contactResult.status === 'fulfilled') setContacts(contactResult.value);
+      if (landmarkResult.status === 'fulfilled') setLandmarks(landmarkResult.value);
+    } catch {
+      // silently fail
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    setIsLoading(true);
+    fetchMapData();
+  }, [fetchMapData]);
+  useAutoRefresh(fetchMapData, 5 * 60 * 1000); // 5 min + visibility refetch
 
   // ---- Geocode contacts with addresses (waits for MapKit) ----
   useEffect(() => {

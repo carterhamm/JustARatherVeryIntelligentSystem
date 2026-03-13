@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 import {
   Cloud, Sun, CloudRain, CloudSnow, CloudLightning, CloudDrizzle, Wind, Droplets,
   Calendar, Clock, ChevronRight, ExternalLink, RefreshCw,
@@ -274,11 +275,10 @@ function WeatherWidget() {
   }, []);
 
   useEffect(() => {
-    // Wait briefly for geolocation to resolve before first fetch
     const timer = setTimeout(fetchWeather, 1500);
-    const interval = setInterval(fetchWeather, 10 * 60 * 1000); // 10 min
-    return () => { clearTimeout(timer); clearInterval(interval); };
+    return () => clearTimeout(timer);
   }, [fetchWeather]);
+  useAutoRefresh(fetchWeather, 10 * 60 * 1000); // 10 min + visibility refetch
 
   if (loading && !data) {
     return <WeatherSkeleton />;
@@ -391,11 +391,8 @@ function CalendarWidget() {
     }
   }, []);
 
-  useEffect(() => {
-    fetchCalendar();
-    const interval = setInterval(fetchCalendar, 5 * 60 * 1000); // 5 min
-    return () => clearInterval(interval);
-  }, [fetchCalendar]);
+  useEffect(() => { fetchCalendar(); }, [fetchCalendar]);
+  useAutoRefresh(fetchCalendar, 5 * 60 * 1000); // 5 min + visibility refetch
 
   if (loading && !data) {
     return <CalendarSkeleton />;
@@ -449,12 +446,15 @@ function GoogleConnectWidget() {
   const [status, setStatus] = useState<SystemStatus | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const fetchStatus = useCallback(() => {
     api.get<SystemStatus>('/widgets/status')
       .then(setStatus)
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => { fetchStatus(); }, [fetchStatus]);
+  useAutoRefresh(fetchStatus, 5 * 60 * 1000); // 5 min + visibility refetch
 
   if (loading) {
     return (
@@ -508,12 +508,15 @@ function QuickStatsWidget() {
   const [status, setStatus] = useState<SystemStatus | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const fetchStatus = useCallback(() => {
     api.get<SystemStatus>('/widgets/status')
       .then(setStatus)
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => { fetchStatus(); }, [fetchStatus]);
+  useAutoRefresh(fetchStatus, 5 * 60 * 1000); // 5 min + visibility refetch
 
   if (loading && !status) return <SubsystemsSkeleton />;
   if (!status) return null;
@@ -573,11 +576,8 @@ function HealthWidget() {
     }
   }, []);
 
-  useEffect(() => {
-    fetchHealth();
-    const interval = setInterval(fetchHealth, 10 * 60 * 1000); // 10 min
-    return () => clearInterval(interval);
-  }, [fetchHealth]);
+  useEffect(() => { fetchHealth(); }, [fetchHealth]);
+  useAutoRefresh(fetchHealth, 10 * 60 * 1000);
 
   if (loading && !data) return <GenericSkeleton label="HEALTH" />;
 
@@ -655,11 +655,8 @@ function EmailWidget() {
     }
   }, []);
 
-  useEffect(() => {
-    fetchEmail();
-    const interval = setInterval(fetchEmail, 10 * 60 * 1000); // 10 min
-    return () => clearInterval(interval);
-  }, [fetchEmail]);
+  useEffect(() => { fetchEmail(); }, [fetchEmail]);
+  useAutoRefresh(fetchEmail, 10 * 60 * 1000);
 
   if (loading && !data) return <GenericSkeleton label="INTEL" />;
 
@@ -727,11 +724,8 @@ function RemindersWidget() {
     }
   }, []);
 
-  useEffect(() => {
-    fetchReminders();
-    const interval = setInterval(fetchReminders, 2 * 60 * 1000); // 2 min
-    return () => clearInterval(interval);
-  }, [fetchReminders]);
+  useEffect(() => { fetchReminders(); }, [fetchReminders]);
+  useAutoRefresh(fetchReminders, 2 * 60 * 1000);
 
   if (loading && !data) return <GenericSkeleton label="REMINDERS" />;
 
@@ -946,11 +940,8 @@ function HabitsWidget() {
     }
   }, []);
 
-  useEffect(() => {
-    fetchHabits();
-    const interval = setInterval(fetchHabits, 5 * 60 * 1000);
-    return () => clearInterval(interval);
-  }, [fetchHabits]);
+  useEffect(() => { fetchHabits(); }, [fetchHabits]);
+  useAutoRefresh(fetchHabits, 5 * 60 * 1000);
 
   if (loading && !data) {
     return (
@@ -1107,13 +1098,8 @@ export default function WidgetPanel() {
     }
   }, []);
 
-  useEffect(() => {
-    if (token) {
-      fetchLayout();
-      const interval = setInterval(fetchLayout, 3 * 60 * 1000); // 3 min
-      return () => clearInterval(interval);
-    }
-  }, [token, fetchLayout]);
+  useEffect(() => { if (token) fetchLayout(); }, [token, fetchLayout]);
+  useAutoRefresh(fetchLayout, 3 * 60 * 1000);
 
   // Animate reorder when layout changes
   useEffect(() => {
