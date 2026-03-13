@@ -4,6 +4,7 @@ import { useAuthStore } from '@/stores/authStore';
 import AuthPage from '@/pages/AuthPage';
 import MainPage from '@/pages/MainPage';
 import MapPage from '@/pages/MapPage';
+import CameraPage from '@/pages/CameraPage';
 import GoogleConnectPage from '@/pages/GoogleConnectPage';
 
 interface ErrorBoundaryProps {
@@ -93,6 +94,14 @@ export default function App() {
           element={
             <ProtectedRoute>
               <MapPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/camera"
+          element={
+            <ProtectedRoute>
+              <CameraPage />
             </ProtectedRoute>
           }
         />

@@ -1058,6 +1058,38 @@ _TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "required": ["action"],
         },
     },
+    # -- Camera / Vision --------------------------------------------------
+    {
+        "name": "camera_look",
+        "description": (
+            "Look through the security camera. Can capture a snapshot and describe "
+            "what you see, or control the camera's pan/tilt/zoom. Use when the user "
+            "asks you to look at something, check the camera, or control PTZ."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["look", "ptz"],
+                    "description": (
+                        "'look' = capture and analyze a frame. "
+                        "'ptz' = move the camera (requires direction param)."
+                    ),
+                },
+                "prompt": {
+                    "type": "string",
+                    "description": "What to look for or describe (for 'look' action).",
+                },
+                "direction": {
+                    "type": "string",
+                    "enum": ["left", "right", "up", "down", "home", "zoom_in", "zoom_out"],
+                    "description": "PTZ direction (for 'ptz' action).",
+                },
+            },
+            "required": ["action"],
+        },
+    },
     # -- Research Briefing -----------------------------------------------
     {
         "name": "research_briefing",

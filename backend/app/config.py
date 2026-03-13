@@ -115,6 +115,12 @@ class Settings(BaseSettings):
     MAC_MINI_AGENT_URL: str = ""   # e.g. https://agent.malibupoint.dev
     MAC_MINI_AGENT_KEY: str = ""   # Bearer token for auth
 
+    # -- Camera / Security (TP-Link Tapo via Mac Mini daemon) ----------------
+    CAMERA_PROXY_URL: str = ""       # Mac Mini camera daemon URL
+    CAMERA_IP: str = ""              # Camera IP on local network
+    CAMERA_USERNAME: str = ""        # Camera account username
+    CAMERA_PASSWORD: str = ""        # Camera account password
+
     # -- Matter / Smart Home --------------------------------------------------
     MATTER_CONTROLLER_URL: str = "http://localhost:5580"
 

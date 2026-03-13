@@ -22,6 +22,7 @@ from app.api.v1.habits import router as habits_router
 from app.api.v1.landmarks import router as landmarks_router
 from app.api.v1.location import router as location_router
 from app.api.v1.sessions import router as sessions_router
+from app.api.v1.camera import router as camera_router
 
 v1_router = APIRouter()
 v1_router.include_router(auth_router, prefix="/auth", tags=["auth"])
@@ -44,3 +45,4 @@ v1_router.include_router(habits_router, prefix="/habits", tags=["Habits"])
 v1_router.include_router(landmarks_router, prefix="/landmarks", tags=["Landmarks"])
 v1_router.include_router(location_router, prefix="/location", tags=["Location"])
 v1_router.include_router(sessions_router, prefix="/sessions", tags=["Sessions"])
+v1_router.include_router(camera_router, tags=["Camera"])

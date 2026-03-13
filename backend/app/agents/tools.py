@@ -3881,6 +3881,42 @@ class FocusSessionTool(BaseTool):
 
 
 # ═════════════════════════════════════════════════════════════════════════
+# Camera / Vision
+# ═════════════════════════════════════════════════════════════════════════
+
+
+class CameraLookTool(BaseTool):
+    name = "camera_look"
+    description = "Look through the security camera or control PTZ"
+
+    async def execute(
+        self, params: dict[str, Any], *, state: Optional[AgentState] = None
+    ) -> str:
+        action = params.get("action", "look")
+
+        try:
+            from app.services.camera import CameraService
+
+            if action == "look":
+                prompt = params.get("prompt", "")
+                return await CameraService.analyze_frame(prompt)
+
+            elif action == "ptz":
+                direction = params.get("direction", "home")
+                result = await CameraService.ptz_command(direction)
+                if result.get("ok"):
+                    return f"Camera moved: {direction}"
+                return f"PTZ failed: {result.get('error', 'unknown error')}"
+
+            else:
+                return f"Unknown action '{action}'. Use: look, ptz."
+
+        except Exception as exc:
+            logger.exception("CameraLookTool error")
+            return f"Camera error: {exc}"
+
+
+# ═════════════════════════════════════════════════════════════════════════
 # Tool registry factory
 # ═════════════════════════════════════════════════════════════════════════
 
@@ -3963,6 +3999,8 @@ def get_tool_registry() -> dict[str, BaseTool]:
             FocusSessionTool(),
             # Habit tracking
             HabitTool(),
+            # Camera / security vision
+            CameraLookTool(),
         ]
         _registry = {t.name: t for t in tools}
     return _registry

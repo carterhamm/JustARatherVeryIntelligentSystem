@@ -10,6 +10,7 @@ import {
   Users,
   MapPin,
   Monitor,
+  Camera,
   Flame,
   Target,
 } from 'lucide-react';
@@ -214,9 +215,15 @@ export default function CommandDock() {
           onClick={() => navigate('/map')}
         />
         <DockIcon
+          icon={Camera}
+          label="Camera"
+          index={9}
+          onClick={() => navigate('/camera')}
+        />
+        <DockIcon
           icon={Monitor}
           label="Remote Desktop"
-          index={9}
+          index={10}
           onClick={() => window.open('/vnc/mac-mini', '_blank')}
         />
 
@@ -226,7 +233,7 @@ export default function CommandDock() {
         <DockIcon
           icon={Settings}
           label="Settings"
-          index={10}
+          index={11}
           onClick={() => dispatch('jarvis-settings-toggle')}
         />
       </div>
