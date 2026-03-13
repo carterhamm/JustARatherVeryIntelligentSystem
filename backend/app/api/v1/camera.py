@@ -5,11 +5,11 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
 
-from app.core.dependencies import get_current_active_user
+from app.core.dependencies import get_current_active_user, get_user_from_token_or_query
 from app.services.camera import CameraService
 
 logger = logging.getLogger("jarvis.api.camera")
@@ -47,12 +47,20 @@ async def camera_snapshot(user=Depends(get_current_active_user)):
 # -- MJPEG Stream ----------------------------------------------------------
 
 @router.get("/stream")
-async def camera_stream(token: str = Query(None), user=Depends(get_current_active_user)):
-    """Proxy MJPEG stream from the camera daemon."""
+async def camera_stream(user=Depends(get_user_from_token_or_query)):
+    """Proxy MJPEG stream from the camera daemon.
+
+    Accepts JWT via ``Authorization: Bearer`` header **or** ``?token=`` query
+    param (required for ``<img>`` tags that cannot set HTTP headers).
+    """
     try:
         return StreamingResponse(
             CameraService.stream_proxy(),
             media_type="multipart/x-mixed-replace; boundary=frame",
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "X-Content-Type-Options": "nosniff",
+            },
         )
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Stream unavailable: {exc}")

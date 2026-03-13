@@ -49,16 +49,22 @@ export default function CameraPage() {
 
   const [status, setStatus] = useState<CameraStatus | null>(null);
   const [gestures, setGestures] = useState<GestureState | null>(null);
-  const [frameUrl, setFrameUrl] = useState<string>('');
   const [streaming, setStreaming] = useState(true);
+  const [streamError, setStreamError] = useState(false);
   const [gesturesEnabled, setGesturesEnabled] = useState(true);
   const [showOverlay, setShowOverlay] = useState(true);
   const [fullscreen, setFullscreen] = useState(false);
   const [ptzActive, setPtzActive] = useState<string | null>(null);
+  const [streamKey, setStreamKey] = useState(0); // force remount on reconnect
 
   const containerRef = useRef<HTMLDivElement>(null);
-  const frameIntervalRef = useRef<ReturnType<typeof setInterval>>();
   const gestureIntervalRef = useRef<ReturnType<typeof setInterval>>();
+
+  // ── MJPEG stream URL ─────────────────────────────────────────────────
+  const apiBase = import.meta.env.VITE_API_URL || '/api/v1';
+  const streamUrl = streaming && token
+    ? `${apiBase}/camera/stream?token=${encodeURIComponent(token)}&_t=${streamKey}`
+    : '';
 
   // ── Fetch camera status ────────────────────────────────────────────────
 
@@ -77,36 +83,17 @@ export default function CameraPage() {
     return () => clearInterval(interval);
   }, []);
 
-  // ── Frame polling (snapshot-based live view) ───────────────────────────
+  // ── Stream reconnect on error ──────────────────────────────────────────
 
   useEffect(() => {
-    if (!streaming) {
-      if (frameIntervalRef.current) clearInterval(frameIntervalRef.current);
-      return;
-    }
-
-    const fetchFrame = async () => {
-      try {
-        const resp = await fetch(`${import.meta.env.VITE_API_URL || '/api/v1'}/camera/snapshot`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (resp.ok) {
-          const blob = await resp.blob();
-          const url = URL.createObjectURL(blob);
-          setFrameUrl((prev) => {
-            if (prev) URL.revokeObjectURL(prev);
-            return url;
-          });
-        }
-      } catch { /* camera offline */ }
-    };
-
-    fetchFrame();
-    frameIntervalRef.current = setInterval(fetchFrame, 150); // ~7fps
-    return () => {
-      if (frameIntervalRef.current) clearInterval(frameIntervalRef.current);
-    };
-  }, [streaming, token]);
+    if (!streamError || !streaming) return;
+    // Auto-retry stream every 3 seconds on error
+    const timer = setTimeout(() => {
+      setStreamError(false);
+      setStreamKey((k) => k + 1);
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [streamError, streaming]);
 
   // ── Gesture polling ────────────────────────────────────────────────────
 
@@ -170,21 +157,32 @@ export default function CameraPage() {
 
   return (
     <div ref={containerRef} className="relative w-full h-screen bg-[#050510] overflow-hidden select-none">
-      {/* Camera Feed */}
+      {/* Camera Feed — MJPEG Stream */}
       <div className="absolute inset-0 flex items-center justify-center">
-        {frameUrl ? (
+        {streaming && streamUrl && !streamError ? (
           <img
-            src={frameUrl}
+            key={streamKey}
+            src={streamUrl}
             alt="Camera feed"
             className="max-w-full max-h-full object-contain"
             draggable={false}
+            onError={() => setStreamError(true)}
           />
         ) : (
           <div className="flex flex-col items-center gap-4 text-gray-500">
             <VideoOff size={48} className="text-gray-600" />
             <span className="font-mono text-sm tracking-wider">
-              {status?.error || 'CONNECTING TO CAMERA...'}
+              {streamError ? 'STREAM INTERRUPTED — RECONNECTING...' : status?.error || (streaming ? 'CONNECTING TO CAMERA...' : 'STREAM PAUSED')}
             </span>
+            {streamError && (
+              <button
+                onClick={() => { setStreamError(false); setStreamKey((k) => k + 1); }}
+                className="flex items-center gap-2 px-3 py-1.5 font-mono text-[10px] tracking-wider text-[#00d4ff]"
+                style={{ background: 'rgba(0,212,255,0.1)', border: '1px solid rgba(0,212,255,0.3)' }}
+              >
+                <RotateCcw size={12} /> RETRY NOW
+              </button>
+            )}
           </div>
         )}
       </div>

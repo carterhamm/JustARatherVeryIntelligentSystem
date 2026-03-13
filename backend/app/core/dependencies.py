@@ -76,6 +76,42 @@ async def get_current_active_user(
     return user
 
 
+async def get_user_from_token_or_query(
+    request: Request,
+    token: str | None = None,
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    """Authenticate via JWT in Authorization header OR ``?token=`` query param.
+
+    Needed for endpoints consumed by ``<img>`` / ``<video>`` tags that cannot
+    set HTTP headers (e.g. MJPEG streams).
+    """
+    from app.core.security import decode_token as _decode
+
+    jwt: str | None = token  # query param
+    if not jwt:
+        auth_header = request.headers.get("authorization", "")
+        if auth_header.startswith("Bearer "):
+            jwt = auth_header[7:]
+    if not jwt:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required (Bearer token or ?token= query)",
+        )
+
+    payload = _decode(jwt)
+    if payload.type != "access":
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token type")
+
+    result = await db.execute(select(User).where(User.id == payload.sub))
+    user = result.scalar_one_or_none()
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+    if not user.is_active:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account deactivated")
+    return user
+
+
 async def get_current_active_user_or_service(
     request: Request,
     db: AsyncSession = Depends(get_db),
