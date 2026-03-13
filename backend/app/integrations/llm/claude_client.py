@@ -39,11 +39,18 @@ class ClaudeClient(BaseLLMClient):
         max_retries: int = _MAX_RETRIES,
         retry_base_delay: float = _RETRY_BASE_DELAY,
     ) -> None:
-        self._client = AsyncAnthropic(
-            api_key=api_key,
-            max_retries=max_retries,
-            timeout=60.0,
-        )
+        from app.config import cf_gateway_url
+
+        gateway = cf_gateway_url("anthropic")
+        client_kwargs: dict[str, Any] = {
+            "api_key": api_key,
+            "max_retries": max_retries,
+            "timeout": 60.0,
+        }
+        if gateway:
+            client_kwargs["base_url"] = gateway
+            logger.info("Claude routed through Cloudflare AI Gateway")
+        self._client = AsyncAnthropic(**client_kwargs)
         self.default_model = default_model
         self._max_retries = max_retries
         self._retry_base_delay = retry_base_delay

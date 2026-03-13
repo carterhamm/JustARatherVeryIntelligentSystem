@@ -71,6 +71,13 @@ class Settings(BaseSettings):
     # -- Cerebras (ultra-fast intent routing) -----------------------------------
     CEREBRAS_API_KEY: str = ""
 
+    # -- Cloudflare AI Gateway (analytics, caching, fallback) -----------------
+    # Create a gateway at https://dash.cloudflare.com → AI → AI Gateway
+    # Routes Cerebras + Claude through CF edge for cost tracking & observability
+    # Gemini excluded due to known streaming compatibility issue
+    CLOUDFLARE_ACCOUNT_ID: str = ""
+    CLOUDFLARE_AI_GATEWAY_ID: str = ""
+
     # -- Twilio (JARVIS phone number) -----------------------------------------
     TWILIO_ACCOUNT_SID: str = ""
     TWILIO_AUTH_TOKEN: str = ""
@@ -222,3 +229,19 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+
+def cf_gateway_url(provider: str) -> str | None:
+    """Build Cloudflare AI Gateway base URL for a provider.
+
+    Returns None if AI Gateway is not configured, signaling direct API usage.
+    Supported providers: 'anthropic', 'cerebras'.
+    """
+    if not settings.CLOUDFLARE_ACCOUNT_ID or not settings.CLOUDFLARE_AI_GATEWAY_ID:
+        return None
+    return (
+        f"https://gateway.ai.cloudflare.com/v1/"
+        f"{settings.CLOUDFLARE_ACCOUNT_ID}/"
+        f"{settings.CLOUDFLARE_AI_GATEWAY_ID}/"
+        f"{provider}"
+    )

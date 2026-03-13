@@ -3,10 +3,15 @@
 Classifies user messages into tool categories in <100ms so the main
 LLM (Gemini/Claude) only receives relevant tool definitions.
 This prevents token waste and confusion from sending 39+ tools every request.
+
+Includes Redis caching: identical messages return cached tool routing
+for 10 minutes, avoiding redundant Cerebras calls.
 """
 
 from __future__ import annotations
 
+import hashlib
+import json as _json_module
 import logging
 from typing import Optional
 
@@ -157,6 +162,38 @@ Rules:
 - Be fast, be precise"""
 
 _client: Optional[AsyncOpenAI] = None
+_INTENT_CACHE_TTL = 600  # 10 minutes
+
+
+async def _get_cached_intent(message: str) -> Optional[list[str]]:
+    """Check Redis for a cached intent routing result."""
+    try:
+        import redis.asyncio as aioredis
+
+        r = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
+        key = f"intent:{hashlib.sha256(message.strip().lower().encode()).hexdigest()[:16]}"
+        cached = await r.get(key)
+        await r.aclose()
+        if cached is not None:
+            result = _json_module.loads(cached)
+            logger.debug("Intent cache hit: %s → %d tools", key, len(result))
+            return result
+    except Exception:
+        pass  # cache miss or Redis unavailable — proceed normally
+    return None
+
+
+async def _set_cached_intent(message: str, tools: list[str]) -> None:
+    """Store intent routing result in Redis."""
+    try:
+        import redis.asyncio as aioredis
+
+        r = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
+        key = f"intent:{hashlib.sha256(message.strip().lower().encode()).hexdigest()[:16]}"
+        await r.set(key, _json_module.dumps(tools), ex=_INTENT_CACHE_TTL)
+        await r.aclose()
+    except Exception:
+        pass  # non-critical — caching is best-effort
 
 
 def _get_client() -> Optional[AsyncOpenAI]:
@@ -165,9 +202,17 @@ def _get_client() -> Optional[AsyncOpenAI]:
         return _client
     if not settings.CEREBRAS_API_KEY:
         return None
+
+    from app.config import cf_gateway_url
+
+    gateway = cf_gateway_url("cerebras")
+    base_url = gateway or "https://api.cerebras.ai/v1"
+    if gateway:
+        logger.info("Cerebras routed through Cloudflare AI Gateway")
+
     _client = AsyncOpenAI(
         api_key=settings.CEREBRAS_API_KEY,
-        base_url="https://api.cerebras.ai/v1",
+        base_url=base_url,
     )
     return _client
 
@@ -178,7 +223,14 @@ async def route_intent(message: str) -> list[str]:
     Returns a list of tool names that should be sent with the request.
     Returns empty list if no tools needed (general conversation) or
     if Cerebras is unavailable (falls back to sending all tools).
+
+    Results are cached in Redis for 10 minutes to avoid redundant calls.
     """
+    # Check cache first
+    cached = await _get_cached_intent(message)
+    if cached is not None:
+        return cached
+
     client = _get_client()
     if not client:
         logger.debug("Cerebras not configured — sending all tools")
@@ -215,6 +267,7 @@ async def route_intent(message: str) -> list[str]:
 
             if "general" in categories and len(categories) == 1:
                 logger.info("Intent: general (no tools needed)")
+                await _set_cached_intent(message, [])
                 return []
 
             # Collect all tools from matched categories
@@ -227,8 +280,10 @@ async def route_intent(message: str) -> list[str]:
             if "search_knowledge" not in tools and categories != ["general"]:
                 tools.append("search_knowledge")
 
-            logger.info("Intent categories: %s → %d tools", categories, len(tools))
-            return list(set(tools))  # deduplicate
+            deduped = list(set(tools))
+            logger.info("Intent categories: %s → %d tools", categories, len(deduped))
+            await _set_cached_intent(message, deduped)
+            return deduped
 
         except Exception as exc:
             logger.warning("Cerebras %s failed: %s — trying fallback", model, exc)
