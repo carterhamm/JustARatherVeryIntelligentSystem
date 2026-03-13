@@ -112,9 +112,12 @@ class UploadResponse(BaseModel):
 
 _FIELDS = [
     "first_name", "last_name", "phone", "email", "company", "title", "address", "notes",
-    "photo", "photo_content_type", "street", "city", "state", "postal_code", "country",
+    "photo", "street", "city", "state", "postal_code", "country",
     "birthday", "url", "raw_vcard", "extra_fields",
 ]
+
+# photo_content_type is NOT encrypted — it's just a MIME type (e.g. "image/jpeg"),
+# not PII, and the String(64) column can't hold AES-encrypted values.
 
 
 def _encrypt_contact(data: dict[str, Any], user_id: uuid.UUID) -> dict[str, Any]:
@@ -123,6 +126,8 @@ def _encrypt_contact(data: dict[str, Any], user_id: uuid.UUID) -> dict[str, Any]
     for f in _FIELDS:
         val = data.get(f) or None
         out[f] = encrypt_message(val, user_id) if val else None
+    # Pass through photo_content_type unencrypted (not PII, String(64) column)
+    out["photo_content_type"] = data.get("photo_content_type") or None
     return out
 
 
@@ -132,6 +137,8 @@ def _decrypt_contact(contact: Contact) -> dict[str, Any]:
     for f in _FIELDS:
         val = getattr(contact, f, None)
         result[f] = decrypt_message(val, contact.user_id) if val else None
+    # photo_content_type stored unencrypted (not PII)
+    result["photo_content_type"] = getattr(contact, "photo_content_type", None)
     return result
 
 
@@ -371,6 +378,35 @@ def _parse_csv(content: str) -> list[dict[str, Any]]:
     return contacts
 
 
+def _is_duplicate(raw: dict[str, Any], existing: list[dict[str, Any]]) -> bool:
+    """Check if a contact matches any existing contact by name + phone/email."""
+    first = (raw.get("first_name") or "").strip().lower()
+    last = (raw.get("last_name") or "").strip().lower()
+    phone = _normalize_phone(raw.get("phone") or "")
+    email = (raw.get("email") or "").strip().lower()
+    if not first:
+        return False
+    for ex in existing:
+        ex_first = (ex.get("first_name") or "").strip().lower()
+        ex_last = (ex.get("last_name") or "").strip().lower()
+        if first != ex_first or last != ex_last:
+            continue
+        # Same name — check phone or email
+        if phone and _normalize_phone(ex.get("phone") or "") == phone:
+            return True
+        if email and (ex.get("email") or "").strip().lower() == email:
+            return True
+        # Same full name with no phone/email to compare — treat as duplicate
+        if not phone and not email:
+            return True
+    return False
+
+
+def _normalize_phone(p: str) -> str:
+    """Strip non-digits for phone comparison."""
+    return "".join(c for c in p if c.isdigit())[-10:] if p else ""
+
+
 # ── Endpoints ────────────────────────────────────────────────────────────
 
 @router.post("/upload", response_model=UploadResponse)
@@ -381,6 +417,12 @@ async def upload_contacts(
 ):
     """Upload contacts from one or more .vcf or .csv files."""
     imported, skipped, errors = 0, 0, 0
+
+    # Load existing contacts for duplicate detection
+    existing_rows = await db.execute(
+        select(Contact).where(Contact.user_id == current_user.id)
+    )
+    existing_decrypted = [_decrypt_contact(c) for c in existing_rows.scalars().all()]
 
     for upload_file in file:
         content = (await upload_file.read()).decode("utf-8", errors="ignore")
@@ -396,10 +438,15 @@ async def upload_contacts(
 
         for raw in parsed:
             try:
+                if _is_duplicate(raw, existing_decrypted):
+                    skipped += 1
+                    continue
                 encrypted = _encrypt_contact(raw, current_user.id)
                 contact = Contact(user_id=current_user.id, **encrypted)
                 db.add(contact)
                 imported += 1
+                # Add to existing list so subsequent entries in same import are checked
+                existing_decrypted.append(raw)
             except Exception:
                 logger.exception("Failed to import contact")
                 errors += 1
@@ -411,7 +458,9 @@ async def upload_contacts(
         imported=imported,
         skipped=skipped,
         errors=errors,
-        message=f"Imported {imported} contacts." + (f" {errors} errors." if errors else ""),
+        message=f"Imported {imported} contacts."
+        + (f" {skipped} duplicates skipped." if skipped else "")
+        + (f" {errors} errors." if errors else ""),
     )
 
 
@@ -486,6 +535,37 @@ async def count_contacts(
         select(func.count()).select_from(Contact).where(Contact.user_id == current_user.id)
     )
     return {"count": result.scalar() or 0}
+
+
+@router.get("/duplicates")
+async def find_duplicates(
+    current_user: User = Depends(get_current_active_user_or_service),
+    db: AsyncSession = Depends(get_db),
+):
+    """Find suspected duplicate contacts (same name + phone or email)."""
+    result = await db.execute(
+        select(Contact).where(Contact.user_id == current_user.id)
+    )
+    all_contacts = [_decrypt_contact(c) for c in result.scalars().all()]
+
+    # Group by normalized name
+    from collections import defaultdict
+    groups: dict[str, list[dict]] = defaultdict(list)
+    for c in all_contacts:
+        key = f"{(c.get('first_name') or '').strip().lower()}|{(c.get('last_name') or '').strip().lower()}"
+        groups[key].append(c)
+
+    # Return only groups with 2+ contacts
+    duplicates = []
+    for key, members in groups.items():
+        if len(members) >= 2:
+            duplicates.append({
+                "name": key.replace("|", " ").strip(),
+                "count": len(members),
+                "contacts": [ContactResponse(**m) for m in members],
+            })
+
+    return {"duplicate_groups": duplicates, "total_duplicates": sum(g["count"] for g in duplicates)}
 
 
 @router.put("/{contact_id}", response_model=ContactResponse)

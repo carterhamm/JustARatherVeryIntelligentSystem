@@ -1154,6 +1154,15 @@ export default function MapPage() {
         });
 
         mapRef.current = map;
+
+        // Dismiss contact callout when map pans/zooms (prevents "sticking")
+        map.addEventListener('region-change-start', () => {
+          if (calloutOverlayRef.current) {
+            calloutOverlayRef.current.remove();
+            calloutOverlayRef.current = null;
+          }
+        });
+
         if (!cancelled) setMapReady(true);
       } catch (err) {
         console.error('[MapKit] Init failed:', err);
@@ -1244,8 +1253,12 @@ export default function MapPage() {
         }
         if (!cancelled) {
           setGeocodeProgress({ done: i + 1, total: withAddress.length });
-          setGeocodedContacts([...results]);
         }
+      }
+      // Set all geocoded contacts at once to avoid flickering
+      // (each setState triggers annotation removal + re-add)
+      if (!cancelled) {
+        setGeocodedContacts([...results]);
       }
     })();
 
@@ -1342,14 +1355,32 @@ export default function MapPage() {
         footer.appendChild(laBtn);
         callout.appendChild(footer);
 
-        // Position callout near the annotation
+        // Position callout near the annotation, clamped to map bounds
         const mapContainer = mapContainerRef.current;
         if (mapContainer) {
-          const point = map.convertCoordinateToPointOnPage(coord);
-          const rect = mapContainer.getBoundingClientRect();
-          callout.style.left = `${point.x - rect.left - 140}px`;
-          callout.style.top = `${point.y - rect.top - 180}px`;
           mapContainer.appendChild(callout);
+          const point = map.convertCoordinateToPointOnPage(coord);
+          const containerRect = mapContainer.getBoundingClientRect();
+          const calloutRect = callout.getBoundingClientRect();
+          const cw = calloutRect.width;
+          const ch = calloutRect.height;
+          const pad = 8;
+
+          // Initial position: centered above the pin
+          let left = point.x - containerRect.left - cw / 2;
+          let top = point.y - containerRect.top - ch - 24;
+
+          // Clamp within container bounds
+          left = Math.max(pad, Math.min(left, containerRect.width - cw - pad));
+          top = Math.max(pad, Math.min(top, containerRect.height - ch - pad));
+
+          // If callout would overlap the pin (not enough room above), show below
+          if (point.y - containerRect.top - ch - 24 < pad) {
+            top = point.y - containerRect.top + 30;
+          }
+
+          callout.style.left = `${left}px`;
+          callout.style.top = `${top}px`;
           calloutOverlayRef.current = callout;
         }
       });
@@ -1636,7 +1667,7 @@ export default function MapPage() {
           className="absolute inset-0 z-[5] pointer-events-none"
           style={{
             backgroundImage:
-              'linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px)',
+              'linear-gradient(rgba(0,212,255,0.07) 1px, transparent 1px), linear-gradient(90deg, rgba(0,212,255,0.07) 1px, transparent 1px)',
             backgroundSize: '80px 80px',
           }}
         />
