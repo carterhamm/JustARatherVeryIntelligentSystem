@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import AsyncIterator
 
 import structlog
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
@@ -14,7 +14,15 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.api.v1 import v1_router
 from app.config import settings
 from app.core.events import shutdown_handler, startup_handler
-from app.core.middleware import RequestLoggingMiddleware, RateLimitMiddleware, SecurityHeadersMiddleware
+from app.core.middleware import (
+    RequestLoggingMiddleware,
+    RateLimitMiddleware,
+    SecurityHeadersMiddleware,
+    ErrorSanitizationMiddleware,
+    HTTPSEnforcementMiddleware,
+)
+from app.core.dependencies import get_current_active_user_or_service
+from app.models.user import User
 from app.schemas.common import HealthResponse
 
 logger = structlog.stdlib.get_logger(__name__)
@@ -74,6 +82,8 @@ def create_app() -> FastAPI:
 
     # -- Custom middleware (outermost first) -----------------------------------
     application.add_middleware(SecurityHeadersMiddleware)
+    application.add_middleware(ErrorSanitizationMiddleware)
+    application.add_middleware(HTTPSEnforcementMiddleware)
     application.add_middleware(RateLimitMiddleware, max_requests=120, window_seconds=60)
     application.add_middleware(RequestLoggingMiddleware)
 
@@ -107,7 +117,9 @@ def create_app() -> FastAPI:
         return HealthResponse(status="healthy", version="0.1.0")
 
     @application.get("/health/services", tags=["health"])
-    async def health_services() -> JSONResponse:
+    async def health_services(
+        _user: User = Depends(get_current_active_user_or_service),
+    ) -> JSONResponse:
         """Return per-service availability.  Never fails -- always 200."""
         try:
             from app.services.health import ServiceHealth

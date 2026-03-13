@@ -26,7 +26,7 @@ from app.config import settings
 
 logger = logging.getLogger("jarvis.encryption")
 
-_PBKDF2_ITERATIONS = 480_000
+_PBKDF2_ITERATIONS = settings.PBKDF2_ITERATIONS
 _PBKDF2_KEY_LENGTH = 32  # 256 bits
 
 # Prefix to identify encrypted content

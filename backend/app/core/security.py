@@ -137,7 +137,8 @@ def decrypt_value(cipher_text: str) -> str:
 # PBKDF2 per-user key derivation (for OAuth token encryption)
 # ---------------------------------------------------------------------------
 
-_PBKDF2_ITERATIONS = 480_000
+from app.config import settings as _settings
+_PBKDF2_ITERATIONS = _settings.PBKDF2_ITERATIONS
 _PBKDF2_KEY_LENGTH = 32  # 256 bits
 
 

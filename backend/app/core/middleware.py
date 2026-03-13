@@ -1,5 +1,7 @@
 """Custom ASGI middleware for request logging, rate-limiting, and security headers."""
 
+import json as _json
+import re as _re
 import time
 from collections import defaultdict
 from typing import Callable
@@ -157,3 +159,69 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         )
 
         return response
+
+
+# ---------------------------------------------------------------------------
+# Error sanitization — strip internal details from 5xx responses in production
+# ---------------------------------------------------------------------------
+
+# Patterns that suggest internal details are leaking
+_LEAK_PATTERNS = _re.compile(
+    r"(api[_-]?key|token|secret|password|https?://[^\s]+|Traceback)",
+    _re.IGNORECASE,
+)
+
+
+class ErrorSanitizationMiddleware(BaseHTTPMiddleware):
+    """Strip internal exception details from error responses in production.
+
+    5xx responses that contain API keys, URLs, or tracebacks are replaced
+    with a generic message.  The full error is still logged server-side.
+    """
+
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+        response = await call_next(request)
+
+        if response.status_code >= 500:
+            from app.config import settings
+            if not settings.DEBUG:
+                body_bytes = b""
+                async for chunk in response.body_iterator:
+                    body_bytes += chunk if isinstance(chunk, bytes) else chunk.encode()
+                try:
+                    body = _json.loads(body_bytes)
+                    detail = body.get("detail", "")
+                    if isinstance(detail, str) and _LEAK_PATTERNS.search(detail):
+                        op = detail.split(" failed")[0] if " failed" in detail else "Operation"
+                        body["detail"] = f"{op} failed. Please try again later."
+                        return JSONResponse(content=body, status_code=response.status_code)
+                except (ValueError, AttributeError):
+                    pass
+                return Response(content=body_bytes, status_code=response.status_code,
+                                media_type=response.media_type)
+
+        return response
+
+
+# ---------------------------------------------------------------------------
+# HTTPS enforcement
+# ---------------------------------------------------------------------------
+
+
+class HTTPSEnforcementMiddleware(BaseHTTPMiddleware):
+    """Reject non-HTTPS requests in production.
+
+    Checks X-Forwarded-Proto (set by Railway/Cloudflare load balancer)
+    since the app itself runs behind a reverse proxy on HTTP.
+    """
+
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+        from app.config import settings
+        if not settings.DEBUG:
+            proto = request.headers.get("x-forwarded-proto", "https")
+            if proto != "https" and not request.url.path.startswith("/health"):
+                return JSONResponse(
+                    status_code=403,
+                    content={"detail": "HTTPS required"},
+                )
+        return await call_next(request)

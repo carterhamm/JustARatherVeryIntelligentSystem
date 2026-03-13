@@ -198,6 +198,9 @@ class Settings(BaseSettings):
     LOGIN_MAX_ATTEMPTS: int = 3
     LOGIN_LOCKOUT_MINUTES: int = 30
 
+    # -- Cryptographic constants -----------------------------------------------
+    PBKDF2_ITERATIONS: int = 480_000
+
     @field_validator("JWT_SECRET_KEY", mode="before")
     @classmethod
     def _ensure_jwt_secret(cls, v: object) -> str:
