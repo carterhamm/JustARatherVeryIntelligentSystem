@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
 
-from app.api.deps import get_current_user
+from app.core.dependencies import get_current_active_user
 from app.services.camera import CameraService
 
 logger = logging.getLogger("jarvis.api.camera")
@@ -24,7 +24,7 @@ class PTZRequest(BaseModel):
 # -- Status ----------------------------------------------------------------
 
 @router.get("/status")
-async def camera_status(user=Depends(get_current_user)) -> dict[str, Any]:
+async def camera_status(user=Depends(get_current_active_user)) -> dict[str, Any]:
     """Get camera connection status and info."""
     try:
         return await CameraService.get_status()
@@ -35,7 +35,7 @@ async def camera_status(user=Depends(get_current_user)) -> dict[str, Any]:
 # -- Snapshot --------------------------------------------------------------
 
 @router.get("/snapshot")
-async def camera_snapshot(user=Depends(get_current_user)):
+async def camera_snapshot(user=Depends(get_current_active_user)):
     """Get a JPEG snapshot from the camera."""
     try:
         data = await CameraService.get_snapshot()
@@ -47,7 +47,7 @@ async def camera_snapshot(user=Depends(get_current_user)):
 # -- MJPEG Stream ----------------------------------------------------------
 
 @router.get("/stream")
-async def camera_stream(token: str = Query(None), user=Depends(get_current_user)):
+async def camera_stream(token: str = Query(None), user=Depends(get_current_active_user)):
     """Proxy MJPEG stream from the camera daemon."""
     try:
         return StreamingResponse(
@@ -62,7 +62,7 @@ async def camera_stream(token: str = Query(None), user=Depends(get_current_user)
 
 @router.post("/ptz/{action}")
 async def camera_ptz(
-    action: str, body: PTZRequest = PTZRequest(), user=Depends(get_current_user)
+    action: str, body: PTZRequest = PTZRequest(), user=Depends(get_current_active_user)
 ) -> dict[str, Any]:
     """Send PTZ command: left, right, up, down, home, stop."""
     valid = {"left", "right", "up", "down", "home", "stop",
@@ -78,7 +78,7 @@ async def camera_ptz(
 # -- Gesture Recognition ---------------------------------------------------
 
 @router.get("/gestures")
-async def camera_gestures(user=Depends(get_current_user)) -> dict[str, Any]:
+async def camera_gestures(user=Depends(get_current_active_user)) -> dict[str, Any]:
     """Get current gesture recognition state."""
     try:
         return await CameraService.get_gestures()
@@ -90,7 +90,7 @@ async def camera_gestures(user=Depends(get_current_user)) -> dict[str, Any]:
 
 @router.post("/analyze")
 async def camera_analyze(
-    prompt: str = "", user=Depends(get_current_user)
+    prompt: str = "", user=Depends(get_current_active_user)
 ) -> dict[str, str]:
     """Capture a frame and analyze it with Gemini vision."""
     result = await CameraService.analyze_frame(prompt)
