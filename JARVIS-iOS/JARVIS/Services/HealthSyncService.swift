@@ -11,13 +11,13 @@ actor HealthSyncService {
 
     // MARK: - Constants
 
-    private static let bgTaskID = "dev.malibupoint.jarvis.healthsync"
+    private static let bgTaskID = "dev.jarvis.malibupoint.healthsync"
     private static let outboxFile = "health_outbox.json"
     private static let anchorPrefix = "hk_anchor_"
     private static let debounceInterval: TimeInterval = 2.0
     private static let maxBatchSize = 500
 
-    private let logger = Logger(subsystem: "dev.malibupoint.jarvis", category: "HealthSync")
+    private let logger = Logger(subsystem: "dev.jarvis.malibupoint", category: "HealthSync")
 
     // MARK: - HealthKit Store
 
@@ -468,7 +468,7 @@ actor HealthSyncService {
         do {
             try BGTaskScheduler.shared.submit(request)
         } catch {
-            Logger(subsystem: "dev.malibupoint.jarvis", category: "HealthSync")
+            Logger(subsystem: "dev.jarvis.malibupoint", category: "HealthSync")
                 .error("Failed to schedule BG refresh: \(error.localizedDescription)")
         }
     }

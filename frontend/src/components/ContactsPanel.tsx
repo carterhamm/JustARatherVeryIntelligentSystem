@@ -485,7 +485,7 @@ export default function ContactsPanel() {
 
     setUploadStatus(totalErrors > 0 && totalImported === 0 ? 'error' : 'success');
     setUploadMessage(
-      `Imported ${totalImported} contacts.${totalErrors > 0 ? ` ${totalErrors} errors.` : ''}`
+      `Imported ${totalImported} contact${totalImported !== 1 ? 's' : ''}.${totalErrors > 0 ? ` ${totalErrors} error${totalErrors !== 1 ? 's' : ''}.` : ''}`
     );
     loadContacts();
     loadCount();

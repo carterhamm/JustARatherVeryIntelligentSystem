@@ -254,21 +254,21 @@ function createAnnotationElement(contact: Contact, count?: number): HTMLDivEleme
   el.style.position = 'relative';
 
   if (photo) {
-    el.innerHTML = `
-      <div style="
-        width: 44px; height: 44px; border-radius: 50%;
-        background: rgba(0, 20, 40, 0.9);
-        border: 2px solid rgba(0, 212, 255, 0.6);
-        box-shadow: 0 0 16px rgba(0, 212, 255, 0.3), 0 4px 12px rgba(0,0,0,0.5);
-        overflow: hidden;
-        transition: all 0.25s ease;
-      ">
-        <img src="${photo}" alt="" style="
-          width: 100%; height: 100%; object-fit: cover;
-          border-radius: 50%;
-        " onerror="this.style.display='none';this.parentElement.innerHTML='<div style=\\'display:flex;align-items:center;justify-content:center;width:100%;height:100%;font-family:monospace;font-size:12px;font-weight:600;color:#00d4ff;\\'>${initials}</div>';" />
-      </div>
-    `;
+    const wrapper = document.createElement('div');
+    wrapper.style.cssText = 'width:44px;height:44px;border-radius:50%;background:rgba(0,20,40,0.9);border:2px solid rgba(0,212,255,0.6);box-shadow:0 0 16px rgba(0,212,255,0.3),0 4px 12px rgba(0,0,0,0.5);overflow:hidden;transition:all 0.25s ease;display:flex;align-items:center;justify-content:center;';
+    const img = document.createElement('img');
+    img.src = photo;
+    img.alt = '';
+    img.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:50%;';
+    img.onerror = () => {
+      img.remove();
+      const fallback = document.createElement('div');
+      fallback.style.cssText = 'display:flex;align-items:center;justify-content:center;width:100%;height:100%;font-family:monospace;font-size:12px;font-weight:600;color:#00d4ff;';
+      fallback.textContent = initials;
+      wrapper.appendChild(fallback);
+    };
+    wrapper.appendChild(img);
+    el.appendChild(wrapper);
   } else {
     el.innerHTML = `
       <div style="
@@ -429,8 +429,10 @@ function createCalloutElement(contact: Contact): HTMLDivElement {
     );
   }
   if (contact.birthday) {
+    const bday = new Date(contact.birthday + 'T00:00:00');
+    const bdayStr = isNaN(bday.getTime()) ? contact.birthday : bday.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
     lines.push(
-      `<div style="display:flex;align-items:center;gap:6px;margin:4px 0;"><span style="color:rgba(0,212,255,0.4);font-size:9px;">BDAY</span><span style="color:#999;font-size:9px;">${contact.birthday}</span></div>`,
+      `<div style="display:flex;align-items:center;gap:6px;margin:4px 0;"><span style="color:rgba(0,212,255,0.4);font-size:9px;">BDAY</span><span style="color:#999;font-size:9px;">${bdayStr}</span></div>`,
     );
   }
 
@@ -569,7 +571,7 @@ function ContactCard({
           {contact.birthday && (
             <div className="flex items-center gap-2">
               <Cake size={10} className="text-jarvis-blue/30 flex-shrink-0" />
-              <span className="text-[10px] font-mono text-gray-400">{contact.birthday}</span>
+              <span className="text-[10px] font-mono text-gray-400">{(() => { const d = new Date(contact.birthday + 'T00:00:00'); return isNaN(d.getTime()) ? contact.birthday : d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }); })()}</span>
             </div>
           )}
           {contact.url && (
@@ -842,7 +844,8 @@ function MapContextMenu({
         background: 'linear-gradient(to bottom right, rgba(10, 10, 10, 0.75), rgba(10, 10, 10, 0.9))',
         backdropFilter: 'blur(20px) saturate(180%)',
         WebkitBackdropFilter: 'blur(20px) saturate(180%)',
-        borderRadius: 16,
+        borderRadius: 0,
+        clipPath: 'polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px))',
         border: '1px solid rgba(0, 212, 255, 0.12)',
         boxShadow: '0 10px 40px rgba(0,0,0,0.4), 0 0 20px rgba(0, 212, 255, 0.05)',
         padding: '6px',
@@ -857,7 +860,7 @@ function MapContextMenu({
             item.onClick();
             onClose();
           }}
-          className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-left transition-colors hover:bg-white/[0.06]"
+          className="w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-white/[0.06]"
         >
           <item.icon size={14} className="text-jarvis-blue/60 flex-shrink-0" />
           <span className="text-[12px] font-medium text-gray-300">{item.label}</span>
@@ -1630,7 +1633,7 @@ export default function MapPage() {
       {/* ---- HUD grid overlay ---- */}
       {gridVisible && (
         <div
-          className="absolute inset-0 z-[1] pointer-events-none"
+          className="absolute inset-0 z-[5] pointer-events-none"
           style={{
             backgroundImage:
               'linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px)',
@@ -1644,7 +1647,7 @@ export default function MapPage() {
         <div
           className="flex items-center justify-between px-3 h-11 pointer-events-auto"
           style={{
-            background: 'rgba(0, 0, 0, 0.6)',
+            background: 'linear-gradient(to bottom, rgba(5, 5, 16, 0.95), rgba(5, 5, 16, 0.7), transparent)',
             borderBottom: '1px solid rgba(0, 212, 255, 0.08)',
             backdropFilter: 'blur(16px)',
             WebkitBackdropFilter: 'blur(16px)',

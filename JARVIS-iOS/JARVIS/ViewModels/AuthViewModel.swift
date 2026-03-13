@@ -143,7 +143,7 @@ class AuthViewModel: ObservableObject {
             if (err as? ASAuthorizationError)?.code == .canceled {
                 // User cancelled — not an error
             } else {
-                error = "Authentication failed"
+                error = err.localizedDescription
             }
             isLoading = false
         }
@@ -178,7 +178,7 @@ class AuthViewModel: ObservableObject {
                 isAuthenticated = true
             }
         } catch {
-            self.error = "Verification failed"
+            self.error = error.localizedDescription
         }
 
         isLoading = false

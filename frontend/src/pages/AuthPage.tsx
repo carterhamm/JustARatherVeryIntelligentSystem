@@ -411,9 +411,21 @@ export default function AuthPage() {
       if (result && 'needs_totp' in result && result.needs_totp) {
         // Now verify the TOTP code we collected earlier
         await verifyTOTPLogin(result.totp_token, pendingTotpCode);
-        navigate('/');
+        const pendingRedirect = localStorage.getItem('jarvis_post_login_redirect');
+        if (pendingRedirect) {
+          localStorage.removeItem('jarvis_post_login_redirect');
+          navigate(pendingRedirect);
+        } else {
+          navigate('/');
+        }
       } else {
-        navigate('/');
+        const pendingRedirect = localStorage.getItem('jarvis_post_login_redirect');
+        if (pendingRedirect) {
+          localStorage.removeItem('jarvis_post_login_redirect');
+          navigate(pendingRedirect);
+        } else {
+          navigate('/');
+        }
       }
     } catch (err: any) {
       const detail = err?.response?.data?.detail || err?.message || 'Authentication failed.';

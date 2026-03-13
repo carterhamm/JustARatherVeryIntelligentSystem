@@ -26,7 +26,7 @@
 	<string>JARVIS syncs your health data (steps, heart rate, sleep, workouts) to provide personalized wellness insights and recommendations.</string>
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array>
-		<string>dev.malibupoint.jarvis.healthsync</string>
+		<string>dev.jarvis.malibupoint.healthsync</string>
 	</array>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>JARVIS uses your location continuously to provide contextual assistance, weather updates, and navigation — even when the app is in the background.</string>

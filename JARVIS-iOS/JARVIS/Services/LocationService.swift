@@ -21,7 +21,7 @@ class LocationService: NSObject, ObservableObject {
     private let locationManager = CLLocationManager()
     private let geocoder = CLGeocoder()
     private let api = APIClient.shared
-    private let logger = Logger(subsystem: "dev.malibupoint.jarvis", category: "Location")
+    private let logger = Logger(subsystem: "dev.jarvis.malibupoint", category: "Location")
 
     private var lastPostedLocation: CLLocation?
     private var lastPostTime: Date?

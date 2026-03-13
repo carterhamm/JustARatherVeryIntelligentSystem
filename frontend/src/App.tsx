@@ -1,5 +1,5 @@
 import { Component, type ReactNode } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
 import AuthPage from '@/pages/AuthPage';
 import MainPage from '@/pages/MainPage';
@@ -59,7 +59,14 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
   const token = useAuthStore((state) => state.token);
-  if (!token) return <Navigate to="/login" replace />;
+  const location = useLocation();
+  if (!token) {
+    // Save the attempted URL so we can redirect back after login
+    if (location.pathname !== '/login' && location.pathname !== '/') {
+      localStorage.setItem('jarvis_post_login_redirect', location.pathname + location.search);
+    }
+    return <Navigate to="/login" replace />;
+  }
   return <>{children}</>;
 }
 

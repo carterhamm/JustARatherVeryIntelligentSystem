@@ -4,7 +4,7 @@ import Security
 actor KeychainService {
     static let shared = KeychainService()
 
-    private let service = "dev.malibupoint.jarvis"
+    private let service = "dev.jarvis.malibupoint"
 
     enum Key: String {
         case accessToken

@@ -4,7 +4,6 @@ import AuthenticationServices
 struct LoginView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @State private var showGrid = false
-    @State private var ringRotation = 0.0
     @State private var bootComplete = false
     @FocusState private var identifierFocused: Bool
     @FocusState private var totpFocused: Bool
@@ -22,30 +21,16 @@ struct LoginView: View {
 
             ScrollView {
                 VStack(spacing: 0) {
-                    Spacer().frame(height: 80)
+                    Spacer().frame(height: 40)
 
-                    // JARVIS Core Visual
+                    // JARVIS Core Visual — Arc Reactor
                     ZStack {
-                        ForEach(0..<3, id: \.self) { i in
-                            Circle()
-                                .stroke(
-                                    Color.jarvisBlue.opacity(0.1 + Double(i) * 0.1),
-                                    lineWidth: 1
-                                )
-                                .frame(
-                                    width: CGFloat(140 + i * 36),
-                                    height: CGFloat(140 + i * 36)
-                                )
-                                .rotationEffect(.degrees(ringRotation * (i % 2 == 0 ? 1 : -0.7)))
-                        }
+                        // Outer ring
+                        Circle()
+                            .stroke(Color.jarvisBlue.opacity(0.35), lineWidth: 1.5)
+                            .frame(width: 100, height: 100)
 
-                        ForEach(0..<6, id: \.self) { i in
-                            ArcSegment(startAngle: Double(i) * 60 + 10, endAngle: Double(i) * 60 + 50)
-                                .stroke(Color.jarvisBlue.opacity(0.4), lineWidth: 2)
-                                .frame(width: 180, height: 180)
-                                .rotationEffect(.degrees(ringRotation * 0.3))
-                        }
-
+                        // Inner glow
                         Circle()
                             .fill(
                                 RadialGradient(
@@ -55,23 +40,20 @@ struct LoginView: View {
                                         .clear
                                     ],
                                     center: .center,
-                                    startRadius: 10,
-                                    endRadius: 60
+                                    startRadius: 5,
+                                    endRadius: 40
                                 )
                             )
-                            .frame(width: 120, height: 120)
-
-                        Circle()
-                            .stroke(Color.jarvisBlue.opacity(0.5), lineWidth: 1.5)
                             .frame(width: 80, height: 80)
 
+                        // Core dot
                         Circle()
-                            .fill(Color.jarvisBlue.opacity(0.8))
-                            .frame(width: 14, height: 14)
-                            .shadow(color: .jarvisBlue, radius: 15)
-                            .shadow(color: .jarvisBlue, radius: 30)
+                            .fill(Color.jarvisBlue.opacity(0.9))
+                            .frame(width: 12, height: 12)
+                            .shadow(color: .jarvisBlue, radius: 12)
+                            .shadow(color: .jarvisBlue, radius: 24)
                     }
-                    .padding(.bottom, 36)
+                    .padding(.bottom, 24)
 
                     // Title
                     VStack(spacing: 12) {
@@ -91,7 +73,7 @@ struct LoginView: View {
                             .frame(width: 200, height: 0.5)
                             .padding(.vertical, 6)
 
-                        Text("MALIBU POINT SECURE ACCESS")
+                        Text("STARK SECURE SERVER")
                             .font(.system(size: 9, weight: .medium, design: .monospaced))
                             .tracking(2)
                             .foregroundColor(.jarvisBlue.opacity(0.5))
@@ -139,9 +121,6 @@ struct LoginView: View {
             .scrollDismissesKeyboard(.interactively)
         }
         .onAppear {
-            withAnimation(.linear(duration: 40).repeatForever(autoreverses: false)) {
-                ringRotation = 360
-            }
             withAnimation(.easeOut(duration: 1).delay(1)) {
                 showGrid = true
             }
@@ -377,25 +356,6 @@ struct LoginView: View {
                 RoundedRectangle(cornerRadius: 8)
                     .strokeBorder(Color.jarvisBlue.opacity(0.4), lineWidth: 1)
             )
-    }
-}
-
-// MARK: - Arc Segment Shape
-
-struct ArcSegment: Shape {
-    let startAngle: Double
-    let endAngle: Double
-
-    func path(in rect: CGRect) -> Path {
-        Path { p in
-            p.addArc(
-                center: CGPoint(x: rect.midX, y: rect.midY),
-                radius: min(rect.width, rect.height) / 2,
-                startAngle: .degrees(startAngle),
-                endAngle: .degrees(endAngle),
-                clockwise: false
-            )
-        }
     }
 }
 
