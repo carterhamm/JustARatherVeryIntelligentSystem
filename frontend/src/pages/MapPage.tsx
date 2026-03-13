@@ -1194,7 +1194,7 @@ export default function MapPage() {
         if (cancelled || !mapContainerRef.current) return;
 
         const map = new mk.Map(mapContainerRef.current, {
-          center: new mk.Coordinate(40.2969, -111.6946),
+          center: new mk.Coordinate(38.5, -98.0), // Central US default
           mapType: mk.Map.MapTypes.MutedStandard,
           colorScheme: mk.Map.ColorSchemes.Dark,
           showsCompass: mk.FeatureVisibility.Hidden,
@@ -1674,11 +1674,13 @@ export default function MapPage() {
   // ---- Helper: region from contacts ----
   function regionFromContacts(contacts: GeocodedContact[]) {
     const mk = window.mapkit;
-    const valid = contacts.filter((c) => !(Math.abs(c.lat) < 0.1 && Math.abs(c.lng) < 0.1));
+    // Filter out (0,0) region — failed geocodes that would drag view to Africa
+    const valid = contacts.filter((c) => !(Math.abs(c.lat) < 1 && Math.abs(c.lng) < 1));
     if (valid.length === 0) {
+      // Default: central US (Kansas) — never Africa
       return new mk.CoordinateRegion(
-        new mk.Coordinate(40.2969, -111.6946),
-        new mk.CoordinateSpan(5, 5),
+        new mk.Coordinate(38.5, -98.0),
+        new mk.CoordinateSpan(30, 50),
       );
     }
 
@@ -1690,6 +1692,8 @@ export default function MapPage() {
       if (c.lng > maxLng) maxLng = c.lng;
     });
     landmarks.forEach((lm) => {
+      // Skip landmarks near (0,0) — same Africa guard
+      if (Math.abs(lm.latitude) < 1 && Math.abs(lm.longitude) < 1) return;
       if (lm.latitude < minLat) minLat = lm.latitude;
       if (lm.latitude > maxLat) maxLat = lm.latitude;
       if (lm.longitude < minLng) minLng = lm.longitude;
