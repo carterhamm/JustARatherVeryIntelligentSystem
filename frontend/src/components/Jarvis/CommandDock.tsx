@@ -10,6 +10,8 @@ import {
   Users,
   MapPin,
   Monitor,
+  Flame,
+  Target,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useUIStore } from '@/stores/uiStore';
@@ -187,6 +189,20 @@ export default function CommandDock() {
           index={5}
           onClick={() => dispatch('jarvis-knowledge-toggle')}
         />
+        <DockIcon
+          icon={Flame}
+          label="Habits"
+          accent="#f0a500"
+          index={6}
+          onClick={() => dispatch('jarvis-habits-toggle')}
+        />
+        <DockIcon
+          icon={Target}
+          label="Focus"
+          accent="#00d4ff"
+          index={7}
+          onClick={() => dispatch('jarvis-focus-toggle')}
+        />
 
         {/* Divider */}
         <div className="w-5 h-px bg-white/[0.06] my-0.5" />
@@ -194,13 +210,13 @@ export default function CommandDock() {
         <DockIcon
           icon={MapPin}
           label="Map"
-          index={6}
+          index={8}
           onClick={() => navigate('/map')}
         />
         <DockIcon
           icon={Monitor}
           label="Remote Desktop"
-          index={7}
+          index={9}
           onClick={() => window.open('/vnc/mac-mini', '_blank')}
         />
 
@@ -210,7 +226,7 @@ export default function CommandDock() {
         <DockIcon
           icon={Settings}
           label="Settings"
-          index={8}
+          index={10}
           onClick={() => dispatch('jarvis-settings-toggle')}
         />
       </div>

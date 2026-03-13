@@ -9,6 +9,8 @@ import SettingsPanel from '@/components/SettingsPanel';
 import DataImportPanel from '@/components/DataImportPanel';
 import KnowledgePanel from '@/components/KnowledgePanel';
 import ContactsPanel from '@/components/ContactsPanel';
+import HabitsPanel from '@/components/HabitsPanel';
+import FocusPanel from '@/components/FocusPanel';
 
 function HudCorner({ position }: { position: 'tl' | 'tr' | 'bl' | 'br' }) {
   const isTop = position.startsWith('t');
@@ -130,6 +132,8 @@ export default function MainPage() {
       <DataImportPanel />
       <KnowledgePanel />
       <ContactsPanel />
+      <HabitsPanel />
+      <FocusPanel />
     </div>
   );
 }

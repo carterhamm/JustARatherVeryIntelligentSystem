@@ -447,18 +447,44 @@ async def update_location(
     current_user: User = Depends(get_current_active_user_or_service),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, str]:
-    """Update the user's current location. Called by iOS Shortcuts automations."""
+    """Update the user's current location. Called by iOS Shortcuts automations.
+
+    Also logs the location to the history table for timeline display.
+    """
+    from datetime import datetime, timezone as tz
+    from app.models.location_history import LocationHistory
+
+    lat = payload.get("latitude")
+    lng = payload.get("longitude")
+    city = payload.get("city")
+    state = payload.get("state")
+    country = payload.get("country")
+
+    # Update current location in preferences
     prefs = dict(current_user.preferences or {})
     prefs["current_location"] = {
-        "latitude": payload.get("latitude"),
-        "longitude": payload.get("longitude"),
-        "city": payload.get("city"),
-        "state": payload.get("state"),
-        "country": payload.get("country"),
-        "updated_at": payload.get("timestamp") or __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
+        "latitude": lat,
+        "longitude": lng,
+        "city": city,
+        "state": state,
+        "country": country,
+        "updated_at": payload.get("timestamp") or datetime.now(tz.utc).isoformat(),
     }
     current_user.preferences = prefs
     flag_modified(current_user, "preferences")
+
+    # Log to location history for timeline
+    if lat is not None and lng is not None:
+        entry = LocationHistory(
+            user_id=current_user.id,
+            latitude=float(lat),
+            longitude=float(lng),
+            city=city,
+            state=state,
+            country=country,
+        )
+        db.add(entry)
+
     await db.commit()
     return {"status": "ok"}
 
