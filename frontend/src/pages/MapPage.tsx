@@ -252,6 +252,7 @@ function createAnnotationElement(contact: Contact, count?: number): HTMLDivEleme
   const el = document.createElement('div');
   el.style.cursor = 'pointer';
   el.style.position = 'relative';
+  el.style.willChange = 'transform'; // reduce sub-pixel jitter at low zoom
 
   if (photo) {
     const wrapper = document.createElement('div');
@@ -334,6 +335,7 @@ function createLandmarkAnnotation(landmark: LandmarkData): HTMLDivElement {
   const el = document.createElement('div');
   el.style.cursor = 'pointer';
   el.style.position = 'relative';
+  el.style.willChange = 'transform';
 
   el.innerHTML = `
     <div style="
@@ -651,28 +653,62 @@ function LookAroundPanel({
     }
 
     // Try to initialize MapKit JS Look Around
+    // If exact coords fail, search nearby roads within ~200m offsets
     try {
-      if (typeof mk.LookAround === 'function') {
-        const coord = new mk.Coordinate(lat, lng);
-        const la = new mk.LookAround(containerRef.current, coord, {
-          showsDialogControl: true,
-          showsCloseControl: false,
-        });
-        lookAroundRef.current = la;
-        // Listen for errors/availability
-        la.addEventListener('error', () => setStatus('unavailable'));
-        la.addEventListener('load', () => setStatus('active'));
-        // If no event fires after 3 seconds, assume it worked or failed silently
-        const timer = setTimeout(() => {
-          setStatus((s) => (s === 'loading' ? 'active' : s));
-        }, 3000);
-        return () => {
-          clearTimeout(timer);
-          if (lookAroundRef.current?.destroy) lookAroundRef.current.destroy();
-        };
-      } else {
+      if (typeof mk.LookAround !== 'function') {
         setStatus('unavailable');
+        return;
       }
+
+      let cancelled = false;
+      const container = containerRef.current;
+
+      // Try the exact coords first, then nearby offsets (~100-200m in each direction)
+      const offsets = [
+        [0, 0],
+        [0.001, 0], [-0.001, 0], [0, 0.001], [0, -0.001],
+        [0.001, 0.001], [-0.001, -0.001], [0.002, 0], [-0.002, 0],
+        [0, 0.002], [0, -0.002],
+      ];
+
+      const tryLookAround = (latOff: number, lngOff: number): Promise<boolean> => {
+        return new Promise((resolve) => {
+          if (cancelled || !container) { resolve(false); return; }
+          const coord = new mk.Coordinate(lat + latOff, lng + lngOff);
+          const la = new mk.LookAround(container, coord, {
+            showsDialogControl: true,
+            showsCloseControl: false,
+          });
+          let settled = false;
+          la.addEventListener('error', () => {
+            if (!settled) { settled = true; la.destroy(); resolve(false); }
+          });
+          la.addEventListener('load', () => {
+            if (!settled) { settled = true; lookAroundRef.current = la; resolve(true); }
+          });
+          // Timeout: if no event in 2s, assume failure and try next
+          setTimeout(() => {
+            if (!settled) { settled = true; la.destroy(); resolve(false); }
+          }, 2000);
+        });
+      };
+
+      (async () => {
+        for (const [latOff, lngOff] of offsets) {
+          if (cancelled) return;
+          const ok = await tryLookAround(latOff, lngOff);
+          if (ok) {
+            if (!cancelled) setStatus('active');
+            return;
+          }
+        }
+        if (!cancelled) setStatus('unavailable');
+      })();
+
+      return () => {
+        cancelled = true;
+        if (lookAroundRef.current?.destroy) lookAroundRef.current.destroy();
+      };
     } catch {
       setStatus('unavailable');
     }
@@ -1113,6 +1149,7 @@ export default function MapPage() {
   const annotationsRef = useRef<any[]>([]);
   const landmarkAnnotationsRef = useRef<any[]>([]);
   const calloutOverlayRef = useRef<HTMLDivElement | null>(null);
+  const calloutLayerRef = useRef<HTMLDivElement>(null);
 
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [geocodedContacts, setGeocodedContacts] = useState<GeocodedContact[]>([]);
@@ -1142,14 +1179,16 @@ export default function MapPage() {
 
         const map = new mk.Map(mapContainerRef.current, {
           center: new mk.Coordinate(40.2969, -111.6946), // Orem, Utah
-          mapType: mk.Map.MapTypes.MutedStandard,
+          mapType: mk.Map.MapTypes.Standard,
           colorScheme: mk.Map.ColorSchemes.Dark,
           showsCompass: mk.FeatureVisibility.Hidden,
           showsZoomControl: true,
           showsMapTypeControl: false,
+          showsPointsOfInterest: true,
           isZoomEnabled: true,
           isScrollEnabled: true,
           isRotationEnabled: true,
+          cameraZoomRange: new mk.CameraZoomRange(200, 20000000),
           padding: new mk.Padding(0, 0, 0, 0),
         });
 
@@ -1355,10 +1394,11 @@ export default function MapPage() {
         footer.appendChild(laBtn);
         callout.appendChild(footer);
 
-        // Position callout near the annotation, clamped to map bounds
+        // Position callout in the overlay layer (above sidebar z-index)
+        const layer = calloutLayerRef.current;
         const mapContainer = mapContainerRef.current;
-        if (mapContainer) {
-          mapContainer.appendChild(callout);
+        if (layer && mapContainer) {
+          layer.appendChild(callout);
           const point = map.convertCoordinateToPointOnPage(coord);
           const containerRect = mapContainer.getBoundingClientRect();
           const calloutRect = callout.getBoundingClientRect();
@@ -1815,6 +1855,9 @@ export default function MapPage() {
           onClose={() => setLookAroundCoords(null)}
         />
       )}
+
+      {/* -- Callout overlay layer (above sidebar) -- */}
+      <div ref={calloutLayerRef} className="absolute inset-0 z-[15] pointer-events-none" />
 
       {/* -- Sidebar -- */}
       <div

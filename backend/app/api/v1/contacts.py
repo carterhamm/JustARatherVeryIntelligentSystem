@@ -236,34 +236,42 @@ def _parse_vcard(content: str) -> list[dict[str, Any]]:
         # Notes
         if hasattr(vcard, "note"):
             c["notes"] = vcard.note.value
-        # Photo
+        # Photo — handle bytes, base64-encoded, and URI formats
         if hasattr(vcard, "photo"):
-            photo_prop = vcard.photo
-            photo_val = photo_prop.value
-            params = getattr(photo_prop, "params", {})
-            content_type = None
-            if "TYPE" in params:
-                ptype = params["TYPE"]
-                if isinstance(ptype, list):
-                    ptype = ptype[0]
-                ptype = ptype.lower()
-                if "/" not in ptype:
-                    content_type = f"image/{ptype}"
+            try:
+                photo_prop = vcard.photo
+                photo_val = photo_prop.value
+                params = getattr(photo_prop, "params", {}) or {}
+                content_type = None
+                if "TYPE" in params:
+                    ptype = params["TYPE"]
+                    if isinstance(ptype, list):
+                        ptype = ptype[0]
+                    ptype = ptype.lower()
+                    content_type = f"image/{ptype}" if "/" not in ptype else ptype
+                elif "MEDIATYPE" in params:
+                    mt = params["MEDIATYPE"]
+                    content_type = mt[0] if isinstance(mt, list) else mt
+                encoding = params.get("ENCODING", [])
+                if isinstance(encoding, list):
+                    encoding = encoding[0] if encoding else ""
+                encoding = encoding.upper() if isinstance(encoding, str) else ""
+                if isinstance(photo_val, bytes):
+                    c["photo"] = base64.b64encode(photo_val).decode("ascii")
+                elif encoding in ("B", "BASE64"):
+                    c["photo"] = photo_val.replace("\n", "").replace("\r", "").replace(" ", "")
+                elif isinstance(photo_val, str) and photo_val.startswith(("http://", "https://")):
+                    c["photo"] = photo_val  # URI — frontend handles http URLs
+                elif isinstance(photo_val, str) and len(photo_val) > 50:
+                    # Likely raw base64 without explicit encoding param
+                    c["photo"] = photo_val.replace("\n", "").replace("\r", "").replace(" ", "")
                 else:
-                    content_type = ptype
-            elif "MEDIATYPE" in params:
-                mt = params["MEDIATYPE"]
-                content_type = mt[0] if isinstance(mt, list) else mt
-            encoding = params.get("ENCODING", [])
-            if isinstance(encoding, list):
-                encoding = encoding[0] if encoding else ""
-            encoding = encoding.upper() if isinstance(encoding, str) else ""
-            if isinstance(photo_val, bytes):
-                c["photo"] = base64.b64encode(photo_val).decode("ascii")
-            elif encoding == "B" or encoding == "BASE64":
-                c["photo"] = photo_val.replace("\n", "").replace("\r", "").replace(" ", "")
-            else:
-                c["photo"] = photo_val
+                    c["photo"] = photo_val
+                if not content_type:
+                    content_type = "image/jpeg"
+                c["photo_content_type"] = content_type
+            except Exception as exc:
+                logger.warning("Failed to extract photo for contact: %s", exc)
             if content_type:
                 c["photo_content_type"] = content_type
             elif not content_type and isinstance(photo_val, bytes):
