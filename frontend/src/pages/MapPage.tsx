@@ -307,11 +307,11 @@ function createAnnotationElement(contact: Contact, count?: number): HTMLDivEleme
     badge.style.cssText = `
       position: absolute; top: -4px; right: -4px;
       min-width: 18px; height: 18px;
-      background: #f0a500; border: 2px solid rgba(10, 14, 23, 0.95);
+      background: #00d4ff; border: 2px solid rgba(10, 14, 23, 0.95);
       border-radius: 9px; display: flex; align-items: center; justify-content: center;
       font-family: 'JetBrains Mono', monospace; font-size: 9px; font-weight: 700;
       color: #0A0E17; padding: 0 4px;
-      box-shadow: 0 0 8px rgba(240, 165, 0, 0.4);
+      box-shadow: 0 0 8px rgba(0, 212, 255, 0.4);
       z-index: 2;
     `;
     badge.textContent = String(count);
@@ -1194,7 +1194,7 @@ export default function MapPage() {
         if (cancelled || !mapContainerRef.current) return;
 
         const map = new mk.Map(mapContainerRef.current, {
-          center: new mk.Coordinate(38.5, -98.0), // Central US default
+          center: new mk.Coordinate(40.29, -111.69), // Orem, Utah
           mapType: mk.Map.MapTypes.MutedStandard,
           colorScheme: mk.Map.ColorSchemes.Dark,
           showsCompass: mk.FeatureVisibility.Hidden,
@@ -1240,6 +1240,59 @@ export default function MapPage() {
       landmarkAnnotationsRef.current = [];
     };
   }, []);
+
+  // ---- POI click handler (MapKit built-in annotation select) ----
+  useEffect(() => {
+    const map = mapRef.current;
+    const mk = window.mapkit;
+    if (!map || !mk || !mapReady) return;
+
+    const handler = (event: any) => {
+      try {
+        const annotation = event?.annotation;
+        if (!annotation) return;
+        // Our custom annotations have `data` — built-in POIs don't
+        if (annotation.data) return;
+
+        const title = annotation.title || '';
+        const subtitle = annotation.subtitle || '';
+        if (!title) return;
+
+        // Search for full details
+        const search = new mk.Search({ language: 'en', region: map.region });
+        search.search(title, (err: any, searchData: any) => {
+          try {
+            if (err || !searchData?.places?.length) {
+              // Show basic info from the annotation itself
+              const coord = annotation.coordinate;
+              if (coord) {
+                setSelectedPlace({
+                  name: title,
+                  latitude: coord.latitude,
+                  longitude: coord.longitude,
+                  formattedAddress: subtitle,
+                });
+              }
+              return;
+            }
+            const place = searchData.places[0];
+            setSelectedPlace({
+              name: place.name || title,
+              latitude: place.coordinate.latitude,
+              longitude: place.coordinate.longitude,
+              formattedAddress: place.formattedAddress || subtitle,
+              phone: place.telephone || '',
+              url: place.urls?.[0] || '',
+              category: formatPOICategory(place.pointOfInterestCategory) || '',
+            });
+          } catch { /* search callback error — non-fatal */ }
+        });
+      } catch { /* event handler error — non-fatal */ }
+    };
+
+    map.addEventListener('select', handler);
+    return () => { try { map.removeEventListener('select', handler); } catch {} };
+  }, [mapReady]);
 
   // ---- Right-click context menu handler ----
   useEffect(() => {
@@ -1498,8 +1551,10 @@ export default function MapPage() {
           let left = point.x - containerRect.left - cw / 2;
           let top = point.y - containerRect.top - ch - 24;
 
-          left = Math.max(pad, Math.min(left, containerRect.width - cw - pad));
-          top = Math.max(pad, Math.min(top, containerRect.height - ch - pad));
+          // Keep callout clear of the left floating panel (~400px wide)
+          const leftPanelEdge = 410;
+          left = Math.max(leftPanelEdge, Math.min(left, containerRect.width - cw - pad));
+          top = Math.max(pad + 70, Math.min(top, containerRect.height - ch - pad));
 
           if (point.y - containerRect.top - ch - 24 < pad) {
             top = point.y - containerRect.top + 30;
@@ -1677,10 +1732,10 @@ export default function MapPage() {
     // Filter out (0,0) region — failed geocodes that would drag view to Africa
     const valid = contacts.filter((c) => !(Math.abs(c.lat) < 1 && Math.abs(c.lng) < 1));
     if (valid.length === 0) {
-      // Default: central US (Kansas) — never Africa
+      // Default: Orem, Utah area — never Africa
       return new mk.CoordinateRegion(
-        new mk.Coordinate(38.5, -98.0),
-        new mk.CoordinateSpan(30, 50),
+        new mk.Coordinate(40.29, -111.69),
+        new mk.CoordinateSpan(0.5, 0.5),
       );
     }
 
@@ -2085,7 +2140,7 @@ export default function MapPage() {
               </div>
             </div>
             <span className="text-[10px] font-mono tracking-[0.25em] text-jarvis-blue/40">
-              LOADING CONTACT ATLAS
+              INITIALIZING A.T.L.A.S.
             </span>
           </div>
         </div>

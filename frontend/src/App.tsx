@@ -97,7 +97,7 @@ export default function App() {
           }
         />
         <Route
-          path="/map"
+          path="/atlas"
           element={
             <ProtectedRoute>
               <MapPage />
@@ -112,7 +112,8 @@ export default function App() {
             </ProtectedRoute>
           }
         />
-        <Route path="/maps" element={<Navigate to="/map" replace />} />
+        <Route path="/maps" element={<Navigate to="/atlas" replace />} />
+        <Route path="/map" element={<Navigate to="/atlas" replace />} />
         <Route path="/connect/google" element={<GoogleConnectPage />} />
         <Route path="/register" element={<Navigate to="/login" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />

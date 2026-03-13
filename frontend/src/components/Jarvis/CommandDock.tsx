@@ -210,9 +210,9 @@ export default function CommandDock() {
 
         <DockIcon
           icon={MapPin}
-          label="Map"
+          label="Atlas"
           index={8}
-          onClick={() => navigate('/map')}
+          onClick={() => navigate('/atlas')}
         />
         <DockIcon
           icon={Camera}
