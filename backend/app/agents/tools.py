@@ -56,37 +56,51 @@ async def _get_google_tokens(state: Optional[AgentState]) -> Optional[dict]:
 
 
 async def _get_icloud_credentials(state: Optional[AgentState]) -> Optional[dict]:
-    """Load per-user iCloud Mail credentials from DB preferences.
+    """Load iCloud Mail credentials.
 
-    Returns dict with 'apple_id' and 'app_password' (decrypted), or None.
+    Priority:
+      1. Per-user encrypted credentials from DB preferences.
+      2. Global env-var credentials (ICLOUD_EMAIL / ICLOUD_APP_PASSWORD).
+
+    Returns dict with 'apple_id' and 'app_password', or None.
     """
     user_id = (state or {}).get("user_id", "")
-    if not user_id:
-        return None
-    try:
-        from sqlalchemy import select
-        from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession as _AS
-        from sqlalchemy.orm import sessionmaker
-        from app.config import settings
-        from app.models.user import User
-        from app.core.encryption import decrypt_message
 
-        engine = create_async_engine(settings.DATABASE_URL)
-        async_session = sessionmaker(engine, class_=_AS, expire_on_commit=False)
-        async with async_session() as session:
-            result = await session.execute(
-                select(User).where(User.id == user_id)
-            )
-            user = result.scalar_one_or_none()
-            if user and user.preferences:
-                icloud_prefs = user.preferences.get("icloud_mail", {})
-                if icloud_prefs.get("connected"):
-                    apple_id = decrypt_message(icloud_prefs["apple_id"], user.id)
-                    app_password = decrypt_message(icloud_prefs["app_password"], user.id)
-                    return {"apple_id": apple_id, "app_password": app_password}
-        await engine.dispose()
-    except Exception:
-        logger.debug("Failed to load iCloud credentials for user %s", user_id, exc_info=True)
+    # 1. Try per-user DB credentials
+    if user_id:
+        try:
+            from sqlalchemy import select
+            from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession as _AS
+            from sqlalchemy.orm import sessionmaker
+            from app.config import settings as _settings
+            from app.models.user import User
+            from app.core.encryption import decrypt_message
+
+            engine = create_async_engine(_settings.DATABASE_URL)
+            async_session = sessionmaker(engine, class_=_AS, expire_on_commit=False)
+            async with async_session() as session:
+                result = await session.execute(
+                    select(User).where(User.id == user_id)
+                )
+                user = result.scalar_one_or_none()
+                if user and user.preferences:
+                    icloud_prefs = user.preferences.get("icloud_mail", {})
+                    if icloud_prefs.get("connected"):
+                        apple_id = decrypt_message(icloud_prefs["apple_id"], user.id)
+                        app_password = decrypt_message(icloud_prefs["app_password"], user.id)
+                        return {"apple_id": apple_id, "app_password": app_password}
+            await engine.dispose()
+        except Exception:
+            logger.debug("Failed to load iCloud DB credentials for user %s", user_id, exc_info=True)
+
+    # 2. Fallback to global env-var credentials
+    from app.config import settings as _settings
+    if _settings.ICLOUD_EMAIL and _settings.ICLOUD_APP_PASSWORD:
+        return {
+            "apple_id": _settings.ICLOUD_EMAIL,
+            "app_password": _settings.ICLOUD_APP_PASSWORD,
+        }
+
     return None
 
 

@@ -107,25 +107,41 @@ async def _get_owner(db: AsyncSession):
 
 
 async def _check_unread_emails(owner_id: str) -> Optional[str]:
-    """Check for unread emails via Gmail. Returns summary or None."""
+    """Check for unread emails via Gmail + iCloud. Returns summary or None."""
     from app.agents.tools import get_tool_registry
 
     registry = get_tool_registry()
-    tool = registry.get("read_email")
-    if not tool:
-        return None
+    sections: list[str] = []
 
-    try:
-        result = await tool.run(
-            {"query": "is:unread is:important", "limit": 5},
-            state={"user_id": owner_id},
-        )
-        if "not connected" in result.lower() or "no emails found" in result.lower():
-            return None
-        return result
-    except Exception as exc:
-        logger.warning("Heartbeat email check failed: %s", exc)
+    # --- Gmail ---
+    gmail_tool = registry.get("read_email")
+    if gmail_tool:
+        try:
+            gmail_result = await gmail_tool.run(
+                {"query": "is:unread is:important", "limit": 5},
+                state={"user_id": owner_id},
+            )
+            if gmail_result and "not connected" not in gmail_result.lower() and "no emails found" not in gmail_result.lower():
+                sections.append(f"[Gmail]\n{gmail_result}")
+        except Exception as exc:
+            logger.warning("Heartbeat Gmail check failed: %s", exc)
+
+    # --- iCloud Mail ---
+    icloud_tool = registry.get("read_icloud_email")
+    if icloud_tool:
+        try:
+            icloud_result = await icloud_tool.run(
+                {"query": "unread", "limit": 5},
+                state={"user_id": owner_id},
+            )
+            if icloud_result and "not connected" not in icloud_result.lower() and "no icloud emails found" not in icloud_result.lower():
+                sections.append(f"[iCloud]\n{icloud_result}")
+        except Exception as exc:
+            logger.warning("Heartbeat iCloud email check failed: %s", exc)
+
+    if not sections:
         return None
+    return "\n\n".join(sections)
 
 
 async def _check_calendar(owner_id: str) -> Optional[str]:

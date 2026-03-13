@@ -162,6 +162,12 @@ class Settings(BaseSettings):
     # -- News (NewsAPI) -------------------------------------------------------
     NEWS_API_KEY: str = ""
 
+    # -- iCloud Mail (IMAP read access) -----------------------------------------
+    ICLOUD_EMAIL: str = ""
+    ICLOUD_APP_PASSWORD: str = ""
+    ICLOUD_IMAP_HOST: str = "imap.mail.me.com"
+    ICLOUD_IMAP_PORT: int = 993
+
     # -- Resend (outbound email from jarvis@malibupoint.dev) ------------------
     RESEND_API_KEY: str = ""
     RESEND_FROM_EMAIL: str = "JARVIS <jarvis@malibupoint.dev>"

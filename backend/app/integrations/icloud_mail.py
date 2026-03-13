@@ -21,8 +21,17 @@ from typing import Any
 
 logger = logging.getLogger("jarvis.icloud_mail")
 
-ICLOUD_IMAP_HOST = "imap.mail.me.com"
-ICLOUD_IMAP_PORT = 993
+from app.config import settings
+
+ICLOUD_IMAP_HOST = settings.ICLOUD_IMAP_HOST or "imap.mail.me.com"
+ICLOUD_IMAP_PORT = settings.ICLOUD_IMAP_PORT or 993
+
+
+def _get_default_credentials() -> tuple[str, str] | None:
+    """Return (apple_id, app_password) from env config, or None."""
+    if settings.ICLOUD_EMAIL and settings.ICLOUD_APP_PASSWORD:
+        return settings.ICLOUD_EMAIL, settings.ICLOUD_APP_PASSWORD
+    return None
 
 
 def _decode_header(raw: str | None) -> str:
