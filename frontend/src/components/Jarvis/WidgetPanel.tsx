@@ -256,10 +256,10 @@ function WeatherWidget() {
     }
   }, []);
 
+  const hasDataRef = useRef(false);
   const fetchWeather = useCallback(async () => {
     try {
-      // Only show skeleton on first load, not refetches
-      if (!data) setLoading(true);
+      if (!hasDataRef.current) setLoading(true);
       const params = new URLSearchParams();
       if (coordsRef.current) {
         params.set('lat', coordsRef.current.lat.toFixed(4));
@@ -268,12 +268,13 @@ function WeatherWidget() {
       const qs = params.toString();
       const res = await api.get<WeatherData>(`/widgets/weather${qs ? `?${qs}` : ''}`);
       setData(res);
+      hasDataRef.current = true;
     } catch {
       setData({ error: 'Failed to fetch weather' });
     } finally {
       setLoading(false);
     }
-  }, [data]);
+  }, []);
 
   useEffect(() => {
     const timer = setTimeout(fetchWeather, 1500);
@@ -380,17 +381,19 @@ function CalendarWidget() {
   const [data, setData] = useState<CalendarData | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const calHasDataRef = useRef(false);
   const fetchCalendar = useCallback(async () => {
     try {
-      if (!data) setLoading(true);
+      if (!calHasDataRef.current) setLoading(true);
       const res = await api.get<CalendarData>('/widgets/calendar');
       setData(res);
+      calHasDataRef.current = true;
     } catch {
       setData({ connected: false, events: [] });
     } finally {
       setLoading(false);
     }
-  }, [data]);
+  }, []);
 
   useEffect(() => { fetchCalendar(); }, [fetchCalendar]);
   useAutoRefresh(fetchCalendar, 5 * 60 * 1000); // 5 min + visibility refetch
@@ -565,17 +568,19 @@ function HealthWidget() {
   const [data, setData] = useState<HealthSummary | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const healthHasDataRef = useRef(false);
   const fetchHealth = useCallback(async () => {
     try {
-      if (!data) setLoading(true);
+      if (!healthHasDataRef.current) setLoading(true);
       const res = await api.get<HealthSummary>('/health/summary');
       setData(res);
+      healthHasDataRef.current = true;
     } catch {
-      if (!data) setData(null);
+      setData(null);
     } finally {
       setLoading(false);
     }
-  }, [data]);
+  }, []);
 
   useEffect(() => { fetchHealth(); }, [fetchHealth]);
   useAutoRefresh(fetchHealth, 10 * 60 * 1000);
@@ -644,17 +649,19 @@ function EmailWidget() {
   const [data, setData] = useState<EmailData | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const emailHasDataRef = useRef(false);
   const fetchEmail = useCallback(async () => {
     try {
-      if (!data) setLoading(true);
+      if (!emailHasDataRef.current) setLoading(true);
       const res = await api.get<EmailData>('/widgets/email');
       setData(res);
+      emailHasDataRef.current = true;
     } catch {
-      if (!data) setData(null);
+      setData(null);
     } finally {
       setLoading(false);
     }
-  }, [data]);
+  }, []);
 
   useEffect(() => { fetchEmail(); }, [fetchEmail]);
   useAutoRefresh(fetchEmail, 10 * 60 * 1000);
@@ -713,17 +720,19 @@ function RemindersWidget() {
   const [data, setData] = useState<RemindersData | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const remHasDataRef = useRef(false);
   const fetchReminders = useCallback(async () => {
     try {
-      if (!data) setLoading(true);
+      if (!remHasDataRef.current) setLoading(true);
       const res = await api.get<RemindersData>('/widgets/reminders');
       setData(res);
+      remHasDataRef.current = true;
     } catch {
-      if (!data) setData(null);
+      setData(null);
     } finally {
       setLoading(false);
     }
-  }, [data]);
+  }, []);
 
   useEffect(() => { fetchReminders(); }, [fetchReminders]);
   useAutoRefresh(fetchReminders, 2 * 60 * 1000);
@@ -929,17 +938,19 @@ function HabitsWidget() {
   const [data, setData] = useState<HabitsData | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const habHasDataRef = useRef(false);
   const fetchHabits = useCallback(async () => {
     try {
-      if (!data) setLoading(true);
+      if (!habHasDataRef.current) setLoading(true);
       const res = await api.get<HabitsData>('/widgets/habits');
       setData(res);
+      habHasDataRef.current = true;
     } catch {
-      if (!data) setData(null);
+      setData(null);
     } finally {
       setLoading(false);
     }
-  }, [data]);
+  }, []);
 
   useEffect(() => { fetchHabits(); }, [fetchHabits]);
   useAutoRefresh(fetchHabits, 5 * 60 * 1000);

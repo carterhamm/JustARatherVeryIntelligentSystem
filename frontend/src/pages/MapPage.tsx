@@ -7,6 +7,7 @@ import {
   ArrowLeft,
   Loader,
   MapPin,
+  Users,
   Search,
   X,
   Phone,
@@ -16,9 +17,12 @@ import {
   Cake,
   ChevronDown,
   ChevronUp,
-  ChevronRight,
   Crosshair,
   Layers,
+  Plus,
+  Trash2,
+  Edit3,
+  Navigation,
   Landmark as LandmarkIcon,
   Copy,
   ExternalLink,
@@ -96,21 +100,6 @@ interface ContextMenuState {
   lng: number;
 }
 
-interface PlaceDetail {
-  name: string;
-  latitude: number;
-  longitude: number;
-  formattedAddress?: string;
-  phone?: string;
-  url?: string;
-  category?: string;
-}
-
-interface SearchSuggestion {
-  displayLines: string[];
-  completionUrl?: string;
-}
-
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -144,6 +133,7 @@ async function geocodeAddress(
   const mk = window.mapkit;
   if (!mk) return null;
 
+  // Use MapKit JS Geocoder (no rate limiting, no CORS issues)
   return new Promise((resolve) => {
     const geocoder = new mk.Geocoder({ language: 'en' });
     geocoder.lookup(address, (error: any, data: any) => {
@@ -172,11 +162,13 @@ function getInitials(contact: Contact): string {
 
 function getPhotoDataUri(contact: Contact): string | null {
   if (!contact.photo) return null;
+  // Skip very short strings (likely empty/placeholder)
   if (contact.photo.length < 20) return null;
   const mime = contact.photo_content_type || 'image/jpeg';
   if (contact.photo.startsWith('data:') || contact.photo.startsWith('http')) {
     return contact.photo;
   }
+  // Ensure clean base64 (no whitespace/newlines)
   const cleanBase64 = contact.photo.replace(/\s/g, '');
   return `data:${mime};base64,${cleanBase64}`;
 }
@@ -200,9 +192,10 @@ function getShortLocation(contact: Contact): string {
   return '';
 }
 
+/** Group contacts by approximate location (within ~200m) */
 function groupByLocation(contacts: GeocodedContact[]): Map<string, GeocodedContact[]> {
   const groups = new Map<string, GeocodedContact[]>();
-  const precision = 3;
+  const precision = 3; // ~111m precision
   contacts.forEach((c) => {
     const key = `${c.lat.toFixed(precision)},${c.lng.toFixed(precision)}`;
     const existing = groups.get(key) || [];
@@ -210,15 +203,6 @@ function groupByLocation(contacts: GeocodedContact[]): Map<string, GeocodedConta
     groups.set(key, existing);
   });
   return groups;
-}
-
-function formatPOICategory(category?: string): string | null {
-  if (!category) return null;
-  // MapKit POI categories are like "MKPOICategoryRestaurant" — clean them up
-  return category
-    .replace(/^MKPOICategory/, '')
-    .replace(/([A-Z])/g, ' $1')
-    .trim();
 }
 
 // ---------------------------------------------------------------------------
@@ -268,7 +252,7 @@ function createAnnotationElement(contact: Contact, count?: number): HTMLDivEleme
   const el = document.createElement('div');
   el.style.cursor = 'pointer';
   el.style.position = 'relative';
-  el.style.willChange = 'transform';
+  el.style.willChange = 'transform'; // reduce sub-pixel jitter at low zoom
 
   if (photo) {
     const wrapper = document.createElement('div');
@@ -302,22 +286,24 @@ function createAnnotationElement(contact: Contact, count?: number): HTMLDivEleme
     `;
   }
 
+  // Add count badge for multiple people at same location
   if (count && count > 1) {
     const badge = document.createElement('div');
     badge.style.cssText = `
       position: absolute; top: -4px; right: -4px;
       min-width: 18px; height: 18px;
-      background: #00d4ff; border: 2px solid rgba(10, 14, 23, 0.95);
+      background: #f0a500; border: 2px solid rgba(10, 14, 23, 0.95);
       border-radius: 9px; display: flex; align-items: center; justify-content: center;
       font-family: 'JetBrains Mono', monospace; font-size: 9px; font-weight: 700;
       color: #0A0E17; padding: 0 4px;
-      box-shadow: 0 0 8px rgba(0, 212, 255, 0.4);
+      box-shadow: 0 0 8px rgba(240, 165, 0, 0.4);
       z-index: 2;
     `;
     badge.textContent = String(count);
     el.appendChild(badge);
   }
 
+  // Hover effects
   el.addEventListener('mouseenter', () => {
     const inner = el.firstElementChild as HTMLElement;
     if (inner) {
@@ -399,6 +385,7 @@ function createCalloutElement(contact: Contact): HTMLDivElement {
 
   const lines: string[] = [];
 
+  // Header with photo
   lines.push(`<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">`);
   if (photo) {
     lines.push(
@@ -422,6 +409,7 @@ function createCalloutElement(contact: Contact): HTMLDivElement {
   }
   lines.push(`</div></div>`);
 
+  // Divider
   lines.push(
     `<div style="height:1px;background:linear-gradient(90deg,transparent,rgba(0,212,255,0.15),transparent);margin:6px 0;"></div>`,
   );
@@ -455,560 +443,27 @@ function createCalloutElement(contact: Contact): HTMLDivElement {
 }
 
 // ---------------------------------------------------------------------------
-// Look Around Panel (wider search radius)
+// Skeleton Loader
 // ---------------------------------------------------------------------------
 
-function LookAroundPanel({
-  lat,
-  lng,
-  onClose,
-}: {
-  lat: number;
-  lng: number;
-  onClose: () => void;
-}) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const lookAroundRef = useRef<any>(null);
-  const [status, setStatus] = useState<'loading' | 'active' | 'unavailable'>('loading');
-
-  useEffect(() => {
-    const mk = window.mapkit;
-    if (!mk || !containerRef.current) {
-      setStatus('unavailable');
-      return;
-    }
-
-    try {
-      if (typeof mk.LookAround !== 'function') {
-        setStatus('unavailable');
-        return;
-      }
-
-      let cancelled = false;
-      const container = containerRef.current;
-
-      // Wider search radius (~500m) with more offsets in a spiral pattern
-      const offsets = [
-        [0, 0],
-        // Ring 1: ~100m
-        [0.001, 0], [-0.001, 0], [0, 0.001], [0, -0.001],
-        [0.0007, 0.0007], [-0.0007, 0.0007], [0.0007, -0.0007], [-0.0007, -0.0007],
-        // Ring 2: ~200m
-        [0.002, 0], [-0.002, 0], [0, 0.002], [0, -0.002],
-        [0.0015, 0.0015], [-0.0015, 0.0015], [0.0015, -0.0015], [-0.0015, -0.0015],
-        // Ring 3: ~350m
-        [0.003, 0], [-0.003, 0], [0, 0.003], [0, -0.003],
-        [0.002, 0.002], [-0.002, 0.002], [0.002, -0.002], [-0.002, -0.002],
-        // Ring 4: ~500m
-        [0.005, 0], [-0.005, 0], [0, 0.005], [0, -0.005],
-        [0.004, 0.003], [-0.004, 0.003], [0.004, -0.003], [-0.004, -0.003],
-      ];
-
-      const tryLookAround = (latOff: number, lngOff: number): Promise<boolean> => {
-        return new Promise((resolve) => {
-          if (cancelled || !container) { resolve(false); return; }
-          const coord = new mk.Coordinate(lat + latOff, lng + lngOff);
-          const la = new mk.LookAround(container, coord, {
-            showsDialogControl: true,
-            showsCloseControl: false,
-          });
-          let settled = false;
-          la.addEventListener('error', () => {
-            if (!settled) { settled = true; la.destroy(); resolve(false); }
-          });
-          la.addEventListener('load', () => {
-            if (!settled) { settled = true; lookAroundRef.current = la; resolve(true); }
-          });
-          setTimeout(() => {
-            if (!settled) { settled = true; la.destroy(); resolve(false); }
-          }, 4000);
-        });
-      };
-
-      // First try reverse geocode to find nearest road, then search at road coords
-      const tryWithRoadSearch = async (): Promise<boolean> => {
-        return new Promise((resolveRoad) => {
-          const geocoder = new mk.Geocoder({ language: 'en' });
-          geocoder.reverseLookup(new mk.Coordinate(lat, lng), async (error: any, data: any) => {
-            if (error || !data?.results?.length) {
-              resolveRoad(false);
-              return;
-            }
-            const r = data.results[0];
-            if (r.coordinate) {
-              const roadLat = r.coordinate.latitude;
-              const roadLng = r.coordinate.longitude;
-              if (Math.abs(roadLat - lat) > 0.0001 || Math.abs(roadLng - lng) > 0.0001) {
-                const ok = await tryLookAround(roadLat - lat, roadLng - lng);
-                resolveRoad(ok);
-                return;
-              }
-            }
-            resolveRoad(false);
-          });
-        });
-      };
-
-      (async () => {
-        // Try road-based coordinates first
-        if (!cancelled) {
-          const roadOk = await tryWithRoadSearch();
-          if (roadOk) {
-            if (!cancelled) setStatus('active');
-            return;
-          }
-        }
-        // Then try spiral offsets
-        for (const [latOff, lngOff] of offsets) {
-          if (cancelled) return;
-          const ok = await tryLookAround(latOff, lngOff);
-          if (ok) {
-            if (!cancelled) setStatus('active');
-            return;
-          }
-        }
-        if (!cancelled) setStatus('unavailable');
-      })();
-
-      return () => {
-        cancelled = true;
-        if (lookAroundRef.current?.destroy) lookAroundRef.current.destroy();
-      };
-    } catch {
-      setStatus('unavailable');
-    }
-  }, [lat, lng]);
-
-  useEffect(() => {
-    const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    document.addEventListener('keydown', handleEsc);
-    return () => document.removeEventListener('keydown', handleEsc);
-  }, [onClose]);
-
-  return createPortal(
-    <div
-      className="fixed inset-0 z-[60] flex items-center justify-center"
-      style={{ background: 'rgba(0,0,0,0.7)' }}
-      onClick={onClose}
-    >
-      <div
-        className="relative w-[90vw] max-w-[900px] h-[70vh] max-h-[600px] overflow-hidden"
-        style={{
-          background: 'rgba(10, 14, 23, 0.95)',
-          border: '1px solid rgba(0, 212, 255, 0.15)',
-          boxShadow: '0 0 40px rgba(0, 212, 255, 0.08), 0 20px 60px rgba(0,0,0,0.6)',
-          clipPath: 'polygon(0 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 16px 100%, 0 calc(100% - 16px))',
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div
-          className="flex items-center justify-between px-4 py-2.5"
-          style={{
-            background: 'rgba(0, 0, 0, 0.4)',
-            borderBottom: '1px solid rgba(0, 212, 255, 0.08)',
-          }}
-        >
-          <div className="flex items-center gap-2">
-            <Eye size={14} className="text-jarvis-blue/60" />
-            <span className="text-[10px] font-mono tracking-[0.2em] text-jarvis-blue/60 uppercase">
-              Look Around
-            </span>
-            <span className="text-[9px] font-mono text-gray-500">
-              {lat.toFixed(5)}, {lng.toFixed(5)}
-            </span>
+function SidebarSkeleton() {
+  return (
+    <div className="space-y-1 p-3">
+      {Array.from({ length: 6 }).map((_, i) => (
+        <div key={i} className="flex items-center gap-3 px-3 py-3">
+          <div className="w-9 h-9 rounded-full skeleton-line flex-shrink-0" />
+          <div className="flex-1 space-y-2">
+            <div className="skeleton-line h-3 w-3/4 rounded" />
+            <div className="skeleton-line h-2 w-1/2 rounded" />
           </div>
-          <button
-            onClick={onClose}
-            className="w-6 h-6 flex items-center justify-center hover:bg-white/[0.06] transition-colors"
-          >
-            <X size={14} className="text-jarvis-blue/40" />
-          </button>
         </div>
-
-        <div ref={containerRef} className="w-full" style={{ height: 'calc(100% - 40px)' }}>
-          {status === 'loading' && (
-            <div className="w-full h-full flex flex-col items-center justify-center gap-3">
-              <Loader size={24} className="text-jarvis-blue/40 animate-spin" />
-              <span className="text-[10px] font-mono text-gray-500 tracking-wider">
-                SEARCHING NEARBY COVERAGE...
-              </span>
-            </div>
-          )}
-          {status === 'unavailable' && (
-            <div className="w-full h-full flex flex-col items-center justify-center gap-4">
-              <Eye size={32} className="text-jarvis-blue/20" />
-              <div className="text-center space-y-2">
-                <p className="text-[11px] font-mono text-gray-400">
-                  Look Around not available for this location
-                </p>
-                <p className="text-[9px] font-mono text-gray-600 max-w-sm">
-                  Coverage is limited to select cities. Try a major urban area, or view in Apple Maps.
-                </p>
-              </div>
-              <button
-                onClick={() => {
-                  window.open(
-                    `https://maps.apple.com/?ll=${lat},${lng}&z=17&v=2`,
-                    '_blank',
-                  );
-                }}
-                className="mt-2 px-4 py-2 text-[10px] font-mono tracking-wider text-jarvis-blue/70 border border-jarvis-blue/20 hover:bg-jarvis-blue/5 transition-colors"
-                style={{ clipPath: 'polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px))' }}
-              >
-                OPEN IN APPLE MAPS
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>,
-    document.body,
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Context Menu
-// ---------------------------------------------------------------------------
-
-function MapContextMenu({
-  x,
-  y,
-  onAddLandmark,
-  onCopyCoords,
-  onOpenInAppleMaps,
-  onLookAround,
-  onClose,
-}: {
-  x: number;
-  y: number;
-  onAddLandmark: () => void;
-  onCopyCoords: () => void;
-  onOpenInAppleMaps: () => void;
-  onLookAround: () => void;
-  onClose: () => void;
-}) {
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleClick = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        onClose();
-      }
-    };
-    const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    document.addEventListener('mousedown', handleClick);
-    document.addEventListener('keydown', handleEsc);
-    return () => {
-      document.removeEventListener('mousedown', handleClick);
-      document.removeEventListener('keydown', handleEsc);
-    };
-  }, [onClose]);
-
-  useEffect(() => {
-    let timer = setTimeout(onClose, 5000);
-    const reset = () => {
-      clearTimeout(timer);
-      timer = setTimeout(onClose, 5000);
-    };
-    const el = menuRef.current;
-    el?.addEventListener('mousemove', reset);
-    return () => {
-      clearTimeout(timer);
-      el?.removeEventListener('mousemove', reset);
-    };
-  }, [onClose]);
-
-  const items = [
-    { icon: Eye, label: 'Look Around', onClick: onLookAround },
-    { icon: LandmarkIcon, label: 'Add Landmark', onClick: onAddLandmark },
-    { icon: Copy, label: 'Copy Coordinates', onClick: onCopyCoords },
-    { icon: ExternalLink, label: 'Open in Apple Maps', onClick: onOpenInAppleMaps },
-  ];
-
-  return createPortal(
-    <div
-      ref={menuRef}
-      className="animate-fade-in"
-      style={{
-        position: 'fixed',
-        left: x,
-        top: y,
-        transform: 'translate(-50%, -50%)',
-        zIndex: 99999,
-        minWidth: 220,
-        background: 'linear-gradient(to bottom right, rgba(10, 10, 10, 0.75), rgba(10, 10, 10, 0.9))',
-        backdropFilter: 'blur(20px) saturate(180%)',
-        WebkitBackdropFilter: 'blur(20px) saturate(180%)',
-        clipPath: 'polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px))',
-        border: '1px solid rgba(0, 212, 255, 0.12)',
-        boxShadow: '0 10px 40px rgba(0,0,0,0.4), 0 0 20px rgba(0, 212, 255, 0.05)',
-        padding: '6px',
-        animation: 'contextMenuIn 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275) both',
-      }}
-      onClick={(e) => e.stopPropagation()}
-    >
-      {items.map((item, i) => (
-        <button
-          key={i}
-          onClick={() => {
-            item.onClick();
-            onClose();
-          }}
-          className="ctx-menu-item w-full flex items-center gap-3 px-4 py-2.5 text-left transition-all"
-        >
-          <item.icon size={14} className="text-jarvis-blue/60 flex-shrink-0" />
-          <span className="text-[12px] font-medium text-gray-300">{item.label}</span>
-        </button>
       ))}
-      <style>{`
-        @keyframes contextMenuIn {
-          from { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
-          to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-        }
-        .ctx-menu-item {
-          transition: background 0.15s ease, clip-path 0.15s ease;
-        }
-        .ctx-menu-item:hover {
-          background: rgba(255, 255, 255, 0.06);
-          clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px));
-        }
-      `}</style>
-    </div>,
-    document.body,
+    </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Landmark Form Modal
-// ---------------------------------------------------------------------------
-
-function LandmarkForm({
-  lat,
-  lng,
-  initialName,
-  initialAddress,
-  initialAppleMapsUrl,
-  onSave,
-  onCancel,
-}: {
-  lat: number;
-  lng: number;
-  initialName?: string;
-  initialAddress?: string;
-  initialAppleMapsUrl?: string;
-  onSave: (data: { name: string; description: string; latitude: number; longitude: number; address: string; apple_maps_url: string }) => void;
-  onCancel: () => void;
-}) {
-  const [name, setName] = useState(initialName || '');
-  const [description, setDescription] = useState('');
-  const [address, setAddress] = useState(initialAddress || '');
-  const [appleMapsUrl, setAppleMapsUrl] = useState(initialAppleMapsUrl || '');
-  const [saving, setSaving] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searching, setSearching] = useState(false);
-  const [finalLat, setFinalLat] = useState(lat);
-  const [finalLng, setFinalLng] = useState(lng);
-
-  // Reverse geocode only if no initial address provided
-  useEffect(() => {
-    if (initialAddress) return;
-    const mk = window.mapkit;
-    if (!mk) return;
-    const geocoder = new mk.Geocoder({ language: 'en' });
-    geocoder.reverseLookup(new mk.Coordinate(lat, lng), (error: any, data: any) => {
-      if (!error && data?.results?.length) {
-        const r = data.results[0];
-        const parts = [r.name, r.locality, r.administrativeArea, r.postCode].filter(Boolean);
-        setAddress(parts.join(', '));
-      }
-    });
-  }, [lat, lng, initialAddress]);
-
-  const handleSearch = async () => {
-    const query = searchQuery.trim();
-    if (!query) return;
-    setSearching(true);
-
-    if (query.includes('maps.apple.com') || query.includes('apple.com/maps')) {
-      try {
-        const url = new URL(query);
-        const ll = url.searchParams.get('ll');
-        if (ll) {
-          const [parsedLat, parsedLng] = ll.split(',').map(Number);
-          if (!isNaN(parsedLat) && !isNaN(parsedLng)) {
-            setFinalLat(parsedLat);
-            setFinalLng(parsedLng);
-            setAppleMapsUrl(query);
-            const mk = window.mapkit;
-            if (mk) {
-              const geocoder = new mk.Geocoder({ language: 'en' });
-              geocoder.reverseLookup(new mk.Coordinate(parsedLat, parsedLng), (error: any, data: any) => {
-                if (!error && data?.results?.length) {
-                  const r = data.results[0];
-                  const parts = [r.name, r.locality, r.administrativeArea, r.postCode].filter(Boolean);
-                  setAddress(parts.join(', '));
-                }
-              });
-            }
-          }
-        }
-      } catch {
-        // not a valid URL
-      }
-      setSearching(false);
-      return;
-    }
-
-    const mk = window.mapkit;
-    if (!mk) { setSearching(false); return; }
-    const geocoder = new mk.Geocoder({ language: 'en' });
-    geocoder.lookup(query, (error: any, data: any) => {
-      if (!error && data?.results?.length) {
-        const r = data.results[0];
-        setFinalLat(r.coordinate.latitude);
-        setFinalLng(r.coordinate.longitude);
-        const parts = [r.name, r.locality, r.administrativeArea, r.postCode].filter(Boolean);
-        setAddress(parts.join(', '));
-      }
-      setSearching(false);
-    });
-  };
-
-  const handleSubmit = async () => {
-    if (!name.trim()) return;
-    setSaving(true);
-    onSave({
-      name: name.trim(),
-      description: description.trim(),
-      latitude: finalLat,
-      longitude: finalLng,
-      address: address.trim(),
-      apple_maps_url: appleMapsUrl.trim(),
-    });
-  };
-
-  return createPortal(
-    <div
-      className="fixed inset-0 z-[99999] flex items-center justify-center"
-      style={{ background: 'rgba(0, 0, 0, 0.6)', backdropFilter: 'blur(4px)' }}
-      onClick={onCancel}
-    >
-      <div
-        className="animate-fade-in"
-        style={{
-          width: 400,
-          maxWidth: '90vw',
-          background: 'rgba(10, 14, 23, 0.97)',
-          border: '1px solid rgba(0, 212, 255, 0.12)',
-          clipPath: 'polygon(0 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 16px 100%, 0 calc(100% - 16px))',
-          boxShadow: '0 20px 60px rgba(0,0,0,0.6), 0 0 30px rgba(0, 212, 255, 0.05)',
-          backdropFilter: 'blur(24px)',
-          padding: '24px',
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center gap-2 mb-5">
-          <LandmarkIcon size={16} className="text-jarvis-gold" />
-          <span className="text-[11px] font-mono font-semibold tracking-[0.15em] text-jarvis-gold uppercase">
-            New Landmark
-          </span>
-        </div>
-
-        <div className="mb-4">
-          <label className="text-[9px] font-mono tracking-wider text-gray-500 uppercase mb-1.5 block">
-            Search Location or Paste Apple Maps URL
-          </label>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-              placeholder="e.g. Central Park or https://maps.apple.com/?ll=..."
-              className="flex-1 py-2 px-3 text-xs font-mono bg-transparent border border-white/[0.06] text-gray-300 placeholder-gray-600 focus:border-jarvis-blue/25 transition-colors"
-              style={{ clipPath: 'polygon(0 0, calc(100% - 4px) 0, 100% 4px, 100% 100%, 4px 100%, 0 calc(100% - 4px))' }}
-            />
-            <button
-              onClick={handleSearch}
-              disabled={searching}
-              className="px-3 py-2 text-[10px] font-mono bg-jarvis-blue/10 border border-jarvis-blue/20 text-jarvis-blue hover:bg-jarvis-blue/20 transition-colors disabled:opacity-50"
-            >
-              {searching ? <Loader size={12} className="animate-spin" /> : <Search size={12} />}
-            </button>
-          </div>
-        </div>
-
-        <div className="mb-3">
-          <label className="text-[9px] font-mono tracking-wider text-gray-500 uppercase mb-1.5 block">
-            Title *
-          </label>
-          <input
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. Childhood Home, Favorite Coffee Shop"
-            className="w-full py-2 px-3 text-xs font-mono bg-transparent border border-white/[0.06] text-gray-300 placeholder-gray-600 focus:border-jarvis-gold/25 transition-colors"
-            autoFocus
-          />
-        </div>
-
-        <div className="mb-3">
-          <label className="text-[9px] font-mono tracking-wider text-gray-500 uppercase mb-1.5 block">
-            Description / Context
-          </label>
-          <textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Tell JARVIS about this place... memories, significance, details"
-            rows={3}
-            className="w-full py-2 px-3 text-xs font-mono bg-transparent border border-white/[0.06] text-gray-300 placeholder-gray-600 focus:border-jarvis-gold/25 transition-colors resize-none"
-          />
-        </div>
-
-        <div className="mb-4">
-          <label className="text-[9px] font-mono tracking-wider text-gray-500 uppercase mb-1.5 block">
-            Address
-          </label>
-          <input
-            type="text"
-            value={address}
-            onChange={(e) => setAddress(e.target.value)}
-            placeholder="Auto-detected from coordinates..."
-            className="w-full py-2 px-3 text-xs font-mono bg-transparent border border-white/[0.06] text-gray-400 placeholder-gray-600 transition-colors"
-          />
-          <p className="text-[8px] font-mono text-gray-700 mt-1">
-            {finalLat.toFixed(6)}, {finalLng.toFixed(6)}
-          </p>
-        </div>
-
-        <div className="flex justify-end gap-2">
-          <button
-            onClick={onCancel}
-            className="px-4 py-2 text-[11px] font-mono text-gray-500 hover:text-gray-300 transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSubmit}
-            disabled={!name.trim() || saving}
-            className="px-5 py-2 text-[11px] font-mono font-semibold bg-jarvis-gold/20 border border-jarvis-gold/30 text-jarvis-gold hover:bg-jarvis-gold/30 transition-colors disabled:opacity-40"
-            style={{ clipPath: 'polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px))' }}
-          >
-            {saving ? 'Saving...' : 'Save Landmark'}
-          </button>
-        </div>
-      </div>
-    </div>,
-    document.body,
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Contact Card (used in expanded contact list)
+// Contact Card
 // ---------------------------------------------------------------------------
 
 function ContactCard({
@@ -1040,7 +495,9 @@ function ContactCard({
         style={{ minHeight: '52px' }}
       >
         <div
-          className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden transition-all duration-200"
+          className={clsx(
+            'w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden transition-all duration-200',
+          )}
           style={{
             background: photo ? 'transparent' : 'rgba(0, 20, 40, 0.8)',
             border: isSelected
@@ -1081,7 +538,7 @@ function ContactCard({
 
       {isExpanded && (
         <div
-          className="px-4 pb-3 pl-16 space-y-1.5"
+          className="px-4 pb-3 pl-16 space-y-1.5 animate-fade-in"
           style={{ animation: 'fadeIn 0.15s ease-out' }}
         >
           {contact.company && (
@@ -1134,17 +591,560 @@ function ContactCard({
 }
 
 // ---------------------------------------------------------------------------
-// Glass panel style (shared between left & right sidebars)
+// Map Controls
 // ---------------------------------------------------------------------------
 
-const GLASS_PANEL: React.CSSProperties = {
-  background: 'linear-gradient(135deg, rgba(10, 14, 23, 0.88), rgba(8, 12, 20, 0.94))',
-  backdropFilter: 'blur(20px) saturate(1.3)',
-  WebkitBackdropFilter: 'blur(20px) saturate(1.3)',
-  border: '1px solid rgba(0, 212, 255, 0.1)',
-  clipPath: 'polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px))',
-  boxShadow: '0 8px 32px rgba(0,0,0,0.4), 0 0 20px rgba(0, 212, 255, 0.04)',
-};
+function MapControls({
+  onResetView,
+  onToggleGrid,
+  gridVisible,
+}: {
+  onResetView: () => void;
+  onToggleGrid: () => void;
+  gridVisible: boolean;
+}) {
+  return (
+    <div className="absolute bottom-24 right-4 z-10 flex flex-col gap-2">
+      <button
+        onClick={onResetView}
+        className="glass-circle w-9 h-9 flex items-center justify-center"
+        title="Reset view to fit all contacts"
+        aria-label="Reset view"
+      >
+        <Crosshair size={14} className="text-jarvis-blue/70" />
+      </button>
+      <button
+        onClick={onToggleGrid}
+        className={clsx(
+          'glass-circle w-9 h-9 flex items-center justify-center',
+          gridVisible && 'active',
+        )}
+        title="Toggle HUD grid overlay"
+        aria-label="Toggle grid"
+      >
+        <Layers size={14} className="text-jarvis-blue/70" />
+      </button>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Look Around Panel
+// ---------------------------------------------------------------------------
+
+function LookAroundPanel({
+  lat,
+  lng,
+  onClose,
+}: {
+  lat: number;
+  lng: number;
+  onClose: () => void;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const lookAroundRef = useRef<any>(null);
+  const [status, setStatus] = useState<'loading' | 'active' | 'unavailable'>('loading');
+
+  useEffect(() => {
+    const mk = window.mapkit;
+    if (!mk || !containerRef.current) {
+      setStatus('unavailable');
+      return;
+    }
+
+    // Try to initialize MapKit JS Look Around
+    // If exact coords fail, search nearby roads within ~200m offsets
+    try {
+      if (typeof mk.LookAround !== 'function') {
+        setStatus('unavailable');
+        return;
+      }
+
+      let cancelled = false;
+      const container = containerRef.current;
+
+      // Try the exact coords first, then nearby offsets (~100-200m in each direction)
+      const offsets = [
+        [0, 0],
+        [0.001, 0], [-0.001, 0], [0, 0.001], [0, -0.001],
+        [0.001, 0.001], [-0.001, -0.001], [0.002, 0], [-0.002, 0],
+        [0, 0.002], [0, -0.002],
+      ];
+
+      const tryLookAround = (latOff: number, lngOff: number): Promise<boolean> => {
+        return new Promise((resolve) => {
+          if (cancelled || !container) { resolve(false); return; }
+          const coord = new mk.Coordinate(lat + latOff, lng + lngOff);
+          const la = new mk.LookAround(container, coord, {
+            showsDialogControl: true,
+            showsCloseControl: false,
+          });
+          let settled = false;
+          la.addEventListener('error', () => {
+            if (!settled) { settled = true; la.destroy(); resolve(false); }
+          });
+          la.addEventListener('load', () => {
+            if (!settled) { settled = true; lookAroundRef.current = la; resolve(true); }
+          });
+          // Timeout: if no event in 2s, assume failure and try next
+          setTimeout(() => {
+            if (!settled) { settled = true; la.destroy(); resolve(false); }
+          }, 2000);
+        });
+      };
+
+      (async () => {
+        for (const [latOff, lngOff] of offsets) {
+          if (cancelled) return;
+          const ok = await tryLookAround(latOff, lngOff);
+          if (ok) {
+            if (!cancelled) setStatus('active');
+            return;
+          }
+        }
+        if (!cancelled) setStatus('unavailable');
+      })();
+
+      return () => {
+        cancelled = true;
+        if (lookAroundRef.current?.destroy) lookAroundRef.current.destroy();
+      };
+    } catch {
+      setStatus('unavailable');
+    }
+  }, [lat, lng]);
+
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', handleEsc);
+    return () => document.removeEventListener('keydown', handleEsc);
+  }, [onClose]);
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center"
+      style={{ background: 'rgba(0,0,0,0.7)' }}
+      onClick={onClose}
+    >
+      <div
+        className="relative w-[90vw] max-w-[900px] h-[70vh] max-h-[600px] rounded-lg overflow-hidden"
+        style={{
+          background: 'rgba(10, 14, 23, 0.95)',
+          border: '1px solid rgba(0, 212, 255, 0.15)',
+          boxShadow: '0 0 40px rgba(0, 212, 255, 0.08), 0 20px 60px rgba(0,0,0,0.6)',
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div
+          className="flex items-center justify-between px-4 py-2.5"
+          style={{
+            background: 'rgba(0, 0, 0, 0.4)',
+            borderBottom: '1px solid rgba(0, 212, 255, 0.08)',
+          }}
+        >
+          <div className="flex items-center gap-2">
+            <Eye size={14} className="text-jarvis-blue/60" />
+            <span className="text-[10px] font-mono tracking-[0.2em] text-jarvis-blue/60 uppercase">
+              Look Around
+            </span>
+            <span className="text-[9px] font-mono text-gray-500">
+              {lat.toFixed(5)}, {lng.toFixed(5)}
+            </span>
+          </div>
+          <button
+            onClick={onClose}
+            className="w-6 h-6 flex items-center justify-center rounded-full hover:bg-white/[0.06] transition-colors"
+          >
+            <X size={14} className="text-jarvis-blue/40" />
+          </button>
+        </div>
+
+        {/* Look Around container */}
+        <div ref={containerRef} className="w-full" style={{ height: 'calc(100% - 40px)' }}>
+          {status === 'loading' && (
+            <div className="w-full h-full flex flex-col items-center justify-center gap-3">
+              <Loader size={24} className="text-jarvis-blue/40 animate-spin" />
+              <span className="text-[10px] font-mono text-gray-500 tracking-wider">
+                LOADING LOOK AROUND...
+              </span>
+            </div>
+          )}
+          {status === 'unavailable' && (
+            <div className="w-full h-full flex flex-col items-center justify-center gap-4">
+              <Eye size={32} className="text-jarvis-blue/20" />
+              <div className="text-center space-y-2">
+                <p className="text-[11px] font-mono text-gray-400">
+                  Look Around not available for this location
+                </p>
+                <p className="text-[9px] font-mono text-gray-600 max-w-sm">
+                  Coverage is limited to select cities. Try a major urban area, or view in Apple Maps
+                  for the full experience.
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  window.open(
+                    `https://maps.apple.com/?ll=${lat},${lng}&z=17&v=2`,
+                    '_blank',
+                  );
+                }}
+                className="mt-2 px-4 py-2 rounded text-[10px] font-mono tracking-wider text-jarvis-blue/70 border border-jarvis-blue/20 hover:bg-jarvis-blue/5 transition-colors"
+              >
+                OPEN IN APPLE MAPS
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Context Menu (glassmorphic, WagevoCRM-inspired)
+// ---------------------------------------------------------------------------
+
+function MapContextMenu({
+  x,
+  y,
+  onAddLandmark,
+  onCopyCoords,
+  onOpenInAppleMaps,
+  onLookAround,
+  onClose,
+}: {
+  x: number;
+  y: number;
+  onAddLandmark: () => void;
+  onCopyCoords: () => void;
+  onOpenInAppleMaps: () => void;
+  onLookAround: () => void;
+  onClose: () => void;
+}) {
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        onClose();
+      }
+    };
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('mousedown', handleClick);
+    document.addEventListener('keydown', handleEsc);
+    return () => {
+      document.removeEventListener('mousedown', handleClick);
+      document.removeEventListener('keydown', handleEsc);
+    };
+  }, [onClose]);
+
+  // Auto-close after 5s of inactivity
+  useEffect(() => {
+    let timer = setTimeout(onClose, 5000);
+    const reset = () => {
+      clearTimeout(timer);
+      timer = setTimeout(onClose, 5000);
+    };
+    const el = menuRef.current;
+    el?.addEventListener('mousemove', reset);
+    return () => {
+      clearTimeout(timer);
+      el?.removeEventListener('mousemove', reset);
+    };
+  }, [onClose]);
+
+  const items = [
+    { icon: Eye, label: 'Look Around', onClick: onLookAround, accent: false },
+    { icon: LandmarkIcon, label: 'Add Landmark', onClick: onAddLandmark, accent: false },
+    { icon: Copy, label: 'Copy Coordinates', onClick: onCopyCoords, accent: false },
+    { icon: ExternalLink, label: 'Open in Apple Maps', onClick: onOpenInAppleMaps, accent: false },
+  ];
+
+  return createPortal(
+    <div
+      ref={menuRef}
+      className="animate-fade-in"
+      style={{
+        position: 'fixed',
+        left: x,
+        top: y,
+        transform: 'translate(-50%, -50%)',
+        zIndex: 99999,
+        minWidth: 220,
+        background: 'linear-gradient(to bottom right, rgba(10, 10, 10, 0.75), rgba(10, 10, 10, 0.9))',
+        backdropFilter: 'blur(20px) saturate(180%)',
+        WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+        borderRadius: 0,
+        clipPath: 'polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px))',
+        border: '1px solid rgba(0, 212, 255, 0.12)',
+        boxShadow: '0 10px 40px rgba(0,0,0,0.4), 0 0 20px rgba(0, 212, 255, 0.05)',
+        padding: '6px',
+        animation: 'contextMenuIn 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275) both',
+      }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      {items.map((item, i) => (
+        <button
+          key={i}
+          onClick={() => {
+            item.onClick();
+            onClose();
+          }}
+          className="ctx-menu-item w-full flex items-center gap-3 px-4 py-2.5 text-left transition-all"
+        >
+          <item.icon size={14} className="text-jarvis-blue/60 flex-shrink-0" />
+          <span className="text-[12px] font-medium text-gray-300">{item.label}</span>
+        </button>
+      ))}
+      <style>{`
+        @keyframes contextMenuIn {
+          from { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+          to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+        }
+        .ctx-menu-item {
+          clip-path: none;
+          transition: background 0.15s ease, clip-path 0.15s ease;
+        }
+        .ctx-menu-item:hover {
+          background: rgba(255, 255, 255, 0.06);
+          clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px));
+        }
+      `}</style>
+    </div>,
+    document.body,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Landmark Form Modal
+// ---------------------------------------------------------------------------
+
+function LandmarkForm({
+  lat,
+  lng,
+  onSave,
+  onCancel,
+}: {
+  lat: number;
+  lng: number;
+  onSave: (data: { name: string; description: string; latitude: number; longitude: number; address: string; apple_maps_url: string }) => void;
+  onCancel: () => void;
+}) {
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [address, setAddress] = useState('');
+  const [appleMapsUrl, setAppleMapsUrl] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searching, setSearching] = useState(false);
+  const [finalLat, setFinalLat] = useState(lat);
+  const [finalLng, setFinalLng] = useState(lng);
+
+  // Reverse geocode the coordinates to get an address
+  useEffect(() => {
+    const mk = window.mapkit;
+    if (!mk) return;
+    const geocoder = new mk.Geocoder({ language: 'en' });
+    geocoder.reverseLookup(new mk.Coordinate(lat, lng), (error: any, data: any) => {
+      if (!error && data?.results?.length) {
+        const r = data.results[0];
+        const parts = [r.name, r.locality, r.administrativeArea, r.postCode].filter(Boolean);
+        setAddress(parts.join(', '));
+      }
+    });
+  }, [lat, lng]);
+
+  const handleSearch = async () => {
+    const query = searchQuery.trim();
+    if (!query) return;
+    setSearching(true);
+
+    // Check if it's an Apple Maps URL
+    if (query.includes('maps.apple.com') || query.includes('apple.com/maps')) {
+      try {
+        const url = new URL(query);
+        const ll = url.searchParams.get('ll');
+        if (ll) {
+          const [parsedLat, parsedLng] = ll.split(',').map(Number);
+          if (!isNaN(parsedLat) && !isNaN(parsedLng)) {
+            setFinalLat(parsedLat);
+            setFinalLng(parsedLng);
+            setAppleMapsUrl(query);
+            // Reverse geocode the new coords
+            const mk = window.mapkit;
+            if (mk) {
+              const geocoder = new mk.Geocoder({ language: 'en' });
+              geocoder.reverseLookup(new mk.Coordinate(parsedLat, parsedLng), (error: any, data: any) => {
+                if (!error && data?.results?.length) {
+                  const r = data.results[0];
+                  const parts = [r.name, r.locality, r.administrativeArea, r.postCode].filter(Boolean);
+                  setAddress(parts.join(', '));
+                }
+              });
+            }
+          }
+        }
+      } catch {
+        // not a valid URL, fall through to geocode
+      }
+      setSearching(false);
+      return;
+    }
+
+    // Regular search — geocode the query
+    const mk = window.mapkit;
+    if (!mk) { setSearching(false); return; }
+    const geocoder = new mk.Geocoder({ language: 'en' });
+    geocoder.lookup(query, (error: any, data: any) => {
+      if (!error && data?.results?.length) {
+        const r = data.results[0];
+        setFinalLat(r.coordinate.latitude);
+        setFinalLng(r.coordinate.longitude);
+        const parts = [r.name, r.locality, r.administrativeArea, r.postCode].filter(Boolean);
+        setAddress(parts.join(', '));
+      }
+      setSearching(false);
+    });
+  };
+
+  const handleSubmit = async () => {
+    if (!name.trim()) return;
+    setSaving(true);
+    onSave({
+      name: name.trim(),
+      description: description.trim(),
+      latitude: finalLat,
+      longitude: finalLng,
+      address: address.trim(),
+      apple_maps_url: appleMapsUrl.trim(),
+    });
+  };
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[99999] flex items-center justify-center"
+      style={{ background: 'rgba(0, 0, 0, 0.6)', backdropFilter: 'blur(4px)' }}
+      onClick={onCancel}
+    >
+      <div
+        className="animate-fade-in"
+        style={{
+          width: 400,
+          maxWidth: '90vw',
+          background: 'rgba(10, 14, 23, 0.97)',
+          border: '1px solid rgba(0, 212, 255, 0.12)',
+          borderRadius: 12,
+          boxShadow: '0 20px 60px rgba(0,0,0,0.6), 0 0 30px rgba(0, 212, 255, 0.05)',
+          backdropFilter: 'blur(24px)',
+          padding: '24px',
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center gap-2 mb-5">
+          <LandmarkIcon size={16} className="text-jarvis-gold" />
+          <span className="text-[11px] font-mono font-semibold tracking-[0.15em] text-jarvis-gold uppercase">
+            New Landmark
+          </span>
+        </div>
+
+        {/* Search / Apple Maps URL */}
+        <div className="mb-4">
+          <label className="text-[9px] font-mono tracking-wider text-gray-500 uppercase mb-1.5 block">
+            Search Location or Paste Apple Maps URL
+          </label>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+              placeholder="e.g. Central Park or https://maps.apple.com/?ll=..."
+              className="flex-1 py-2 px-3 text-xs font-mono bg-transparent border border-white/[0.06] rounded text-gray-300 placeholder-gray-600 focus:border-jarvis-blue/25 transition-colors"
+            />
+            <button
+              onClick={handleSearch}
+              disabled={searching}
+              className="px-3 py-2 text-[10px] font-mono bg-jarvis-blue/10 border border-jarvis-blue/20 rounded text-jarvis-blue hover:bg-jarvis-blue/20 transition-colors disabled:opacity-50"
+            >
+              {searching ? <Loader size={12} className="animate-spin" /> : <Search size={12} />}
+            </button>
+          </div>
+        </div>
+
+        {/* Name */}
+        <div className="mb-3">
+          <label className="text-[9px] font-mono tracking-wider text-gray-500 uppercase mb-1.5 block">
+            Title *
+          </label>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g. Childhood Home, Favorite Coffee Shop"
+            className="w-full py-2 px-3 text-xs font-mono bg-transparent border border-white/[0.06] rounded text-gray-300 placeholder-gray-600 focus:border-jarvis-gold/25 transition-colors"
+            autoFocus
+          />
+        </div>
+
+        {/* Description */}
+        <div className="mb-3">
+          <label className="text-[9px] font-mono tracking-wider text-gray-500 uppercase mb-1.5 block">
+            Description / Context
+          </label>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Tell JARVIS about this place... memories, significance, details"
+            rows={3}
+            className="w-full py-2 px-3 text-xs font-mono bg-transparent border border-white/[0.06] rounded text-gray-300 placeholder-gray-600 focus:border-jarvis-gold/25 transition-colors resize-none"
+          />
+        </div>
+
+        {/* Address (auto-filled) */}
+        <div className="mb-4">
+          <label className="text-[9px] font-mono tracking-wider text-gray-500 uppercase mb-1.5 block">
+            Address
+          </label>
+          <input
+            type="text"
+            value={address}
+            onChange={(e) => setAddress(e.target.value)}
+            placeholder="Auto-detected from coordinates..."
+            className="w-full py-2 px-3 text-xs font-mono bg-transparent border border-white/[0.06] rounded text-gray-400 placeholder-gray-600 transition-colors"
+          />
+          <p className="text-[8px] font-mono text-gray-700 mt-1">
+            {finalLat.toFixed(6)}, {finalLng.toFixed(6)}
+          </p>
+        </div>
+
+        {/* Actions */}
+        <div className="flex justify-end gap-2">
+          <button
+            onClick={onCancel}
+            className="px-4 py-2 text-[11px] font-mono text-gray-500 hover:text-gray-300 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={!name.trim() || saving}
+            className="px-5 py-2 text-[11px] font-mono font-semibold bg-jarvis-gold/20 border border-jarvis-gold/30 rounded text-jarvis-gold hover:bg-jarvis-gold/30 transition-colors disabled:opacity-40"
+          >
+            {saving ? 'Saving...' : 'Save Landmark'}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Component
@@ -1153,18 +1153,13 @@ const GLASS_PANEL: React.CSSProperties = {
 export default function MapPage() {
   const navigate = useNavigate();
   const mapContainerRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<any>(null);
+  const mapRef = useRef<any>(null); // mapkit.Map
   const annotationsRef = useRef<any[]>([]);
   const landmarkAnnotationsRef = useRef<any[]>([]);
   const calloutOverlayRef = useRef<HTMLDivElement | null>(null);
   const calloutLayerRef = useRef<HTMLDivElement>(null);
   const initialFitDoneRef = useRef(false);
   const lastContactIdsRef = useRef<string>('');
-  const annotationJustSelectedRef = useRef(false);
-  const searchTimerRef = useRef<ReturnType<typeof setTimeout>>();
-  const mapSearchObjRef = useRef<any>(null);
-  const selectedPlaceAnnotationRef = useRef<any>(null);
-  const userLocationRef = useRef<{ lat: number; lng: number } | null>(null);
 
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [geocodedContacts, setGeocodedContacts] = useState<GeocodedContact[]>([]);
@@ -1172,46 +1167,14 @@ export default function MapPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [mapReady, setMapReady] = useState(false);
   const [geocodeProgress, setGeocodeProgress] = useState({ done: 0, total: 0 });
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
   const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
   const [expandedContactId, setExpandedContactId] = useState<string | null>(null);
   const [gridVisible, setGridVisible] = useState(false);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
-  const [landmarkForm, setLandmarkForm] = useState<{ lat: number; lng: number; initialName?: string; initialAddress?: string; initialAppleMapsUrl?: string } | null>(null);
+  const [landmarkForm, setLandmarkForm] = useState<{ lat: number; lng: number } | null>(null);
   const [lookAroundCoords, setLookAroundCoords] = useState<{ lat: number; lng: number } | null>(null);
-
-  // New state for redesign
-  const [mapSearchQuery, setMapSearchQuery] = useState('');
-  const [searchSuggestions, setSearchSuggestions] = useState<SearchSuggestion[]>([]);
-  const [selectedPlace, setSelectedPlace] = useState<PlaceDetail | null>(null);
-  const [leftPanelView, setLeftPanelView] = useState<'rows' | 'contacts' | 'landmarks'>('rows');
-  const [contactFilter, setContactFilter] = useState('');
-
-  // ---- Fetch user location (non-blocking, updates map center when ready) ----
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const loc = await api.get<{ source: string; latitude?: number; longitude?: number }>('/location/latest');
-        if (cancelled) return;
-        if (loc.latitude && loc.longitude && loc.source !== 'none') {
-          userLocationRef.current = { lat: loc.latitude, lng: loc.longitude };
-          // If map is already initialized, fly to user location (only on first load)
-          const map = mapRef.current;
-          const mk = window.mapkit;
-          if (map && mk && !initialFitDoneRef.current) {
-            try {
-              const region = new mk.CoordinateRegion(
-                new mk.Coordinate(loc.latitude, loc.longitude),
-                new mk.CoordinateSpan(0.5, 0.5),
-              );
-              map.setRegionAnimated(region, true);
-            } catch { /* method unavailable */ }
-          }
-        }
-      } catch { /* no location data available */ }
-    })();
-    return () => { cancelled = true; };
-  }, []);
 
   // ---- Load MapKit JS + initialize map ----
   useEffect(() => {
@@ -1224,10 +1187,8 @@ export default function MapPage() {
         const mk = await loadMapKit();
         if (cancelled || !mapContainerRef.current) return;
 
-        // Use cached user location if already fetched, otherwise central US
-        const ul = userLocationRef.current;
         const map = new mk.Map(mapContainerRef.current, {
-          center: new mk.Coordinate(ul?.lat ?? 38.5, ul?.lng ?? -98.0),
+          center: new mk.Coordinate(40.2969, -111.6946), // Orem, Utah
           mapType: mk.Map.MapTypes.MutedStandard,
           colorScheme: mk.Map.ColorSchemes.Dark,
           showsCompass: mk.FeatureVisibility.Hidden,
@@ -1242,14 +1203,12 @@ export default function MapPage() {
           padding: new mk.Padding(0, 0, 0, 0),
         });
 
+        // Explicitly clear any POI filter to ensure all labels show
         try { map.pointOfInterestFilter = null; } catch { /* older API */ }
 
         mapRef.current = map;
 
-        // Create search object
-        mapSearchObjRef.current = new mk.Search({ language: 'en' });
-
-        // Dismiss contact callout when map pans/zooms
+        // Dismiss contact callout when map pans/zooms (prevents "sticking")
         map.addEventListener('region-change-start', () => {
           if (calloutOverlayRef.current) {
             calloutOverlayRef.current.remove();
@@ -1285,6 +1244,8 @@ export default function MapPage() {
       const mk = window.mapkit;
       if (!map || !mk) return;
 
+      const rect = container.getBoundingClientRect();
+      const point = new DOMPoint(e.clientX - rect.left, e.clientY - rect.top);
       const coord = map.convertPointOnPageToCoordinate(new DOMPoint(e.clientX, e.clientY));
 
       setContextMenu({
@@ -1298,8 +1259,6 @@ export default function MapPage() {
     container.addEventListener('contextmenu', handler);
     return () => container.removeEventListener('contextmenu', handler);
   }, [mapReady]);
-
-  // POI tap handler removed — use search bar to find places instead
 
   // ---- Fetch contacts + landmarks ----
   const fetchMapData = useCallback(async () => {
@@ -1321,12 +1280,14 @@ export default function MapPage() {
     setIsLoading(true);
     fetchMapData();
   }, [fetchMapData]);
-  useAutoRefresh(fetchMapData, 5 * 60 * 1000);
+  useAutoRefresh(fetchMapData, 5 * 60 * 1000); // 5 min + visibility refetch
 
-  // ---- Geocode contacts with addresses ----
+  // ---- Geocode contacts with addresses (waits for MapKit) ----
   useEffect(() => {
     if (contacts.length === 0 || !mapReady) return;
 
+    // Skip re-geocoding if the contact list hasn't actually changed
+    // (auto-refresh returns identical data → no need to flicker annotations)
     const contactIds = contacts.map((c) => c.id).sort().join(',');
     if (contactIds === lastContactIdsRef.current) return;
     lastContactIdsRef.current = contactIds;
@@ -1354,6 +1315,7 @@ export default function MapPage() {
           setGeocodeProgress({ done: i + 1, total: withAddress.length });
         }
       }
+      // Set all geocoded contacts at once to avoid flickering
       if (!cancelled) {
         setGeocodedContacts([...results]);
       }
@@ -1362,22 +1324,25 @@ export default function MapPage() {
     return () => { cancelled = true; };
   }, [contacts, mapReady]);
 
-  // ---- Place contact annotations ----
+  // ---- Place contact annotations when geocoded contacts update ----
   useEffect(() => {
     const map = mapRef.current;
     const mk = window.mapkit;
     if (!map || !mk || !mapReady) return;
 
+    // Remove existing contact annotations
     if (annotationsRef.current.length > 0) {
       map.removeAnnotations(annotationsRef.current);
       annotationsRef.current = [];
     }
 
+    // Remove old callout overlay
     if (calloutOverlayRef.current) {
       calloutOverlayRef.current.remove();
       calloutOverlayRef.current = null;
     }
 
+    // Group contacts by approximate location for badge counts
     const locationGroups = groupByLocation(geocodedContacts);
     const countByKey = new Map<string, number>();
     locationGroups.forEach((group, key) => {
@@ -1399,22 +1364,23 @@ export default function MapPage() {
         data: { contactId: c.id },
       });
 
+      // Click handler — show custom callout
       annotation.addEventListener('select', () => {
-        annotationJustSelectedRef.current = true;
-        setTimeout(() => { annotationJustSelectedRef.current = false; }, 300);
-
         setSelectedContactId(c.id);
 
+        // Remove existing callout
         if (calloutOverlayRef.current) {
           calloutOverlayRef.current.remove();
           calloutOverlayRef.current = null;
         }
 
+        // Create callout overlay
         const callout = createCalloutElement(c);
         callout.style.position = 'absolute';
         callout.style.zIndex = '1000';
         callout.style.pointerEvents = 'auto';
 
+        // Add close button
         const closeBtn = document.createElement('button');
         closeBtn.innerHTML = '&times;';
         closeBtn.style.cssText =
@@ -1433,6 +1399,7 @@ export default function MapPage() {
         });
         callout.appendChild(closeBtn);
 
+        // Add "Look Around" footer button
         const footer = document.createElement('div');
         footer.style.cssText = 'margin-top:8px;padding-top:6px;border-top:1px solid rgba(0,212,255,0.06);display:flex;justify-content:flex-end;';
         const laBtn = document.createElement('button');
@@ -1447,6 +1414,7 @@ export default function MapPage() {
         footer.appendChild(laBtn);
         callout.appendChild(footer);
 
+        // Position callout in the overlay layer (above sidebar z-index)
         const layer = calloutLayerRef.current;
         const mapContainer = mapContainerRef.current;
         if (layer && mapContainer) {
@@ -1458,12 +1426,15 @@ export default function MapPage() {
           const ch = calloutRect.height;
           const pad = 8;
 
+          // Initial position: centered above the pin
           let left = point.x - containerRect.left - cw / 2;
           let top = point.y - containerRect.top - ch - 24;
 
+          // Clamp within container bounds
           left = Math.max(pad, Math.min(left, containerRect.width - cw - pad));
           top = Math.max(pad, Math.min(top, containerRect.height - ch - pad));
 
+          // If callout would overlap the pin (not enough room above), show below
           if (point.y - containerRect.top - ch - 24 < pad) {
             top = point.y - containerRect.top + 30;
           }
@@ -1487,6 +1458,7 @@ export default function MapPage() {
     map.addAnnotations(newAnnotations);
     annotationsRef.current = newAnnotations;
 
+    // Fit bounds only on first load — don't steal the user's view on refresh
     if (geocodedContacts.length > 0 && !initialFitDoneRef.current) {
       initialFitDoneRef.current = true;
       const region = regionFromContacts(geocodedContacts);
@@ -1500,6 +1472,7 @@ export default function MapPage() {
     const mk = window.mapkit;
     if (!map || !mk || !mapReady) return;
 
+    // Remove existing landmark annotations
     if (landmarkAnnotationsRef.current.length > 0) {
       map.removeAnnotations(landmarkAnnotationsRef.current);
       landmarkAnnotationsRef.current = [];
@@ -1518,10 +1491,8 @@ export default function MapPage() {
         data: { landmarkId: lm.id },
       });
 
+      // Click handler — show landmark callout
       annotation.addEventListener('select', () => {
-        annotationJustSelectedRef.current = true;
-        setTimeout(() => { annotationJustSelectedRef.current = false; }, 300);
-
         if (calloutOverlayRef.current) {
           calloutOverlayRef.current.remove();
           calloutOverlayRef.current = null;
@@ -1529,7 +1500,7 @@ export default function MapPage() {
 
         const el = document.createElement('div');
         const color = lm.color || '#f0a500';
-        el.style.cssText = `font-family:'JetBrains Mono','Fira Code',monospace;min-width:200px;max-width:300px;padding:14px 16px;background:rgba(10,14,23,0.95);border:1px solid ${color}22;box-shadow:0 0 24px ${color}10,0 12px 40px rgba(0,0,0,0.6);color:#e0e0e0;backdrop-filter:blur(20px);position:absolute;z-index:1000;pointer-events:auto;clip-path:polygon(0 0,calc(100% - 10px) 0,100% 10px,100% 100%,10px 100%,0 calc(100% - 10px));`;
+        el.style.cssText = `font-family:'JetBrains Mono','Fira Code',monospace;min-width:200px;max-width:300px;padding:14px 16px;background:rgba(10,14,23,0.95);border:1px solid ${color}22;border-radius:6px;box-shadow:0 0 24px ${color}10,0 12px 40px rgba(0,0,0,0.6);color:#e0e0e0;backdrop-filter:blur(20px);position:absolute;z-index:1000;pointer-events:auto;`;
 
         let html = `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
@@ -1542,10 +1513,12 @@ export default function MapPage() {
           html += `<div style="display:flex;align-items:flex-start;gap:6px;margin:4px 0;"><span style="color:${color}66;font-size:9px;margin-top:1px;">LOC</span><span style="color:#888;font-size:9px;line-height:1.4;">${lm.address}</span></div>`;
         }
 
+        // Delete button
         html += `<div style="margin-top:8px;padding-top:6px;border-top:1px solid rgba(255,255,255,0.04);display:flex;justify-content:flex-end;">
           <button id="lm-delete-${lm.id}" style="font-family:monospace;font-size:9px;color:#ff4444;background:none;border:none;cursor:pointer;padding:2px 6px;">DELETE</button>
         </div>`;
 
+        // Close button
         const closeBtn = document.createElement('button');
         closeBtn.innerHTML = '&times;';
         closeBtn.style.cssText = `position:absolute;top:4px;right:8px;background:none;border:none;color:${color}66;font-size:18px;cursor:pointer;padding:4px;line-height:1;`;
@@ -1559,6 +1532,7 @@ export default function MapPage() {
         el.innerHTML = html;
         el.appendChild(closeBtn);
 
+        // Wire delete button
         setTimeout(() => {
           const delBtn = el.querySelector(`#lm-delete-${lm.id}`);
           if (delBtn) {
@@ -1600,91 +1574,30 @@ export default function MapPage() {
     landmarkAnnotationsRef.current = newAnnotations;
   }, [landmarks, mapReady]);
 
-  // ---- Search autocomplete (debounced) ----
-  useEffect(() => {
-    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-
-    const query = mapSearchQuery.trim();
-    if (!query || query.length < 2) {
-      setSearchSuggestions([]);
-      return;
-    }
-
-    const mk = window.mapkit;
-    if (!mk) return;
-
-    searchTimerRef.current = setTimeout(() => {
-      const search = mapSearchObjRef.current || new mk.Search({ language: 'en' });
-      search.autocomplete(query, (error: any, data: any) => {
-        if (error || !data?.results) {
-          setSearchSuggestions([]);
-          return;
-        }
-        setSearchSuggestions(
-          data.results.slice(0, 8).map((r: any) => ({
-            displayLines: r.displayLines || [r.completionUrl || ''],
-            completionUrl: r.completionUrl,
-          })),
-        );
-      }, { region: mapRef.current?.region });
-    }, 300);
-
-    return () => {
-      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-    };
-  }, [mapSearchQuery]);
-
-  // ---- Add/remove pin for selected place ----
-  useEffect(() => {
-    const map = mapRef.current;
-    const mk = window.mapkit;
-    if (!map || !mk) return;
-
-    // Remove previous
-    if (selectedPlaceAnnotationRef.current) {
-      try { map.removeAnnotation(selectedPlaceAnnotationRef.current); } catch { /* noop */ }
-      selectedPlaceAnnotationRef.current = null;
-    }
-
-    if (!selectedPlace) return;
-
-    try {
-      const coord = new mk.Coordinate(selectedPlace.latitude, selectedPlace.longitude);
-      const el = document.createElement('div');
-      el.style.cssText = 'width:24px;height:24px;background:#00d4ff;border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:2px solid #0A0E17;box-shadow:0 0 12px rgba(0,212,255,0.4);';
-      const annotation = new mk.Annotation(coord, () => el, {
-        anchorOffset: new DOMPoint(0, -12),
-        calloutEnabled: false,
-      });
-      map.addAnnotation(annotation);
-      selectedPlaceAnnotationRef.current = annotation;
-    } catch { /* annotation creation failed — non-fatal */ }
-  }, [selectedPlace, mapReady]);
-
-  // ---- Helper: region from contacts ----
+  // Helper: compute region from contacts
   function regionFromContacts(contacts: GeocodedContact[]) {
     const mk = window.mapkit;
-    // Filter out (0,0) region — failed geocodes that would drag view to Africa
-    const valid = contacts.filter((c) => !(Math.abs(c.lat) < 1 && Math.abs(c.lng) < 1));
+    // Filter out (0,0) — failed geocodes that would drag center to Africa
+    const valid = contacts.filter((c) => !(Math.abs(c.lat) < 0.1 && Math.abs(c.lng) < 0.1));
     if (valid.length === 0) {
-      // Use user's last known location, or central US fallback — never Africa
-      const ul = userLocationRef.current;
       return new mk.CoordinateRegion(
-        new mk.Coordinate(ul?.lat ?? 38.5, ul?.lng ?? -98.0),
-        new mk.CoordinateSpan(ul ? 0.5 : 30, ul ? 0.5 : 50),
+        new mk.Coordinate(40.2969, -111.6946),
+        new mk.CoordinateSpan(5, 5),
       );
     }
 
-    let minLat = 90, maxLat = -90, minLng = 180, maxLng = -180;
+    let minLat = 90,
+      maxLat = -90,
+      minLng = 180,
+      maxLng = -180;
     valid.forEach((c) => {
       if (c.lat < minLat) minLat = c.lat;
       if (c.lat > maxLat) maxLat = c.lat;
       if (c.lng < minLng) minLng = c.lng;
       if (c.lng > maxLng) maxLng = c.lng;
     });
+    // Also include landmarks in bounds
     landmarks.forEach((lm) => {
-      // Skip landmarks near (0,0) — same Africa guard
-      if (Math.abs(lm.latitude) < 1 && Math.abs(lm.longitude) < 1) return;
       if (lm.latitude < minLat) minLat = lm.latitude;
       if (lm.latitude > maxLat) maxLat = lm.latitude;
       if (lm.longitude < minLng) minLng = lm.longitude;
@@ -1725,25 +1638,6 @@ export default function MapPage() {
     [],
   );
 
-  // ---- Fly to landmark ----
-  const flyToLandmark = useCallback(
-    (lm: LandmarkData) => {
-      const map = mapRef.current;
-      const mk = window.mapkit;
-      if (!map || !mk) return;
-
-      const region = new mk.CoordinateRegion(
-        new mk.Coordinate(lm.latitude, lm.longitude),
-        new mk.CoordinateSpan(0.01, 0.01),
-      );
-      map.setRegionAnimated(region, true);
-
-      const ann = landmarkAnnotationsRef.current.find((a) => a.data?.landmarkId === lm.id);
-      if (ann) map.selectedAnnotation = ann;
-    },
-    [],
-  );
-
   // ---- Reset view ----
   const resetView = useCallback(() => {
     const map = mapRef.current;
@@ -1751,7 +1645,6 @@ export default function MapPage() {
     const region = regionFromContacts(geocodedContacts);
     map.setRegionAnimated(region, true);
     setSelectedContactId(null);
-    setSelectedPlace(null);
     if (calloutOverlayRef.current) {
       calloutOverlayRef.current.remove();
       calloutOverlayRef.current = null;
@@ -1764,85 +1657,11 @@ export default function MapPage() {
       const result = await api.post<LandmarkData>('/landmarks', data);
       setLandmarks((prev) => [...prev, result]);
       setLandmarkForm(null);
-      setSelectedPlace(null);
     } catch (err) {
       console.error('Failed to save landmark:', err);
       setLandmarkForm(null);
     }
   }, []);
-
-  // ---- Search: select a suggestion ----
-  const handleSelectSuggestion = useCallback((suggestion: SearchSuggestion) => {
-    const mk = window.mapkit;
-    if (!mk) return;
-
-    setSearchSuggestions([]);
-    setMapSearchQuery('');
-
-    const search = mapSearchObjRef.current || new mk.Search({ language: 'en' });
-    const query = suggestion.completionUrl || suggestion.displayLines[0] || '';
-
-    search.search(query, (error: any, data: any) => {
-      if (error || !data?.places?.length) return;
-      const place = data.places[0];
-
-      setSelectedPlace({
-        name: place.name || suggestion.displayLines[0] || 'Unknown',
-        latitude: place.coordinate.latitude,
-        longitude: place.coordinate.longitude,
-        formattedAddress: place.formattedAddress || '',
-        phone: place.telephone || '',
-        url: place.urls?.[0] || '',
-        category: formatPOICategory(place.pointOfInterestCategory) || '',
-      });
-
-      // Fly to location
-      const map = mapRef.current;
-      if (map) {
-        const region = new mk.CoordinateRegion(
-          new mk.Coordinate(place.coordinate.latitude, place.coordinate.longitude),
-          new mk.CoordinateSpan(0.01, 0.01),
-        );
-        map.setRegionAnimated(region, true);
-      }
-    }, { region: mapRef.current?.region });
-  }, []);
-
-  // ---- Search: submit query directly ----
-  const handleSearchSubmit = useCallback(() => {
-    const mk = window.mapkit;
-    const query = mapSearchQuery.trim();
-    if (!mk || !query) return;
-
-    setSearchSuggestions([]);
-
-    const search = mapSearchObjRef.current || new mk.Search({ language: 'en' });
-    search.search(query, (error: any, data: any) => {
-      if (error || !data?.places?.length) return;
-      const place = data.places[0];
-
-      setSelectedPlace({
-        name: place.name || query,
-        latitude: place.coordinate.latitude,
-        longitude: place.coordinate.longitude,
-        formattedAddress: place.formattedAddress || '',
-        phone: place.telephone || '',
-        url: place.urls?.[0] || '',
-        category: formatPOICategory(place.pointOfInterestCategory) || '',
-      });
-
-      setMapSearchQuery('');
-
-      const map = mapRef.current;
-      if (map) {
-        const region = new mk.CoordinateRegion(
-          new mk.Coordinate(place.coordinate.latitude, place.coordinate.longitude),
-          new mk.CoordinateSpan(0.01, 0.01),
-        );
-        map.setRegionAnimated(region, true);
-      }
-    }, { region: mapRef.current?.region });
-  }, [mapSearchQuery]);
 
   // ---- Context menu actions ----
   const handleAddLandmark = useCallback(() => {
@@ -1869,10 +1688,10 @@ export default function MapPage() {
     }
   }, [contextMenu]);
 
-  // ---- Filtered contacts for expanded list ----
+  // ---- Filtered contacts for sidebar ----
   const filteredContacts = useMemo(() => {
-    if (!contactFilter.trim()) return geocodedContacts;
-    const q = contactFilter.toLowerCase();
+    if (!searchQuery.trim()) return geocodedContacts;
+    const q = searchQuery.toLowerCase();
     return geocodedContacts.filter(
       (c) =>
         c.first_name.toLowerCase().includes(q) ||
@@ -1882,7 +1701,16 @@ export default function MapPage() {
         (c.city?.toLowerCase().includes(q) ?? false) ||
         (c.state?.toLowerCase().includes(q) ?? false),
     );
-  }, [contactFilter, geocodedContacts]);
+  }, [searchQuery, geocodedContacts]);
+
+  const contactsWithAddress = useMemo(
+    () => contacts.filter((c) => c.address?.trim() || (c.street && c.city)),
+    [contacts],
+  );
+  const contactsWithoutAddress = useMemo(
+    () => contacts.filter((c) => !c.address?.trim() && !(c.street && c.city)),
+    [contacts],
+  );
 
   const isGeocoding =
     geocodeProgress.total > 0 && geocodeProgress.done < geocodeProgress.total;
@@ -1908,7 +1736,7 @@ export default function MapPage() {
         />
       )}
 
-      {/* ---- Top Bar: gradient + back, search, controls ---- */}
+      {/* -- Top Bar -- */}
       <div
         className="absolute top-0 left-0 right-0 z-20 pointer-events-none"
         style={{
@@ -1916,12 +1744,12 @@ export default function MapPage() {
           background: 'linear-gradient(to bottom, rgba(5, 5, 16, 0.95) 0%, rgba(5, 5, 16, 0.6) 40%, transparent 100%)',
         }}
       >
-        <div className="flex items-center gap-3 px-4 h-14 pointer-events-auto">
-          {/* Back button */}
+        <div
+          className="flex items-center justify-between px-3 h-11 pointer-events-auto"
+        >
           <button
             onClick={() => navigate('/')}
-            className="h-8 px-2.5 flex items-center gap-1.5 transition-colors hover:bg-white/[0.05]"
-            style={{ clipPath: 'polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px))' }}
+            className="h-7 px-2.5 flex items-center gap-1.5 rounded transition-colors hover:bg-white/[0.05]"
           >
             <ArrowLeft size={13} className="text-jarvis-blue/50" />
             <span className="text-[9px] font-mono tracking-widest text-jarvis-blue/40 uppercase hidden sm:inline">
@@ -1929,112 +1757,42 @@ export default function MapPage() {
             </span>
           </button>
 
-          {/* Search bar */}
-          <div className="flex-1 max-w-xl relative">
-            <div className="relative">
-              <Search
-                size={13}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-jarvis-blue/30 pointer-events-none"
-              />
-              <input
-                type="text"
-                value={mapSearchQuery}
-                onChange={(e) => setMapSearchQuery(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleSearchSubmit();
-                  if (e.key === 'Escape') {
-                    setMapSearchQuery('');
-                    setSearchSuggestions([]);
-                  }
-                }}
-                placeholder="Search places, businesses, addresses..."
-                className="w-full py-2 pl-9 pr-8 text-xs font-mono bg-black/30 border border-white/[0.08] text-gray-300 placeholder-gray-600 focus:border-jarvis-blue/30 transition-colors"
-                style={{ clipPath: 'polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px))' }}
-              />
-              {mapSearchQuery && (
-                <button
-                  onClick={() => {
-                    setMapSearchQuery('');
-                    setSearchSuggestions([]);
-                  }}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-600 hover:text-gray-400 transition-colors"
-                >
-                  <X size={12} />
-                </button>
-              )}
-            </div>
-
-            {/* Autocomplete dropdown */}
-            {searchSuggestions.length > 0 && (
-              <div
-                className="absolute top-full mt-1 left-0 right-0 z-30 overflow-hidden"
-                style={{
-                  background: 'rgba(10, 14, 23, 0.95)',
-                  border: '1px solid rgba(0, 212, 255, 0.1)',
-                  backdropFilter: 'blur(20px)',
-                  WebkitBackdropFilter: 'blur(20px)',
-                  clipPath: 'polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px))',
-                  boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
-                }}
-              >
-                {searchSuggestions.map((s, i) => (
-                  <button
-                    key={i}
-                    onClick={() => handleSelectSuggestion(s)}
-                    className="w-full text-left px-4 py-2.5 hover:bg-white/[0.04] transition-colors flex items-start gap-3 border-b border-white/[0.03] last:border-0"
-                  >
-                    <MapPin size={12} className="text-jarvis-blue/30 mt-0.5 flex-shrink-0" />
-                    <div className="min-w-0">
-                      <p className="text-[11px] text-gray-300 truncate">
-                        {s.displayLines[0] || ''}
-                      </p>
-                      {s.displayLines[1] && (
-                        <p className="text-[9px] font-mono text-gray-500 truncate mt-0.5">
-                          {s.displayLines[1]}
-                        </p>
-                      )}
-                    </div>
-                  </button>
-                ))}
-              </div>
+          <div className="flex items-center gap-2">
+            <span
+              className="text-[10px] font-mono font-semibold tracking-[0.25em] text-jarvis-blue/70 uppercase"
+              style={{ textShadow: '0 0 12px rgba(0, 212, 255, 0.2)' }}
+            >
+              Contact Atlas
+            </span>
+            {landmarks.length > 0 && (
+              <span className="text-[8px] font-mono text-jarvis-gold/50 tracking-wider">
+                {landmarks.length} LANDMARK{landmarks.length !== 1 ? 'S' : ''}
+              </span>
             )}
           </div>
 
-          {/* Controls */}
-          <div className="flex items-center gap-1.5">
-            <button
-              onClick={resetView}
-              className="w-8 h-8 flex items-center justify-center hover:bg-white/[0.05] transition-colors"
-              title="Reset view"
-              style={{ clipPath: 'polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px))' }}
-            >
-              <Crosshair size={14} className="text-jarvis-blue/50" />
-            </button>
-            <button
-              onClick={() => setGridVisible((p) => !p)}
-              className={clsx(
-                'w-8 h-8 flex items-center justify-center hover:bg-white/[0.05] transition-colors',
-                gridVisible && 'bg-jarvis-blue/10',
-              )}
-              title="Toggle grid"
-              style={{ clipPath: 'polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px))' }}
-            >
-              <Layers size={14} className="text-jarvis-blue/50" />
-            </button>
-          </div>
+          <button
+            onClick={() => setSidebarOpen((p) => !p)}
+            className="h-7 px-2.5 flex items-center gap-1.5 rounded transition-colors hover:bg-white/[0.05]"
+          >
+            <Users size={13} className="text-jarvis-blue/50" />
+            <span className="text-[9px] font-mono tracking-wider text-jarvis-blue/40 hidden sm:inline">
+              {geocodedContacts.length}
+            </span>
+          </button>
         </div>
       </div>
 
-      {/* ---- Geocode Progress ---- */}
+      {/* -- Geocode Progress -- */}
       {isGeocoding && (
-        <div className="absolute top-[60px] left-0 right-0 z-20 pointer-events-none flex justify-center">
+        <div className="absolute top-[52px] left-0 right-0 z-20 pointer-events-none flex justify-center">
           <div
-            className="flex items-center gap-3 px-4 py-2"
+            className="flex items-center gap-3 px-4 py-2 boot-2"
             style={{
               background: 'rgba(10, 14, 23, 0.9)',
               border: '1px solid rgba(0, 212, 255, 0.15)',
+              borderRadius: '0 0 8px 8px',
               borderTop: 'none',
-              clipPath: 'polygon(0 0, 100% 0, calc(100% - 8px) 100%, 8px 100%)',
             }}
           >
             <Loader size={11} className="animate-spin text-jarvis-blue/60" />
@@ -2042,11 +1800,11 @@ export default function MapPage() {
               GEOCODING
             </span>
             <div
-              className="w-20 h-[3px] overflow-hidden"
+              className="w-20 h-[3px] rounded-full overflow-hidden"
               style={{ background: 'rgba(0, 212, 255, 0.08)' }}
             >
               <div
-                className="h-full transition-all duration-500"
+                className="h-full rounded-full transition-all duration-500"
                 style={{
                   width: `${geocodePercent}%`,
                   background: 'linear-gradient(90deg, rgba(0,212,255,0.4), rgba(0,212,255,0.7))',
@@ -2061,7 +1819,7 @@ export default function MapPage() {
         </div>
       )}
 
-      {/* ---- Loading Overlay ---- */}
+      {/* -- Loading Overlay -- */}
       {isLoading && (
         <div
           className="absolute inset-0 z-30 flex items-center justify-center"
@@ -2082,416 +1840,14 @@ export default function MapPage() {
         </div>
       )}
 
-      {/* ---- LEFT FLOATING PANEL ---- */}
-      <div
-        className="absolute z-10 transition-all duration-300"
-        style={{
-          top: 68,
-          left: 16,
-          width: leftPanelView === 'rows' ? 380 : 360,
-          maxWidth: 'calc(100vw - 32px)',
-          ...GLASS_PANEL,
-        }}
-      >
-        {leftPanelView === 'rows' ? (
-          <>
-            {/* ---- Contacts Row ---- */}
-            <div className="px-3 pt-4 pb-2">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-[9px] font-mono tracking-[0.2em] text-jarvis-blue/50 uppercase">
-                    Contacts
-                  </span>
-                  <span className="text-[8px] font-mono text-gray-600 tabular-nums">
-                    {geocodedContacts.length}
-                  </span>
-                </div>
-                {geocodedContacts.length > 0 && (
-                  <button
-                    onClick={() => setLeftPanelView('contacts')}
-                    className="p-1 hover:bg-white/[0.05] transition-colors"
-                    title="View all contacts"
-                  >
-                    <ChevronRight size={14} className="text-jarvis-blue/40" />
-                  </button>
-                )}
-              </div>
-              {geocodedContacts.length > 0 ? (
-                <div
-                  className="flex gap-3 overflow-x-auto pb-1 hide-scrollbar"
-                >
-                  {geocodedContacts.map((c) => {
-                    const photo = getPhotoDataUri(c);
-                    return (
-                      <button
-                        key={c.id}
-                        onClick={() => flyToContact(c)}
-                        className={clsx(
-                          'flex flex-col items-center gap-1 flex-shrink-0 transition-all',
-                          selectedContactId === c.id && 'scale-105',
-                        )}
-                        style={{ width: 56 }}
-                        title={`${c.first_name} ${c.last_name || ''}`}
-                      >
-                        <div
-                          className="w-12 h-12 rounded-full flex items-center justify-center overflow-hidden"
-                          style={{
-                            background: photo ? 'transparent' : 'rgba(0, 20, 40, 0.8)',
-                            border: selectedContactId === c.id
-                              ? '2px solid rgba(0, 212, 255, 0.7)'
-                              : '1.5px solid rgba(0, 212, 255, 0.2)',
-                            boxShadow: selectedContactId === c.id
-                              ? '0 0 12px rgba(0, 212, 255, 0.3)'
-                              : 'none',
-                            transition: 'all 0.2s ease',
-                          }}
-                        >
-                          {photo ? (
-                            <img
-                              src={photo}
-                              alt=""
-                              className="w-full h-full object-cover rounded-full"
-                              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                            />
-                          ) : (
-                            <span className="text-[11px] font-mono font-semibold text-jarvis-blue">
-                              {getInitials(c)}
-                            </span>
-                          )}
-                        </div>
-                        <span className="text-[9px] font-mono text-gray-400 truncate w-full text-center leading-tight">
-                          {c.first_name}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              ) : (
-                <p className="text-[9px] font-mono text-gray-600 py-2">
-                  {isGeocoding ? 'Geocoding contacts...' : 'No mapped contacts'}
-                </p>
-              )}
-            </div>
+      {/* -- Map Controls -- */}
+      <MapControls
+        onResetView={resetView}
+        onToggleGrid={() => setGridVisible((p) => !p)}
+        gridVisible={gridVisible}
+      />
 
-            <div
-              className="mx-3"
-              style={{ height: 1, background: 'linear-gradient(90deg, transparent, rgba(0,212,255,0.1), transparent)' }}
-            />
-
-            {/* ---- Landmarks Row ---- */}
-            <div className="p-3 pt-2">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-[9px] font-mono tracking-[0.2em] text-jarvis-gold/50 uppercase">
-                    Landmarks
-                  </span>
-                  <span className="text-[8px] font-mono text-gray-600 tabular-nums">
-                    {landmarks.length}
-                  </span>
-                </div>
-                {landmarks.length > 0 && (
-                  <button
-                    onClick={() => setLeftPanelView('landmarks')}
-                    className="p-1 hover:bg-white/[0.05] transition-colors"
-                    title="View all landmarks"
-                  >
-                    <ChevronRight size={14} className="text-jarvis-gold/40" />
-                  </button>
-                )}
-              </div>
-              {landmarks.length > 0 ? (
-                <div
-                  className="flex gap-2 overflow-x-auto pb-1 hide-scrollbar"
-                >
-                  {landmarks.map((lm) => (
-                    <button
-                      key={lm.id}
-                      onClick={() => flyToLandmark(lm)}
-                      className="flex items-center gap-1.5 flex-shrink-0 px-2.5 py-1.5 hover:bg-white/[0.04] transition-colors"
-                    >
-                      <div
-                        className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                        style={{
-                          background: lm.color || '#f0a500',
-                          boxShadow: `0 0 6px ${lm.color || '#f0a500'}44`,
-                        }}
-                      />
-                      <span className="text-[10px] font-mono text-gray-400 whitespace-nowrap">
-                        {lm.name}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-[9px] font-mono text-gray-600 py-1">
-                  Right-click map to add landmarks
-                </p>
-              )}
-            </div>
-          </>
-        ) : leftPanelView === 'contacts' ? (
-          /* ---- Expanded Contacts List ---- */
-          <div>
-            <div className="flex items-center gap-2 p-3 border-b border-white/[0.04]">
-              <button
-                onClick={() => { setLeftPanelView('rows'); setContactFilter(''); }}
-                className="p-1 hover:bg-white/[0.05] transition-colors"
-              >
-                <ArrowLeft size={14} className="text-jarvis-blue/50" />
-              </button>
-              <span className="text-[9px] font-mono tracking-[0.2em] text-jarvis-blue/60 uppercase">
-                Contacts
-              </span>
-              <span className="text-[8px] font-mono text-gray-600 ml-auto tabular-nums">
-                {filteredContacts.length}/{geocodedContacts.length}
-              </span>
-            </div>
-
-            <div className="p-3 pb-2">
-              <div className="relative">
-                <Search size={11} className="absolute left-3 top-1/2 -translate-y-1/2 text-jarvis-blue/30" />
-                <input
-                  type="text"
-                  value={contactFilter}
-                  onChange={(e) => setContactFilter(e.target.value)}
-                  placeholder="Filter contacts..."
-                  className="w-full py-2 pl-8 pr-8 text-xs font-mono bg-transparent border border-white/[0.06] text-gray-300 placeholder-gray-600 focus:border-jarvis-blue/25 transition-colors"
-                  autoFocus
-                />
-                {contactFilter && (
-                  <button
-                    onClick={() => setContactFilter('')}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-600 hover:text-gray-400"
-                  >
-                    <X size={11} />
-                  </button>
-                )}
-              </div>
-            </div>
-
-            <div className="overflow-y-auto" style={{ maxHeight: 'calc(100vh - 220px)' }}>
-              {filteredContacts.length === 0 ? (
-                <div className="text-center py-8 px-4">
-                  <MapPin size={16} className="text-gray-700 mx-auto mb-2" />
-                  <p className="text-[10px] font-mono text-gray-600">
-                    {contactFilter ? 'No matches' : 'No mapped contacts'}
-                  </p>
-                </div>
-              ) : (
-                filteredContacts.map((contact) => (
-                  <ContactCard
-                    key={contact.id}
-                    contact={contact}
-                    isSelected={selectedContactId === contact.id}
-                    isExpanded={expandedContactId === contact.id}
-                    onSelect={() => flyToContact(contact)}
-                    onToggleExpand={() =>
-                      setExpandedContactId((prev) => (prev === contact.id ? null : contact.id))
-                    }
-                  />
-                ))
-              )}
-            </div>
-          </div>
-        ) : (
-          /* ---- Expanded Landmarks List ---- */
-          <div>
-            <div className="flex items-center gap-2 p-3 border-b border-white/[0.04]">
-              <button
-                onClick={() => setLeftPanelView('rows')}
-                className="p-1 hover:bg-white/[0.05] transition-colors"
-              >
-                <ArrowLeft size={14} className="text-jarvis-gold/50" />
-              </button>
-              <span className="text-[9px] font-mono tracking-[0.2em] text-jarvis-gold/60 uppercase">
-                Landmarks
-              </span>
-              <span className="text-[8px] font-mono text-gray-600 ml-auto tabular-nums">
-                {landmarks.length}
-              </span>
-            </div>
-
-            <div className="overflow-y-auto" style={{ maxHeight: 'calc(100vh - 160px)' }}>
-              {landmarks.length === 0 ? (
-                <div className="text-center py-8 px-4">
-                  <LandmarkIcon size={16} className="text-gray-700 mx-auto mb-2" />
-                  <p className="text-[10px] font-mono text-gray-600">
-                    No landmarks yet — right-click the map to add one
-                  </p>
-                </div>
-              ) : (
-                landmarks.map((lm) => (
-                  <button
-                    key={lm.id}
-                    onClick={() => flyToLandmark(lm)}
-                    className="w-full text-left px-4 py-3 border-b border-white/[0.03] hover:bg-white/[0.03] transition-colors flex items-center gap-3"
-                  >
-                    <div
-                      className="w-3 h-3 rounded-full flex-shrink-0"
-                      style={{
-                        background: lm.color || '#f0a500',
-                        boxShadow: `0 0 6px ${lm.color || '#f0a500'}44`,
-                      }}
-                    />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[11px] text-gray-300 truncate">{lm.name}</p>
-                      {lm.address && (
-                        <p className="text-[9px] text-gray-600 truncate font-mono mt-0.5">
-                          {lm.address}
-                        </p>
-                      )}
-                    </div>
-                  </button>
-                ))
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* ---- RIGHT FLOATING PANEL (Place Details) ---- */}
-      {selectedPlace && (
-        <div
-          className="absolute z-10 animate-fade-in"
-          style={{
-            top: 68,
-            right: 16,
-            width: 340,
-            maxWidth: 'calc(100vw - 32px)',
-            ...GLASS_PANEL,
-          }}
-        >
-          {/* Header */}
-          <div className="flex items-center justify-between p-3 pb-2">
-            <span className="text-[9px] font-mono tracking-[0.2em] text-jarvis-blue/50 uppercase">
-              Place Detail
-            </span>
-            <button
-              onClick={() => setSelectedPlace(null)}
-              className="p-1 hover:bg-white/[0.05] transition-colors"
-            >
-              <X size={14} className="text-jarvis-blue/40" />
-            </button>
-          </div>
-
-          <div
-            className="mx-3"
-            style={{ height: 1, background: 'linear-gradient(90deg, transparent, rgba(0,212,255,0.1), transparent)' }}
-          />
-
-          <div className="p-3 space-y-3">
-            {/* Name */}
-            <h3 className="text-sm font-semibold text-gray-200 leading-snug">
-              {selectedPlace.name}
-            </h3>
-
-            {/* Category */}
-            {selectedPlace.category && (
-              <div className="flex items-center gap-2">
-                <Building2 size={11} className="text-jarvis-blue/40 flex-shrink-0" />
-                <span className="text-[10px] font-mono text-jarvis-blue/50">
-                  {selectedPlace.category}
-                </span>
-              </div>
-            )}
-
-            {/* Address */}
-            {selectedPlace.formattedAddress && (
-              <div className="flex items-start gap-2">
-                <MapPin size={11} className="text-jarvis-blue/40 flex-shrink-0 mt-0.5" />
-                <span className="text-[10px] font-mono text-gray-400 leading-relaxed">
-                  {selectedPlace.formattedAddress}
-                </span>
-              </div>
-            )}
-
-            {/* Phone */}
-            {selectedPlace.phone && (
-              <div className="flex items-center gap-2">
-                <Phone size={11} className="text-jarvis-blue/40 flex-shrink-0" />
-                <a
-                  href={`tel:${selectedPlace.phone}`}
-                  className="text-[10px] font-mono text-gray-400 hover:text-jarvis-blue transition-colors"
-                >
-                  {selectedPlace.phone}
-                </a>
-              </div>
-            )}
-
-            {/* Website */}
-            {selectedPlace.url && (
-              <div className="flex items-center gap-2">
-                <Globe size={11} className="text-jarvis-blue/40 flex-shrink-0" />
-                <a
-                  href={selectedPlace.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-[10px] font-mono text-jarvis-blue/60 truncate hover:text-jarvis-blue transition-colors"
-                >
-                  {selectedPlace.url.replace(/^https?:\/\/(www\.)?/, '')}
-                </a>
-              </div>
-            )}
-
-            {/* Coordinates */}
-            <div className="flex items-center gap-2">
-              <Copy size={11} className="text-gray-600 flex-shrink-0" />
-              <button
-                onClick={() => navigator.clipboard.writeText(`${selectedPlace.latitude.toFixed(6)}, ${selectedPlace.longitude.toFixed(6)}`)}
-                className="text-[9px] font-mono text-gray-600 hover:text-gray-400 transition-colors"
-                title="Copy coordinates"
-              >
-                {selectedPlace.latitude.toFixed(5)}, {selectedPlace.longitude.toFixed(5)}
-              </button>
-            </div>
-
-            <div
-              style={{ height: 1, background: 'linear-gradient(90deg, transparent, rgba(0,212,255,0.08), transparent)' }}
-            />
-
-            {/* Actions */}
-            <div className="space-y-2">
-              <button
-                onClick={() => {
-                  setLandmarkForm({
-                    lat: selectedPlace.latitude,
-                    lng: selectedPlace.longitude,
-                    initialName: selectedPlace.name,
-                    initialAddress: selectedPlace.formattedAddress,
-                    initialAppleMapsUrl: `https://maps.apple.com/?ll=${selectedPlace.latitude},${selectedPlace.longitude}&q=${encodeURIComponent(selectedPlace.name)}`,
-                  });
-                }}
-                className="w-full py-2.5 flex items-center justify-center gap-2 text-[10px] font-mono font-semibold tracking-wider bg-jarvis-gold/10 border border-jarvis-gold/20 text-jarvis-gold hover:bg-jarvis-gold/20 transition-colors uppercase"
-                style={{ clipPath: 'polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px))' }}
-              >
-                <LandmarkIcon size={12} />
-                Add as Landmark
-              </button>
-
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setLookAroundCoords({ lat: selectedPlace.latitude, lng: selectedPlace.longitude })}
-                  className="flex-1 py-2 flex items-center justify-center gap-1.5 text-[9px] font-mono tracking-wider text-jarvis-blue/60 border border-jarvis-blue/15 hover:bg-jarvis-blue/5 transition-colors uppercase"
-                  style={{ clipPath: 'polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px))' }}
-                >
-                  <Eye size={11} />
-                  Look Around
-                </button>
-                <button
-                  onClick={() => window.open(`https://maps.apple.com/?ll=${selectedPlace.latitude},${selectedPlace.longitude}&z=15`, '_blank')}
-                  className="flex-1 py-2 flex items-center justify-center gap-1.5 text-[9px] font-mono tracking-wider text-jarvis-blue/60 border border-jarvis-blue/15 hover:bg-jarvis-blue/5 transition-colors uppercase"
-                  style={{ clipPath: 'polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px))' }}
-                >
-                  <ExternalLink size={11} />
-                  Apple Maps
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ---- Context Menu ---- */}
+      {/* -- Context Menu -- */}
       {contextMenu && (
         <MapContextMenu
           x={contextMenu.x}
@@ -2504,20 +1860,17 @@ export default function MapPage() {
         />
       )}
 
-      {/* ---- Landmark Form ---- */}
+      {/* -- Landmark Form -- */}
       {landmarkForm && (
         <LandmarkForm
           lat={landmarkForm.lat}
           lng={landmarkForm.lng}
-          initialName={landmarkForm.initialName}
-          initialAddress={landmarkForm.initialAddress}
-          initialAppleMapsUrl={landmarkForm.initialAppleMapsUrl}
           onSave={saveLandmark}
           onCancel={() => setLandmarkForm(null)}
         />
       )}
 
-      {/* ---- Look Around ---- */}
+      {/* -- Look Around -- */}
       {lookAroundCoords && (
         <LookAroundPanel
           lat={lookAroundCoords.lat}
@@ -2526,14 +1879,217 @@ export default function MapPage() {
         />
       )}
 
-      {/* ---- Callout overlay layer ---- */}
+      {/* -- Callout overlay layer (above sidebar) -- */}
       <div ref={calloutLayerRef} className="absolute inset-0 z-[15] pointer-events-none" />
 
-      {/* ---- MapKit JS overrides + custom styles ---- */}
+      {/* -- Sidebar -- */}
+      <div
+        className="absolute top-0 right-0 bottom-0 z-10 flex flex-col transition-transform duration-300 ease-out"
+        style={{
+          width: '340px',
+          maxWidth: '85vw',
+          background: 'rgba(8, 12, 22, 0.92)',
+          borderLeft: '1px solid rgba(0, 212, 255, 0.08)',
+          backdropFilter: 'blur(24px) saturate(1.3)',
+          WebkitBackdropFilter: 'blur(24px) saturate(1.3)',
+          transform: sidebarOpen ? 'translateX(0)' : 'translateX(100%)',
+        }}
+      >
+        <div className="flex items-center justify-between px-4 pt-[52px] pb-3">
+          <div className="flex items-center gap-2">
+            <MapPin size={13} className="text-jarvis-blue/60" />
+            <span className="hud-label">CONTACT ATLAS</span>
+          </div>
+          <button
+            onClick={() => setSidebarOpen(false)}
+            className="glass-circle w-7 h-7 flex items-center justify-center"
+            aria-label="Close sidebar"
+          >
+            <X size={12} className="text-gray-500" />
+          </button>
+        </div>
+
+        <div className="glow-line-h mx-4" />
+
+        <div className="px-4 py-3">
+          <div className="relative">
+            <Search
+              size={12}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-jarvis-blue/30"
+            />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search contacts..."
+              className="w-full py-2 pl-8 pr-8 text-xs font-mono bg-transparent border border-white/[0.06] rounded text-gray-300 placeholder-gray-600 focus:border-jarvis-blue/25 transition-colors"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-600 hover:text-gray-400 transition-colors"
+                aria-label="Clear search"
+              >
+                <X size={12} />
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="px-4 pb-2 flex items-center gap-2">
+          <span className="text-[8px] font-mono tracking-wider text-jarvis-blue/30">
+            {geocodedContacts.length} MAPPED
+          </span>
+          <span className="text-[8px] text-white/[0.06]">|</span>
+          <span className="text-[8px] font-mono tracking-wider text-gray-600">
+            {contactsWithAddress.length} ADDRESSABLE
+          </span>
+          <span className="text-[8px] text-white/[0.06]">|</span>
+          <span className="text-[8px] font-mono tracking-wider text-gray-700">
+            {contacts.length} TOTAL
+          </span>
+        </div>
+
+        <div className="glow-line-h mx-4 mb-1" />
+
+        <div className="flex-1 overflow-y-auto">
+          {isLoading ? (
+            <SidebarSkeleton />
+          ) : filteredContacts.length === 0 ? (
+            <div className="text-center py-16 px-6">
+              <div className="relative w-12 h-12 mx-auto mb-3">
+                <div className="absolute inset-0 rounded-full border border-white/[0.04]" />
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <MapPin size={16} className="text-gray-700" />
+                </div>
+              </div>
+              <p className="text-[11px] text-gray-500 font-mono">
+                {searchQuery
+                  ? 'No matches found'
+                  : isGeocoding
+                    ? 'Geocoding in progress...'
+                    : 'No contacts with addresses'}
+              </p>
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="text-[10px] font-mono text-jarvis-blue/40 mt-2 hover:text-jarvis-blue/60 transition-colors"
+                >
+                  Clear search
+                </button>
+              )}
+            </div>
+          ) : (
+            <div>
+              {filteredContacts.map((contact) => (
+                <ContactCard
+                  key={contact.id}
+                  contact={contact}
+                  isSelected={selectedContactId === contact.id}
+                  isExpanded={expandedContactId === contact.id}
+                  onSelect={() => flyToContact(contact)}
+                  onToggleExpand={() =>
+                    setExpandedContactId((prev) => (prev === contact.id ? null : contact.id))
+                  }
+                />
+              ))}
+            </div>
+          )}
+
+          {/* Landmarks section */}
+          {landmarks.length > 0 && !searchQuery && !isLoading && (
+            <div className="px-4 py-4 border-t border-white/[0.04]">
+              <div className="flex items-center gap-2 mb-2">
+                <LandmarkIcon size={11} className="text-jarvis-gold/60" />
+                <p className="text-[8px] font-mono tracking-wider text-jarvis-gold/50 uppercase">{landmarks.length} LANDMARKS</p>
+              </div>
+              <div className="space-y-1">
+                {landmarks.map((lm) => (
+                  <button
+                    key={lm.id}
+                    onClick={() => {
+                      const map = mapRef.current;
+                      const mk = window.mapkit;
+                      if (!map || !mk) return;
+                      const region = new mk.CoordinateRegion(
+                        new mk.Coordinate(lm.latitude, lm.longitude),
+                        new mk.CoordinateSpan(0.01, 0.01),
+                      );
+                      map.setRegionAnimated(region, true);
+                      const ann = landmarkAnnotationsRef.current.find((a) => a.data?.landmarkId === lm.id);
+                      if (ann) map.selectedAnnotation = ann;
+                    }}
+                    className="w-full text-left px-3 py-2 rounded hover:bg-white/[0.03] transition-colors flex items-center gap-2"
+                  >
+                    <div
+                      className="w-2 h-2 rounded-full flex-shrink-0"
+                      style={{ background: lm.color || '#f0a500', boxShadow: `0 0 4px ${lm.color || '#f0a500'}44` }}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[11px] text-gray-300 truncate">{lm.name}</p>
+                      {lm.address && <p className="text-[9px] text-gray-600 truncate font-mono">{lm.address}</p>}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {contactsWithoutAddress.length > 0 && !searchQuery && !isLoading && (
+            <div className="px-4 py-4 border-t border-white/[0.04]">
+              <p className="hud-label mb-2">{contactsWithoutAddress.length} UNMAPPED</p>
+              <div className="flex flex-wrap gap-1">
+                {contactsWithoutAddress.slice(0, 15).map((c) => {
+                  const photo = getPhotoDataUri(c);
+                  return (
+                    <div
+                      key={c.id}
+                      className="flex items-center gap-1 px-1.5 py-0.5 rounded"
+                      style={{ background: 'rgba(255,255,255,0.02)' }}
+                      title={`${c.first_name} ${c.last_name || ''} — no address`}
+                    >
+                      {photo ? (
+                        <img
+                          src={photo}
+                          alt=""
+                          className="w-3.5 h-3.5 rounded-full object-cover"
+                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                        />
+                      ) : null}
+                      <span className="text-[9px] font-mono text-gray-600">
+                        {c.first_name} {c.last_name?.[0] || ''}
+                      </span>
+                    </div>
+                  );
+                })}
+                {contactsWithoutAddress.length > 15 && (
+                  <span className="text-[8px] font-mono text-gray-700 px-1.5 py-0.5">
+                    +{contactsWithoutAddress.length - 15}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="px-4 py-2 border-t border-white/[0.04]">
+          <div className="flex items-center justify-between">
+            <span className="text-[7px] font-mono tracking-[0.15em] text-jarvis-blue/15">
+              STARK.INDUSTRIES//ATLAS
+            </span>
+            <span className="text-[7px] font-mono tracking-[0.15em] text-gray-800">v3.1</span>
+          </div>
+        </div>
+      </div>
+
+      {/* -- MapKit JS overrides -- */}
       <style>{`
+        /* Hide Apple Maps logo/attribution styling to blend with dark theme */
         .mk-map-view .mk-controls-container {
           opacity: 0.4;
         }
+
+        /* Apple Maps zoom control dark theme */
         .mk-map-view .mk-zoom-in,
         .mk-map-view .mk-zoom-out {
           background: rgba(10, 14, 23, 0.9) !important;
@@ -2544,8 +2100,6 @@ export default function MapPage() {
         .mk-map-view .mk-zoom-out:hover {
           background: rgba(0, 212, 255, 0.08) !important;
         }
-        .hide-scrollbar::-webkit-scrollbar { display: none; }
-        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
       `}</style>
     </div>
   );
