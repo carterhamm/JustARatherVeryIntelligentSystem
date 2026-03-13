@@ -1151,6 +1151,7 @@ export default function MapPage() {
   const calloutOverlayRef = useRef<HTMLDivElement | null>(null);
   const calloutLayerRef = useRef<HTMLDivElement>(null);
   const initialFitDoneRef = useRef(false);
+  const lastContactIdsRef = useRef<string>('');
 
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [geocodedContacts, setGeocodedContacts] = useState<GeocodedContact[]>([]);
@@ -1272,6 +1273,13 @@ export default function MapPage() {
   // ---- Geocode contacts with addresses (waits for MapKit) ----
   useEffect(() => {
     if (contacts.length === 0 || !mapReady) return;
+
+    // Skip re-geocoding if the contact list hasn't actually changed
+    // (auto-refresh returns identical data → no need to flicker annotations)
+    const contactIds = contacts.map((c) => c.id).sort().join(',');
+    if (contactIds === lastContactIdsRef.current) return;
+    lastContactIdsRef.current = contactIds;
+
     let cancelled = false;
 
     const withAddress = contacts.filter((c) => c.address?.trim() || (c.street && c.city));
@@ -1296,7 +1304,6 @@ export default function MapPage() {
         }
       }
       // Set all geocoded contacts at once to avoid flickering
-      // (each setState triggers annotation removal + re-add)
       if (!cancelled) {
         setGeocodedContacts([...results]);
       }
