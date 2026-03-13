@@ -334,6 +334,40 @@ async def research_findings(
 # ═══════════════════════════════════════════════════════════════════════════
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# Reminder delivery — lightweight check every 5 minutes
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+@router.post("/check-reminders")
+async def check_reminders_cron(
+    current_user: User = Depends(get_current_active_user_or_service),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Deliver due reminders via iMessage (or call as fallback).
+
+    Lightweight — no LLM scoring.  Reminders are user-requested and always
+    delivered immediately, even during DND.  Runs every 5 minutes for
+    precise timing.
+
+    Protected by SERVICE_API_KEY or JWT — meant to be called by Railway cron.
+    """
+    from app.services.heartbeat import check_and_deliver_reminders
+
+    logger.info("Reminder check triggered by user=%s", current_user.username)
+    try:
+        result = await check_and_deliver_reminders(db)
+    except Exception as exc:
+        logger.exception("Reminder check failed: %s", exc)
+        raise HTTPException(status_code=500, detail=f"Reminder check error: {exc}")
+    return result
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Heartbeat — proactive monitoring every 15 minutes
+# ═══════════════════════════════════════════════════════════════════════════
+
+
 @router.post("/heartbeat")
 async def heartbeat_cron(
     current_user: User = Depends(get_current_active_user_or_service),

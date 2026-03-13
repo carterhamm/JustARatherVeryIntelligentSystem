@@ -189,7 +189,13 @@ async def _check_weather_alerts() -> Optional[str]:
 
 
 async def _check_pending_reminders(db: AsyncSession, owner_id) -> Optional[str]:
-    """Check for reminders due in the next 30 minutes. Returns summary or None."""
+    """Report upcoming reminders for heartbeat digest (read-only).
+
+    NOTE: This no longer marks reminders as delivered.  Delivery is handled
+    by the dedicated ``check_and_deliver_reminders()`` cron (every 5 min).
+    The heartbeat just includes upcoming reminder info in its findings so
+    the urgency scorer has the full picture.
+    """
     from app.models.reminder import Reminder
 
     now = datetime.now(tz=timezone.utc)
@@ -216,16 +222,90 @@ async def _check_pending_reminders(db: AsyncSession, owner_id) -> Optional[str]:
             remind_mtn = r.remind_at.astimezone(_MTN) if r.remind_at.tzinfo else r.remind_at
             lines.append(f"- {r.message} (due {remind_mtn.strftime('%I:%M %p')})")
 
-            # Mark as delivered
-            r.is_delivered = True
-            r.delivered_at = now
-
-        await db.commit()
         return "Pending reminders:\n" + "\n".join(lines)
 
     except Exception as exc:
         logger.warning("Heartbeat reminder check failed: %s", exc)
         return None
+
+
+async def check_and_deliver_reminders(db: AsyncSession) -> dict[str, Any]:
+    """Lightweight reminder delivery — runs every 5 minutes via dedicated cron.
+
+    Queries due reminders and delivers immediately via iMessage (or call as
+    fallback).  No LLM urgency scoring — reminders are always delivered
+    because the user explicitly asked for them.
+
+    Marks ``is_delivered`` only AFTER a successful send so nothing is lost
+    silently.  Reminders fire even during DND since the user set them
+    intentionally.
+    """
+    from app.models.reminder import Reminder
+
+    now = datetime.now(tz=timezone.utc)
+    results: dict[str, Any] = {"timestamp": now.isoformat(), "delivered": [], "failed": []}
+
+    owner = await _get_owner(db)
+    if not owner:
+        results["status"] = "error"
+        results["error"] = "No active owner"
+        return results
+
+    # Query reminders that are due (remind_at <= now) and not yet delivered
+    stmt = (
+        select(Reminder)
+        .where(
+            Reminder.user_id == owner.id,
+            Reminder.is_delivered.is_(False),
+            Reminder.remind_at <= now,
+        )
+        .order_by(Reminder.remind_at.asc())
+        .limit(10)
+    )
+    rows = await db.execute(stmt)
+    reminders = rows.scalars().all()
+
+    if not reminders:
+        results["status"] = "no_reminders_due"
+        return results
+
+    method = get_contact_method()
+
+    for reminder in reminders:
+        remind_mtn = (
+            reminder.remind_at.astimezone(_MTN)
+            if reminder.remind_at.tzinfo
+            else reminder.remind_at
+        )
+        text = f"Reminder: {reminder.message} (due {remind_mtn.strftime('%I:%M %p')})"
+
+        sent = False
+        try:
+            # Always try iMessage first — reminders are user-requested,
+            # deliver even in DND / off-hours
+            delivery = await _send_text(text)
+            sent = delivery.get("success", False)
+
+            # If iMessage failed and we're in call hours, try call
+            if not sent and method == "call":
+                delivery = await _make_call(text)
+                sent = delivery.get("success", False)
+        except Exception as exc:
+            logger.error("Reminder delivery failed for '%s': %s", reminder.message, exc)
+
+        if sent:
+            reminder.is_delivered = True
+            reminder.delivered_at = now
+            results["delivered"].append(reminder.message)
+            logger.info("Reminder delivered: %s", reminder.message)
+        else:
+            results["failed"].append(reminder.message)
+            logger.warning("Reminder delivery failed: %s", reminder.message)
+
+    await db.commit()
+    results["status"] = "ok"
+    results["total_due"] = len(reminders)
+    return results
 
 
 async def _check_research_findings() -> Optional[str]:
