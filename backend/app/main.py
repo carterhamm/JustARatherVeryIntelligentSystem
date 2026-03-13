@@ -64,6 +64,27 @@ def create_app() -> FastAPI:
     # -- Routers --------------------------------------------------------------
     application.include_router(v1_router, prefix="/api/v1")
 
+    # -- Apple App Site Association (passkey / webcredentials) ----------------
+    @application.get("/.well-known/apple-app-site-association")
+    async def apple_app_site_association():
+        return JSONResponse(
+            content={
+                "webcredentials": {
+                    "apps": [f"{settings.APPLE_TEAM_ID}.{settings.APP_BUNDLE_ID}"]
+                },
+                "applinks": {
+                    "apps": [],
+                    "details": [
+                        {
+                            "appID": f"{settings.APPLE_TEAM_ID}.{settings.APP_BUNDLE_ID}",
+                            "paths": ["*"],
+                        }
+                    ],
+                },
+            },
+            media_type="application/json",
+        )
+
     # -- Health check ---------------------------------------------------------
     @application.get("/health", response_model=HealthResponse, tags=["health"])
     async def health_check() -> HealthResponse:

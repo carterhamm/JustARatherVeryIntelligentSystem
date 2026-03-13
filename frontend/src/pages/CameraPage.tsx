@@ -203,15 +203,10 @@ export default function CameraPage() {
               >
                 <ChevronLeft size={16} className="text-[#00d4ff]" />
               </button>
-              <div>
-                <div className="flex items-center gap-2">
-                  <div className={`w-2 h-2 rounded-full ${status?.online ? 'bg-green-400 shadow-[0_0_8px_rgba(74,222,128,0.6)]' : 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]'}`} />
-                  <span className="font-mono text-xs text-[#00d4ff] tracking-[3px] uppercase">
-                    {status?.model || 'CAMERA'}
-                  </span>
-                </div>
-                <span className="font-mono text-[10px] text-gray-500">
-                  {status?.camera_ip || '—'} · {status?.resolution?.join('×') || '—'} · {status?.fps || 0} FPS
+              <div className="flex items-center gap-2">
+                <div className={`w-2 h-2 rounded-full ${status?.online ? 'bg-green-400 shadow-[0_0_8px_rgba(74,222,128,0.6)]' : 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]'}`} />
+                <span className="font-mono text-xs text-[#00d4ff] tracking-[3px] uppercase">
+                  {status?.model || 'CAMERA'}
                 </span>
               </div>
             </div>
@@ -248,10 +243,13 @@ export default function CameraPage() {
           {/* Bottom Bar — Timestamp + Gesture */}
           <div className="absolute bottom-0 left-0 right-0 z-10 flex items-end justify-between px-6 py-4"
             style={{ background: 'linear-gradient(to top, rgba(5,5,16,0.8), transparent)' }}>
-            {/* Timestamp */}
+            {/* Timestamp + Feed Info */}
             <div className="font-mono text-[10px] text-gray-500">
               <div className="text-[#00d4ff]/60 tracking-[2px]">REC ● {new Date().toLocaleTimeString()}</div>
               <div>{new Date().toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</div>
+              <div className="mt-1 text-gray-600">
+                {status?.camera_ip || '—'} · {status?.resolution?.join('×') || '—'} · {status?.fps || 0} FPS
+              </div>
             </div>
 
             {/* Gesture indicator */}

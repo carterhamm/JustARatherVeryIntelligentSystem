@@ -18,7 +18,7 @@ class CameraService:
 
     The daemon runs on the local network with direct RTSP/ONVIF access
     to the camera. This service forwards requests from Railway → Mac Mini
-    via the Cloudflare tunnel.
+    via the Cloudflare tunnel (Caddy Bearer Auth).
     """
 
     @staticmethod
@@ -29,9 +29,21 @@ class CameraService:
         return url.rstrip("/")
 
     @staticmethod
+    def _headers() -> dict[str, str]:
+        """Build auth headers for the Caddy proxy."""
+        headers: dict[str, str] = {}
+        token = settings.CAMERA_AUTH_TOKEN
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+        return headers
+
+    @staticmethod
     async def get_status() -> dict[str, Any]:
         async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.get(f"{CameraService._base_url()}/status")
+            resp = await client.get(
+                f"{CameraService._base_url()}/status",
+                headers=CameraService._headers(),
+            )
             resp.raise_for_status()
             return resp.json()
 
@@ -39,7 +51,10 @@ class CameraService:
     async def get_snapshot() -> bytes:
         """Get a JPEG snapshot from the camera."""
         async with httpx.AsyncClient(timeout=15) as client:
-            resp = await client.get(f"{CameraService._base_url()}/snapshot")
+            resp = await client.get(
+                f"{CameraService._base_url()}/snapshot",
+                headers=CameraService._headers(),
+            )
             resp.raise_for_status()
             return resp.content
 
@@ -57,6 +72,7 @@ class CameraService:
             resp = await client.post(
                 f"{CameraService._base_url()}/ptz/{action}",
                 json={"speed": speed, "duration": duration},
+                headers=CameraService._headers(),
             )
             resp.raise_for_status()
             return resp.json()
@@ -64,7 +80,10 @@ class CameraService:
     @staticmethod
     async def get_gestures() -> dict[str, Any]:
         async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.get(f"{CameraService._base_url()}/gestures")
+            resp = await client.get(
+                f"{CameraService._base_url()}/gestures",
+                headers=CameraService._headers(),
+            )
             resp.raise_for_status()
             return resp.json()
 
@@ -102,7 +121,9 @@ class CameraService:
         """Async generator that proxies MJPEG stream from the daemon."""
         async with httpx.AsyncClient(timeout=None) as client:
             async with client.stream(
-                "GET", f"{CameraService._base_url()}/stream"
+                "GET",
+                f"{CameraService._base_url()}/stream",
+                headers=CameraService._headers(),
             ) as resp:
                 async for chunk in resp.aiter_bytes(chunk_size=4096):
                     yield chunk

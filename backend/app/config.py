@@ -117,6 +117,7 @@ class Settings(BaseSettings):
 
     # -- Camera / Security (TP-Link Tapo via Mac Mini daemon) ----------------
     CAMERA_PROXY_URL: str = ""       # Mac Mini camera daemon URL
+    CAMERA_AUTH_TOKEN: str = ""      # Bearer token for Caddy auth proxy
     CAMERA_IP: str = ""              # Camera IP on local network
     CAMERA_USERNAME: str = ""        # Camera account username
     CAMERA_PASSWORD: str = ""        # Camera account password
@@ -199,6 +200,10 @@ class Settings(BaseSettings):
     WEBAUTHN_RP_ID: str = "localhost"
     WEBAUTHN_RP_NAME: str = "J.A.R.V.I.S."
     WEBAUTHN_ORIGIN: str = "http://localhost:3000"
+
+    # -- Apple / iOS ----------------------------------------------------------
+    APPLE_TEAM_ID: str = "HKM8P29B68"
+    APP_BUNDLE_ID: str = "dev.jarvis.malibupoint"
 
     # -- CORS -----------------------------------------------------------------
     CORS_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:5173"]
