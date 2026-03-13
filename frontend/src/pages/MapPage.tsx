@@ -1189,13 +1189,13 @@ export default function MapPage() {
 
         const map = new mk.Map(mapContainerRef.current, {
           center: new mk.Coordinate(40.2969, -111.6946), // Orem, Utah
-          mapType: mk.Map.MapTypes.Standard,
+          mapType: mk.Map.MapTypes.MutedStandard,
           colorScheme: mk.Map.ColorSchemes.Dark,
           showsCompass: mk.FeatureVisibility.Hidden,
           showsZoomControl: true,
-          showsMapTypeControl: false,
+          showsMapTypeControl: true,
           showsPointsOfInterest: true,
-          loadPriority: mk.Map.LoadPriorities.LandCover,
+          loadPriority: mk.Map.LoadPriorities.PointsOfInterest,
           isZoomEnabled: true,
           isScrollEnabled: true,
           isRotationEnabled: true,
