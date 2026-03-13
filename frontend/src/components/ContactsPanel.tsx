@@ -106,6 +106,32 @@ function EditForm({ contact, onSave, onCancel, saving }: EditFormProps) {
   const isCreate = !contact;
   const extra = useMemo(() => parseExtraFields(contact?.extra_fields), [contact?.extra_fields]);
 
+  // Build initial phone/email lists from contact + extra_fields
+  const initialPhones = useMemo(() => {
+    const phones: string[] = [];
+    if (contact?.phone) phones.push(contact.phone);
+    if (extra.all_phones) {
+      for (const p of extra.all_phones) {
+        if (p.value && !phones.includes(p.value)) phones.push(p.value);
+      }
+    }
+    return phones.length > 0 ? phones : [''];
+  }, [contact, extra]);
+
+  const initialEmails = useMemo(() => {
+    const emails: string[] = [];
+    if (contact?.email) emails.push(contact.email);
+    if (extra.all_emails) {
+      for (const e of extra.all_emails) {
+        if (e.value && !emails.includes(e.value)) emails.push(e.value);
+      }
+    }
+    return emails.length > 0 ? emails : [''];
+  }, [contact, extra]);
+
+  const [phones, setPhones] = useState<string[]>(initialPhones);
+  const [emails, setEmails] = useState<string[]>(initialEmails);
+
   const [form, setForm] = useState({
     first_name: contact?.first_name || '',
     last_name: contact?.last_name || '',
@@ -126,35 +152,6 @@ function EditForm({ contact, onSave, onCancel, saving }: EditFormProps) {
   const set = (field: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setForm((prev) => ({ ...prev, [field]: e.target.value }));
 
-  // Get all phone numbers and emails for default selection
-  const allPhones = useMemo(() => {
-    const phones: { value: string; label: string }[] = [];
-    if (contact?.phone) phones.push({ value: contact.phone, label: contact.phone });
-    if (extra.all_phones) {
-      for (const p of extra.all_phones) {
-        if (p.value && !phones.find((x) => x.value === p.value)) {
-          const typeLabel = p.params?.TYPE || p.params?.type || '';
-          phones.push({ value: p.value, label: `${p.value}${typeLabel ? ` (${typeLabel})` : ''}` });
-        }
-      }
-    }
-    return phones;
-  }, [contact, extra]);
-
-  const allEmails = useMemo(() => {
-    const emails: { value: string; label: string }[] = [];
-    if (contact?.email) emails.push({ value: contact.email, label: contact.email });
-    if (extra.all_emails) {
-      for (const e of extra.all_emails) {
-        if (e.value && !emails.find((x) => x.value === e.value)) {
-          const typeLabel = e.params?.TYPE || e.params?.type || '';
-          emails.push({ value: e.value, label: `${e.value}${typeLabel ? ` (${typeLabel})` : ''}` });
-        }
-      }
-    }
-    return emails;
-  }, [contact, extra]);
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.first_name.trim()) return;
@@ -163,10 +160,31 @@ function EditForm({ contact, onSave, onCancel, saving }: EditFormProps) {
     const parts = [form.street, form.city, form.state, form.postal_code, form.country].filter(Boolean);
     const address = parts.join(', ');
 
+    // Use first non-empty phone/email as primary
+    const cleanPhones = phones.map((p) => p.trim()).filter(Boolean);
+    const cleanEmails = emails.map((e) => e.trim()).filter(Boolean);
+
     const data: Partial<Contact> = {
       ...form,
+      phone: cleanPhones[0] || null,
+      email: cleanEmails[0] || null,
       address: address || undefined,
     };
+
+    // Store additional phones/emails in extra_fields
+    const existingExtra = parseExtraFields(contact?.extra_fields);
+    if (cleanPhones.length > 1) {
+      existingExtra.all_phones = cleanPhones.slice(1).map((v) => ({ value: v }));
+    } else {
+      delete existingExtra.all_phones;
+    }
+    if (cleanEmails.length > 1) {
+      existingExtra.all_emails = cleanEmails.slice(1).map((v) => ({ value: v }));
+    } else {
+      delete existingExtra.all_emails;
+    }
+    const extraStr = Object.keys(existingExtra).length > 0 ? JSON.stringify(existingExtra) : null;
+    (data as Record<string, unknown>).extra_fields = extraStr;
 
     // Clean empty strings to undefined for update
     if (!isCreate) {
@@ -213,44 +231,84 @@ function EditForm({ contact, onSave, onCancel, saving }: EditFormProps) {
           </div>
         </div>
 
-        {/* Default Phone selector */}
+        {/* Phone numbers (add/remove) */}
         <FieldGroup label="PHONE" icon={<Phone size={10} />}>
-          {allPhones.length > 1 ? (
-            <div className="space-y-1.5">
-              <select
-                value={form.phone}
-                onChange={(e) => setForm((prev) => ({ ...prev, phone: e.target.value }))}
-                className="w-full jarvis-input hud-clip-sm px-3 py-2 text-sm font-mono bg-transparent appearance-none"
-              >
-                {allPhones.map((p) => (
-                  <option key={p.value} value={p.value}>{p.label}</option>
-                ))}
-              </select>
-              <p className="text-[8px] text-gray-600 font-mono tracking-wider">DEFAULT PHONE — SHOWN ON CONTACT CARD</p>
-            </div>
-          ) : (
-            <FormField label="Phone" value={form.phone} onChange={set('phone')} type="tel" />
-          )}
+          <div className="space-y-2">
+            {phones.map((phone, i) => (
+              <div key={i} className="flex items-center gap-1.5">
+                <input
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => {
+                    const updated = [...phones];
+                    updated[i] = e.target.value;
+                    setPhones(updated);
+                  }}
+                  placeholder={i === 0 ? 'Primary phone' : 'Additional phone'}
+                  className="flex-1 jarvis-input hud-clip-sm px-3 py-2 text-sm font-mono"
+                />
+                {phones.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => setPhones(phones.filter((_, j) => j !== i))}
+                    className="p-1.5 text-red-500/50 hover:text-red-400 transition-colors"
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                )}
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={() => setPhones([...phones, ''])}
+              className="flex items-center gap-1.5 text-[9px] font-mono text-jarvis-blue/50 hover:text-jarvis-blue/80 transition-colors"
+            >
+              <Plus size={10} /> Add phone
+            </button>
+            {phones.length > 1 && (
+              <p className="text-[8px] text-gray-600 font-mono tracking-wider">FIRST NUMBER IS PRIMARY</p>
+            )}
+          </div>
         </FieldGroup>
 
-        {/* Default Email selector */}
+        {/* Email addresses (add/remove) */}
         <FieldGroup label="EMAIL" icon={<Mail size={10} />}>
-          {allEmails.length > 1 ? (
-            <div className="space-y-1.5">
-              <select
-                value={form.email}
-                onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))}
-                className="w-full jarvis-input hud-clip-sm px-3 py-2 text-sm font-mono bg-transparent appearance-none"
-              >
-                {allEmails.map((em) => (
-                  <option key={em.value} value={em.value}>{em.label}</option>
-                ))}
-              </select>
-              <p className="text-[8px] text-gray-600 font-mono tracking-wider">DEFAULT EMAIL — SHOWN ON CONTACT CARD</p>
-            </div>
-          ) : (
-            <FormField label="Email" value={form.email} onChange={set('email')} type="email" />
-          )}
+          <div className="space-y-2">
+            {emails.map((email, i) => (
+              <div key={i} className="flex items-center gap-1.5">
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => {
+                    const updated = [...emails];
+                    updated[i] = e.target.value;
+                    setEmails(updated);
+                  }}
+                  placeholder={i === 0 ? 'Primary email' : 'Additional email'}
+                  className="flex-1 jarvis-input hud-clip-sm px-3 py-2 text-sm font-mono"
+                />
+                {emails.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => setEmails(emails.filter((_, j) => j !== i))}
+                    className="p-1.5 text-red-500/50 hover:text-red-400 transition-colors"
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                )}
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={() => setEmails([...emails, ''])}
+              className="flex items-center gap-1.5 text-[9px] font-mono text-jarvis-blue/50 hover:text-jarvis-blue/80 transition-colors"
+            >
+              <Plus size={10} /> Add email
+            </button>
+            {emails.length > 1 && (
+              <p className="text-[8px] text-gray-600 font-mono tracking-wider">FIRST EMAIL IS PRIMARY</p>
+            )}
+          </div>
         </FieldGroup>
 
         {/* Organization */}

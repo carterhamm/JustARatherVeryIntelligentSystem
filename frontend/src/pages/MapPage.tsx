@@ -307,11 +307,11 @@ function createAnnotationElement(contact: Contact, count?: number): HTMLDivEleme
     badge.style.cssText = `
       position: absolute; top: -4px; right: -4px;
       min-width: 18px; height: 18px;
-      background: #f0a500; border: 2px solid rgba(10, 14, 23, 0.95);
+      background: #00d4ff; border: 2px solid rgba(10, 14, 23, 0.95);
       border-radius: 9px; display: flex; align-items: center; justify-content: center;
       font-family: 'JetBrains Mono', monospace; font-size: 9px; font-weight: 700;
       color: #0A0E17; padding: 0 4px;
-      box-shadow: 0 0 8px rgba(240, 165, 0, 0.4);
+      box-shadow: 0 0 8px rgba(0, 212, 255, 0.4);
       z-index: 2;
     `;
     badge.textContent = String(count);
@@ -521,7 +521,7 @@ function LookAroundPanel({
           });
           setTimeout(() => {
             if (!settled) { settled = true; la.destroy(); resolve(false); }
-          }, 2000);
+          }, 4000);
         });
       };
 
@@ -1161,6 +1161,8 @@ export default function MapPage() {
   const annotationJustSelectedRef = useRef(false);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const mapSearchObjRef = useRef<any>(null);
+  const selectedPlaceAnnotationRef = useRef<any>(null);
+  const userLocationRef = useRef<{ lat: number; lng: number } | null>(null);
 
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [geocodedContacts, setGeocodedContacts] = useState<GeocodedContact[]>([]);
@@ -1190,11 +1192,23 @@ export default function MapPage() {
 
     (async () => {
       try {
+        // Fetch user's latest location for initial center
+        let centerLat = 38.5;
+        let centerLng = -98.0;
+        try {
+          const loc = await api.get<{ source: string; latitude?: number; longitude?: number }>('/location/latest');
+          if (loc.latitude && loc.longitude && loc.source !== 'none') {
+            centerLat = loc.latitude;
+            centerLng = loc.longitude;
+            userLocationRef.current = { lat: centerLat, lng: centerLng };
+          }
+        } catch { /* no location data — use central US */ }
+
         const mk = await loadMapKit();
         if (cancelled || !mapContainerRef.current) return;
 
         const map = new mk.Map(mapContainerRef.current, {
-          center: new mk.Coordinate(38.5, -98.0), // Central US default
+          center: new mk.Coordinate(centerLat, centerLng),
           mapType: mk.Map.MapTypes.MutedStandard,
           colorScheme: mk.Map.ColorSchemes.Dark,
           showsCompass: mk.FeatureVisibility.Hidden,
@@ -1671,16 +1685,51 @@ export default function MapPage() {
     };
   }, [mapSearchQuery]);
 
+  // ---- Add/remove native MapKit pin for selected place ----
+  useEffect(() => {
+    const map = mapRef.current;
+    const mk = window.mapkit;
+    if (!map || !mk) return;
+
+    // Remove previous selected place annotation
+    if (selectedPlaceAnnotationRef.current) {
+      map.removeAnnotation(selectedPlaceAnnotationRef.current);
+      selectedPlaceAnnotationRef.current = null;
+    }
+
+    if (!selectedPlace) return;
+
+    // Add a marker annotation (native Apple Maps pin)
+    const coord = new mk.Coordinate(selectedPlace.latitude, selectedPlace.longitude);
+    const annotation = new mk.MarkerAnnotation(coord, {
+      title: selectedPlace.name,
+      subtitle: selectedPlace.formattedAddress || '',
+      color: '#00d4ff',
+      glyphColor: '#0A0E17',
+    });
+
+    map.addAnnotation(annotation);
+    selectedPlaceAnnotationRef.current = annotation;
+
+    return () => {
+      if (selectedPlaceAnnotationRef.current && mapRef.current) {
+        mapRef.current.removeAnnotation(selectedPlaceAnnotationRef.current);
+        selectedPlaceAnnotationRef.current = null;
+      }
+    };
+  }, [selectedPlace]);
+
   // ---- Helper: region from contacts ----
   function regionFromContacts(contacts: GeocodedContact[]) {
     const mk = window.mapkit;
     // Filter out (0,0) region — failed geocodes that would drag view to Africa
     const valid = contacts.filter((c) => !(Math.abs(c.lat) < 1 && Math.abs(c.lng) < 1));
     if (valid.length === 0) {
-      // Default: central US (Kansas) — never Africa
+      // Use user's last known location, or central US fallback — never Africa
+      const ul = userLocationRef.current;
       return new mk.CoordinateRegion(
-        new mk.Coordinate(38.5, -98.0),
-        new mk.CoordinateSpan(30, 50),
+        new mk.Coordinate(ul?.lat ?? 38.5, ul?.lng ?? -98.0),
+        new mk.CoordinateSpan(ul ? 0.5 : 30, ul ? 0.5 : 50),
       );
     }
 
@@ -2105,7 +2154,7 @@ export default function MapPage() {
         {leftPanelView === 'rows' ? (
           <>
             {/* ---- Contacts Row ---- */}
-            <div className="p-3 pb-2">
+            <div className="px-3 pt-4 pb-2">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
                   <span className="text-[9px] font-mono tracking-[0.2em] text-jarvis-blue/50 uppercase">
