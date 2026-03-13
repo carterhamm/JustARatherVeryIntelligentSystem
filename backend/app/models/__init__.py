@@ -9,6 +9,7 @@ from app.models.contact import Contact
 from app.models.health import HealthSample
 from app.models.focus_session import FocusSession
 from app.models.habit import Habit, HabitLog
+from app.models.landmark import Landmark
 
 __all__ = [
     "Base",
@@ -24,4 +25,5 @@ __all__ = [
     "FocusSession",
     "Habit",
     "HabitLog",
+    "Landmark",
 ]

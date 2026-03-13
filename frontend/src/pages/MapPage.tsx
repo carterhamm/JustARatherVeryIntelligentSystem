@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { api } from '@/services/api';
 import {
@@ -17,6 +18,13 @@ import {
   ChevronUp,
   Crosshair,
   Layers,
+  Plus,
+  Trash2,
+  Edit3,
+  Navigation,
+  Landmark as LandmarkIcon,
+  Copy,
+  ExternalLink,
 } from 'lucide-react';
 import clsx from 'clsx';
 
@@ -66,6 +74,26 @@ interface Contact {
 }
 
 interface GeocodedContact extends Contact {
+  lat: number;
+  lng: number;
+}
+
+interface LandmarkData {
+  id: string;
+  name: string;
+  description?: string | null;
+  latitude: number;
+  longitude: number;
+  address?: string | null;
+  apple_maps_url?: string | null;
+  icon?: string | null;
+  color?: string | null;
+  created_at: string;
+}
+
+interface ContextMenuState {
+  x: number;
+  y: number;
   lat: number;
   lng: number;
 }
@@ -132,11 +160,15 @@ function getInitials(contact: Contact): string {
 
 function getPhotoDataUri(contact: Contact): string | null {
   if (!contact.photo) return null;
+  // Skip very short strings (likely empty/placeholder)
+  if (contact.photo.length < 20) return null;
   const mime = contact.photo_content_type || 'image/jpeg';
   if (contact.photo.startsWith('data:') || contact.photo.startsWith('http')) {
     return contact.photo;
   }
-  return `data:${mime};base64,${contact.photo}`;
+  // Ensure clean base64 (no whitespace/newlines)
+  const cleanBase64 = contact.photo.replace(/\s/g, '');
+  return `data:${mime};base64,${cleanBase64}`;
 }
 
 function getDisplayAddress(contact: Contact): string {
@@ -156,6 +188,19 @@ function getShortLocation(contact: Contact): string {
     return parts.slice(-2).join(', ');
   }
   return '';
+}
+
+/** Group contacts by approximate location (within ~200m) */
+function groupByLocation(contacts: GeocodedContact[]): Map<string, GeocodedContact[]> {
+  const groups = new Map<string, GeocodedContact[]>();
+  const precision = 3; // ~111m precision
+  contacts.forEach((c) => {
+    const key = `${c.lat.toFixed(precision)},${c.lng.toFixed(precision)}`;
+    const existing = groups.get(key) || [];
+    existing.push(c);
+    groups.set(key, existing);
+  });
+  return groups;
 }
 
 // ---------------------------------------------------------------------------
@@ -199,7 +244,7 @@ function loadMapKit(): Promise<any> {
 // Create custom annotation element for a contact
 // ---------------------------------------------------------------------------
 
-function createAnnotationElement(contact: Contact): HTMLDivElement {
+function createAnnotationElement(contact: Contact, count?: number): HTMLDivElement {
   const photo = getPhotoDataUri(contact);
   const initials = getInitials(contact);
   const el = document.createElement('div');
@@ -219,17 +264,8 @@ function createAnnotationElement(contact: Contact): HTMLDivElement {
         <img src="${photo}" alt="" style="
           width: 100%; height: 100%; object-fit: cover;
           border-radius: 50%;
-        " />
+        " onerror="this.style.display='none';this.parentElement.innerHTML='<div style=\\'display:flex;align-items:center;justify-content:center;width:100%;height:100%;font-family:monospace;font-size:12px;font-weight:600;color:#00d4ff;\\'>${initials}</div>';" />
       </div>
-      <div style="
-        width: 12px; height: 12px;
-        background: rgba(0, 212, 255, 0.8);
-        border: 2px solid rgba(10, 14, 23, 0.9);
-        border-radius: 50%;
-        position: absolute;
-        bottom: -2px; right: -2px;
-        box-shadow: 0 0 6px rgba(0, 212, 255, 0.5);
-      "></div>
     `;
   } else {
     el.innerHTML = `
@@ -245,6 +281,23 @@ function createAnnotationElement(contact: Contact): HTMLDivElement {
         transition: all 0.25s ease;
       ">${initials}</div>
     `;
+  }
+
+  // Add count badge for multiple people at same location
+  if (count && count > 1) {
+    const badge = document.createElement('div');
+    badge.style.cssText = `
+      position: absolute; top: -4px; right: -4px;
+      min-width: 18px; height: 18px;
+      background: #f0a500; border: 2px solid rgba(10, 14, 23, 0.95);
+      border-radius: 9px; display: flex; align-items: center; justify-content: center;
+      font-family: 'JetBrains Mono', monospace; font-size: 9px; font-weight: 700;
+      color: #0A0E17; padding: 0 4px;
+      box-shadow: 0 0 8px rgba(240, 165, 0, 0.4);
+      z-index: 2;
+    `;
+    badge.textContent = String(count);
+    el.appendChild(badge);
   }
 
   // Hover effects
@@ -271,6 +324,52 @@ function createAnnotationElement(contact: Contact): HTMLDivElement {
 }
 
 // ---------------------------------------------------------------------------
+// Create landmark annotation element (gold/orange style)
+// ---------------------------------------------------------------------------
+
+function createLandmarkAnnotation(landmark: LandmarkData): HTMLDivElement {
+  const color = landmark.color || '#f0a500';
+  const el = document.createElement('div');
+  el.style.cursor = 'pointer';
+  el.style.position = 'relative';
+
+  el.innerHTML = `
+    <div style="
+      width: 36px; height: 36px; border-radius: 50%;
+      background: rgba(20, 15, 5, 0.9);
+      border: 2px solid ${color}99;
+      box-shadow: 0 0 14px ${color}40, 0 4px 12px rgba(0,0,0,0.5);
+      display: flex; align-items: center; justify-content: center;
+      transition: all 0.25s ease;
+    ">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+        <circle cx="12" cy="10" r="3"/>
+      </svg>
+    </div>
+  `;
+
+  el.addEventListener('mouseenter', () => {
+    const inner = el.firstElementChild as HTMLElement;
+    if (inner) {
+      inner.style.borderColor = color;
+      inner.style.boxShadow = `0 0 24px ${color}66, 0 4px 16px rgba(0,0,0,0.5)`;
+      inner.style.transform = 'scale(1.12)';
+    }
+  });
+  el.addEventListener('mouseleave', () => {
+    const inner = el.firstElementChild as HTMLElement;
+    if (inner) {
+      inner.style.borderColor = `${color}99`;
+      inner.style.boxShadow = `0 0 14px ${color}40, 0 4px 12px rgba(0,0,0,0.5)`;
+      inner.style.transform = 'scale(1)';
+    }
+  });
+
+  return el;
+}
+
+// ---------------------------------------------------------------------------
 // Create callout (popup) element for MapKit annotation
 // ---------------------------------------------------------------------------
 
@@ -286,7 +385,7 @@ function createCalloutElement(contact: Contact): HTMLDivElement {
   lines.push(`<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">`);
   if (photo) {
     lines.push(
-      `<img src="${photo}" alt="" style="width:36px;height:36px;border-radius:50%;object-fit:cover;border:1.5px solid rgba(0,212,255,0.4);flex-shrink:0;" />`,
+      `<img src="${photo}" alt="" style="width:36px;height:36px;border-radius:50%;object-fit:cover;border:1.5px solid rgba(0,212,255,0.4);flex-shrink:0;" onerror="this.style.display='none'" />`,
     );
   } else {
     lines.push(
@@ -402,7 +501,7 @@ function ContactCard({
           }}
         >
           {photo ? (
-            <img src={photo} alt="" className="w-full h-full object-cover rounded-full" />
+            <img src={photo} alt="" className="w-full h-full object-cover rounded-full" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
           ) : (
             <span className="text-[10px] font-mono font-semibold text-jarvis-blue">
               {getInitials(contact)}
@@ -524,6 +623,336 @@ function MapControls({
 }
 
 // ---------------------------------------------------------------------------
+// Context Menu (glassmorphic, WagevoCRM-inspired)
+// ---------------------------------------------------------------------------
+
+function MapContextMenu({
+  x,
+  y,
+  onAddLandmark,
+  onCopyCoords,
+  onOpenInAppleMaps,
+  onClose,
+}: {
+  x: number;
+  y: number;
+  onAddLandmark: () => void;
+  onCopyCoords: () => void;
+  onOpenInAppleMaps: () => void;
+  onClose: () => void;
+}) {
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        onClose();
+      }
+    };
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('mousedown', handleClick);
+    document.addEventListener('keydown', handleEsc);
+    return () => {
+      document.removeEventListener('mousedown', handleClick);
+      document.removeEventListener('keydown', handleEsc);
+    };
+  }, [onClose]);
+
+  // Auto-close after 5s of inactivity
+  useEffect(() => {
+    let timer = setTimeout(onClose, 5000);
+    const reset = () => {
+      clearTimeout(timer);
+      timer = setTimeout(onClose, 5000);
+    };
+    const el = menuRef.current;
+    el?.addEventListener('mousemove', reset);
+    return () => {
+      clearTimeout(timer);
+      el?.removeEventListener('mousemove', reset);
+    };
+  }, [onClose]);
+
+  const items = [
+    { icon: LandmarkIcon, label: 'Add Landmark', onClick: onAddLandmark, accent: false },
+    { icon: Copy, label: 'Copy Coordinates', onClick: onCopyCoords, accent: false },
+    { icon: ExternalLink, label: 'Open in Apple Maps', onClick: onOpenInAppleMaps, accent: false },
+  ];
+
+  return createPortal(
+    <div
+      ref={menuRef}
+      className="animate-fade-in"
+      style={{
+        position: 'fixed',
+        left: x,
+        top: y,
+        transform: 'translate(-50%, -50%)',
+        zIndex: 99999,
+        minWidth: 220,
+        background: 'linear-gradient(to bottom right, rgba(10, 10, 10, 0.75), rgba(10, 10, 10, 0.9))',
+        backdropFilter: 'blur(20px) saturate(180%)',
+        WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+        borderRadius: 16,
+        border: '1px solid rgba(0, 212, 255, 0.12)',
+        boxShadow: '0 10px 40px rgba(0,0,0,0.4), 0 0 20px rgba(0, 212, 255, 0.05)',
+        padding: '6px',
+        animation: 'contextMenuIn 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275) both',
+      }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      {items.map((item, i) => (
+        <button
+          key={i}
+          onClick={() => {
+            item.onClick();
+            onClose();
+          }}
+          className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-left transition-colors hover:bg-white/[0.06]"
+        >
+          <item.icon size={14} className="text-jarvis-blue/60 flex-shrink-0" />
+          <span className="text-[12px] font-medium text-gray-300">{item.label}</span>
+        </button>
+      ))}
+      <style>{`
+        @keyframes contextMenuIn {
+          from { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+          to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+        }
+      `}</style>
+    </div>,
+    document.body,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Landmark Form Modal
+// ---------------------------------------------------------------------------
+
+function LandmarkForm({
+  lat,
+  lng,
+  onSave,
+  onCancel,
+}: {
+  lat: number;
+  lng: number;
+  onSave: (data: { name: string; description: string; latitude: number; longitude: number; address: string; apple_maps_url: string }) => void;
+  onCancel: () => void;
+}) {
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [address, setAddress] = useState('');
+  const [appleMapsUrl, setAppleMapsUrl] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searching, setSearching] = useState(false);
+  const [finalLat, setFinalLat] = useState(lat);
+  const [finalLng, setFinalLng] = useState(lng);
+
+  // Reverse geocode the coordinates to get an address
+  useEffect(() => {
+    const mk = window.mapkit;
+    if (!mk) return;
+    const geocoder = new mk.Geocoder({ language: 'en' });
+    geocoder.reverseLookup(new mk.Coordinate(lat, lng), (error: any, data: any) => {
+      if (!error && data?.results?.length) {
+        const r = data.results[0];
+        const parts = [r.name, r.locality, r.administrativeArea, r.postCode].filter(Boolean);
+        setAddress(parts.join(', '));
+      }
+    });
+  }, [lat, lng]);
+
+  const handleSearch = async () => {
+    const query = searchQuery.trim();
+    if (!query) return;
+    setSearching(true);
+
+    // Check if it's an Apple Maps URL
+    if (query.includes('maps.apple.com') || query.includes('apple.com/maps')) {
+      try {
+        const url = new URL(query);
+        const ll = url.searchParams.get('ll');
+        if (ll) {
+          const [parsedLat, parsedLng] = ll.split(',').map(Number);
+          if (!isNaN(parsedLat) && !isNaN(parsedLng)) {
+            setFinalLat(parsedLat);
+            setFinalLng(parsedLng);
+            setAppleMapsUrl(query);
+            // Reverse geocode the new coords
+            const mk = window.mapkit;
+            if (mk) {
+              const geocoder = new mk.Geocoder({ language: 'en' });
+              geocoder.reverseLookup(new mk.Coordinate(parsedLat, parsedLng), (error: any, data: any) => {
+                if (!error && data?.results?.length) {
+                  const r = data.results[0];
+                  const parts = [r.name, r.locality, r.administrativeArea, r.postCode].filter(Boolean);
+                  setAddress(parts.join(', '));
+                }
+              });
+            }
+          }
+        }
+      } catch {
+        // not a valid URL, fall through to geocode
+      }
+      setSearching(false);
+      return;
+    }
+
+    // Regular search — geocode the query
+    const mk = window.mapkit;
+    if (!mk) { setSearching(false); return; }
+    const geocoder = new mk.Geocoder({ language: 'en' });
+    geocoder.lookup(query, (error: any, data: any) => {
+      if (!error && data?.results?.length) {
+        const r = data.results[0];
+        setFinalLat(r.coordinate.latitude);
+        setFinalLng(r.coordinate.longitude);
+        const parts = [r.name, r.locality, r.administrativeArea, r.postCode].filter(Boolean);
+        setAddress(parts.join(', '));
+      }
+      setSearching(false);
+    });
+  };
+
+  const handleSubmit = async () => {
+    if (!name.trim()) return;
+    setSaving(true);
+    onSave({
+      name: name.trim(),
+      description: description.trim(),
+      latitude: finalLat,
+      longitude: finalLng,
+      address: address.trim(),
+      apple_maps_url: appleMapsUrl.trim(),
+    });
+  };
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[99999] flex items-center justify-center"
+      style={{ background: 'rgba(0, 0, 0, 0.6)', backdropFilter: 'blur(4px)' }}
+      onClick={onCancel}
+    >
+      <div
+        className="animate-fade-in"
+        style={{
+          width: 400,
+          maxWidth: '90vw',
+          background: 'rgba(10, 14, 23, 0.97)',
+          border: '1px solid rgba(0, 212, 255, 0.12)',
+          borderRadius: 12,
+          boxShadow: '0 20px 60px rgba(0,0,0,0.6), 0 0 30px rgba(0, 212, 255, 0.05)',
+          backdropFilter: 'blur(24px)',
+          padding: '24px',
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center gap-2 mb-5">
+          <LandmarkIcon size={16} className="text-jarvis-gold" />
+          <span className="text-[11px] font-mono font-semibold tracking-[0.15em] text-jarvis-gold uppercase">
+            New Landmark
+          </span>
+        </div>
+
+        {/* Search / Apple Maps URL */}
+        <div className="mb-4">
+          <label className="text-[9px] font-mono tracking-wider text-gray-500 uppercase mb-1.5 block">
+            Search Location or Paste Apple Maps URL
+          </label>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+              placeholder="e.g. Central Park or https://maps.apple.com/?ll=..."
+              className="flex-1 py-2 px-3 text-xs font-mono bg-transparent border border-white/[0.06] rounded text-gray-300 placeholder-gray-600 focus:border-jarvis-blue/25 transition-colors"
+            />
+            <button
+              onClick={handleSearch}
+              disabled={searching}
+              className="px-3 py-2 text-[10px] font-mono bg-jarvis-blue/10 border border-jarvis-blue/20 rounded text-jarvis-blue hover:bg-jarvis-blue/20 transition-colors disabled:opacity-50"
+            >
+              {searching ? <Loader size={12} className="animate-spin" /> : <Search size={12} />}
+            </button>
+          </div>
+        </div>
+
+        {/* Name */}
+        <div className="mb-3">
+          <label className="text-[9px] font-mono tracking-wider text-gray-500 uppercase mb-1.5 block">
+            Title *
+          </label>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g. Childhood Home, Favorite Coffee Shop"
+            className="w-full py-2 px-3 text-xs font-mono bg-transparent border border-white/[0.06] rounded text-gray-300 placeholder-gray-600 focus:border-jarvis-gold/25 transition-colors"
+            autoFocus
+          />
+        </div>
+
+        {/* Description */}
+        <div className="mb-3">
+          <label className="text-[9px] font-mono tracking-wider text-gray-500 uppercase mb-1.5 block">
+            Description / Context
+          </label>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Tell JARVIS about this place... memories, significance, details"
+            rows={3}
+            className="w-full py-2 px-3 text-xs font-mono bg-transparent border border-white/[0.06] rounded text-gray-300 placeholder-gray-600 focus:border-jarvis-gold/25 transition-colors resize-none"
+          />
+        </div>
+
+        {/* Address (auto-filled) */}
+        <div className="mb-4">
+          <label className="text-[9px] font-mono tracking-wider text-gray-500 uppercase mb-1.5 block">
+            Address
+          </label>
+          <input
+            type="text"
+            value={address}
+            onChange={(e) => setAddress(e.target.value)}
+            placeholder="Auto-detected from coordinates..."
+            className="w-full py-2 px-3 text-xs font-mono bg-transparent border border-white/[0.06] rounded text-gray-400 placeholder-gray-600 transition-colors"
+          />
+          <p className="text-[8px] font-mono text-gray-700 mt-1">
+            {finalLat.toFixed(6)}, {finalLng.toFixed(6)}
+          </p>
+        </div>
+
+        {/* Actions */}
+        <div className="flex justify-end gap-2">
+          <button
+            onClick={onCancel}
+            className="px-4 py-2 text-[11px] font-mono text-gray-500 hover:text-gray-300 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={!name.trim() || saving}
+            className="px-5 py-2 text-[11px] font-mono font-semibold bg-jarvis-gold/20 border border-jarvis-gold/30 rounded text-jarvis-gold hover:bg-jarvis-gold/30 transition-colors disabled:opacity-40"
+          >
+            {saving ? 'Saving...' : 'Save Landmark'}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
@@ -532,10 +961,12 @@ export default function MapPage() {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null); // mapkit.Map
   const annotationsRef = useRef<any[]>([]);
+  const landmarkAnnotationsRef = useRef<any[]>([]);
   const calloutOverlayRef = useRef<HTMLDivElement | null>(null);
 
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [geocodedContacts, setGeocodedContacts] = useState<GeocodedContact[]>([]);
+  const [landmarks, setLandmarks] = useState<LandmarkData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [mapReady, setMapReady] = useState(false);
   const [geocodeProgress, setGeocodeProgress] = useState({ done: 0, total: 0 });
@@ -544,6 +975,8 @@ export default function MapPage() {
   const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
   const [expandedContactId, setExpandedContactId] = useState<string | null>(null);
   const [gridVisible, setGridVisible] = useState(false);
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const [landmarkForm, setLandmarkForm] = useState<{ lat: number; lng: number } | null>(null);
 
   // ---- Load MapKit JS + initialize map ----
   useEffect(() => {
@@ -583,31 +1016,58 @@ export default function MapPage() {
         mapRef.current = null;
       }
       annotationsRef.current = [];
+      landmarkAnnotationsRef.current = [];
     };
   }, []);
 
-  // ---- Fetch contacts ----
+  // ---- Right-click context menu handler ----
+  useEffect(() => {
+    const container = mapContainerRef.current;
+    if (!container || !mapReady) return;
+
+    const handler = (e: MouseEvent) => {
+      e.preventDefault();
+      const map = mapRef.current;
+      const mk = window.mapkit;
+      if (!map || !mk) return;
+
+      const rect = container.getBoundingClientRect();
+      const point = new DOMPoint(e.clientX - rect.left, e.clientY - rect.top);
+      const coord = map.convertPointOnPageToCoordinate(new DOMPoint(e.clientX, e.clientY));
+
+      setContextMenu({
+        x: e.clientX,
+        y: e.clientY,
+        lat: coord.latitude,
+        lng: coord.longitude,
+      });
+    };
+
+    container.addEventListener('contextmenu', handler);
+    return () => container.removeEventListener('contextmenu', handler);
+  }, [mapReady]);
+
+  // ---- Fetch contacts + landmarks ----
   useEffect(() => {
     let cancelled = false;
     (async () => {
       setIsLoading(true);
       try {
-        const result = await api.get<Contact[]>('/contacts', { offset: 0, limit: 200 });
-        if (!cancelled) setContacts(result);
-      } catch {
-        try {
-          const result = await api.get<Contact[]>('/contacts/search', { q: '' });
-          if (!cancelled) setContacts(result);
-        } catch {
-          // silently fail
+        const [contactResult, landmarkResult] = await Promise.allSettled([
+          api.get<Contact[]>('/contacts', { offset: 0, limit: 200 }),
+          api.get<LandmarkData[]>('/landmarks'),
+        ]);
+        if (!cancelled) {
+          if (contactResult.status === 'fulfilled') setContacts(contactResult.value);
+          if (landmarkResult.status === 'fulfilled') setLandmarks(landmarkResult.value);
         }
+      } catch {
+        // silently fail
       } finally {
         if (!cancelled) setIsLoading(false);
       }
     })();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, []);
 
   // ---- Geocode contacts with addresses (waits for MapKit) ----
@@ -639,18 +1099,16 @@ export default function MapPage() {
       }
     })();
 
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [contacts, mapReady]);
 
-  // ---- Place annotations when geocoded contacts update ----
+  // ---- Place contact annotations when geocoded contacts update ----
   useEffect(() => {
     const map = mapRef.current;
     const mk = window.mapkit;
     if (!map || !mk || !mapReady) return;
 
-    // Remove existing annotations
+    // Remove existing contact annotations
     if (annotationsRef.current.length > 0) {
       map.removeAnnotations(annotationsRef.current);
       annotationsRef.current = [];
@@ -662,16 +1120,25 @@ export default function MapPage() {
       calloutOverlayRef.current = null;
     }
 
+    // Group contacts by approximate location for badge counts
+    const locationGroups = groupByLocation(geocodedContacts);
+    const countByKey = new Map<string, number>();
+    locationGroups.forEach((group, key) => {
+      countByKey.set(key, group.length);
+    });
+
     const newAnnotations: any[] = [];
 
     geocodedContacts.forEach((c) => {
       const coord = new mk.Coordinate(c.lat, c.lng);
+      const locKey = `${c.lat.toFixed(3)},${c.lng.toFixed(3)}`;
+      const count = countByKey.get(locKey) || 1;
 
-      const annotation = new mk.Annotation(coord, (coordinate: any) => {
-        return createAnnotationElement(c);
+      const annotation = new mk.Annotation(coord, () => {
+        return createAnnotationElement(c, count);
       }, {
         anchorOffset: new DOMPoint(0, -20),
-        calloutEnabled: false, // We handle callouts ourselves
+        calloutEnabled: false,
         data: { contactId: c.id },
       });
 
@@ -742,6 +1209,114 @@ export default function MapPage() {
     }
   }, [geocodedContacts, mapReady]);
 
+  // ---- Place landmark annotations ----
+  useEffect(() => {
+    const map = mapRef.current;
+    const mk = window.mapkit;
+    if (!map || !mk || !mapReady) return;
+
+    // Remove existing landmark annotations
+    if (landmarkAnnotationsRef.current.length > 0) {
+      map.removeAnnotations(landmarkAnnotationsRef.current);
+      landmarkAnnotationsRef.current = [];
+    }
+
+    const newAnnotations: any[] = [];
+
+    landmarks.forEach((lm) => {
+      const coord = new mk.Coordinate(lm.latitude, lm.longitude);
+
+      const annotation = new mk.Annotation(coord, () => {
+        return createLandmarkAnnotation(lm);
+      }, {
+        anchorOffset: new DOMPoint(0, -18),
+        calloutEnabled: false,
+        data: { landmarkId: lm.id },
+      });
+
+      // Click handler — show landmark callout
+      annotation.addEventListener('select', () => {
+        if (calloutOverlayRef.current) {
+          calloutOverlayRef.current.remove();
+          calloutOverlayRef.current = null;
+        }
+
+        const el = document.createElement('div');
+        const color = lm.color || '#f0a500';
+        el.style.cssText = `font-family:'JetBrains Mono','Fira Code',monospace;min-width:200px;max-width:300px;padding:14px 16px;background:rgba(10,14,23,0.95);border:1px solid ${color}22;border-radius:6px;box-shadow:0 0 24px ${color}10,0 12px 40px rgba(0,0,0,0.6);color:#e0e0e0;backdrop-filter:blur(20px);position:absolute;z-index:1000;pointer-events:auto;`;
+
+        let html = `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+          <span style="font-size:13px;font-weight:600;color:${color};letter-spacing:0.3px;">${lm.name}</span>
+        </div>`;
+        if (lm.description) {
+          html += `<div style="font-size:10px;color:#999;line-height:1.5;margin-bottom:6px;white-space:pre-wrap;">${lm.description}</div>`;
+        }
+        if (lm.address) {
+          html += `<div style="display:flex;align-items:flex-start;gap:6px;margin:4px 0;"><span style="color:${color}66;font-size:9px;margin-top:1px;">LOC</span><span style="color:#888;font-size:9px;line-height:1.4;">${lm.address}</span></div>`;
+        }
+
+        // Delete button
+        html += `<div style="margin-top:8px;padding-top:6px;border-top:1px solid rgba(255,255,255,0.04);display:flex;justify-content:flex-end;">
+          <button id="lm-delete-${lm.id}" style="font-family:monospace;font-size:9px;color:#ff4444;background:none;border:none;cursor:pointer;padding:2px 6px;">DELETE</button>
+        </div>`;
+
+        // Close button
+        const closeBtn = document.createElement('button');
+        closeBtn.innerHTML = '&times;';
+        closeBtn.style.cssText = `position:absolute;top:4px;right:8px;background:none;border:none;color:${color}66;font-size:18px;cursor:pointer;padding:4px;line-height:1;`;
+        closeBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          el.remove();
+          calloutOverlayRef.current = null;
+          map.selectedAnnotation = null;
+        });
+
+        el.innerHTML = html;
+        el.appendChild(closeBtn);
+
+        // Wire delete button
+        setTimeout(() => {
+          const delBtn = el.querySelector(`#lm-delete-${lm.id}`);
+          if (delBtn) {
+            delBtn.addEventListener('click', async () => {
+              try {
+                await api.delete(`/landmarks/${lm.id}`);
+                setLandmarks((prev) => prev.filter((l) => l.id !== lm.id));
+                el.remove();
+                calloutOverlayRef.current = null;
+              } catch (err) {
+                console.error('Failed to delete landmark:', err);
+              }
+            });
+          }
+        }, 0);
+
+        const mapContainer = mapContainerRef.current;
+        if (mapContainer) {
+          const point = map.convertCoordinateToPointOnPage(coord);
+          const rect = mapContainer.getBoundingClientRect();
+          el.style.left = `${point.x - rect.left - 140}px`;
+          el.style.top = `${point.y - rect.top - 180}px`;
+          mapContainer.appendChild(el);
+          calloutOverlayRef.current = el;
+        }
+      });
+
+      annotation.addEventListener('deselect', () => {
+        if (calloutOverlayRef.current) {
+          calloutOverlayRef.current.remove();
+          calloutOverlayRef.current = null;
+        }
+      });
+
+      newAnnotations.push(annotation);
+    });
+
+    map.addAnnotations(newAnnotations);
+    landmarkAnnotationsRef.current = newAnnotations;
+  }, [landmarks, mapReady]);
+
   // Helper: compute region from contacts
   function regionFromContacts(contacts: GeocodedContact[]) {
     const mk = window.mapkit;
@@ -762,10 +1337,17 @@ export default function MapPage() {
       if (c.lng < minLng) minLng = c.lng;
       if (c.lng > maxLng) maxLng = c.lng;
     });
+    // Also include landmarks in bounds
+    landmarks.forEach((lm) => {
+      if (lm.latitude < minLat) minLat = lm.latitude;
+      if (lm.latitude > maxLat) maxLat = lm.latitude;
+      if (lm.longitude < minLng) minLng = lm.longitude;
+      if (lm.longitude > maxLng) maxLng = lm.longitude;
+    });
 
     const centerLat = (minLat + maxLat) / 2;
     const centerLng = (minLng + maxLng) / 2;
-    const spanLat = Math.max(maxLat - minLat, 0.01) * 1.4; // 40% padding
+    const spanLat = Math.max(maxLat - minLat, 0.01) * 1.4;
     const spanLng = Math.max(maxLng - minLng, 0.01) * 1.4;
 
     return new mk.CoordinateRegion(
@@ -783,14 +1365,12 @@ export default function MapPage() {
 
       setSelectedContactId(contact.id);
 
-      // Animate to contact location
       const region = new mk.CoordinateRegion(
         new mk.Coordinate(contact.lat, contact.lng),
         new mk.CoordinateSpan(0.02, 0.02),
       );
       map.setRegionAnimated(region, true);
 
-      // Select the matching annotation
       const ann = annotationsRef.current.find((a) => a.data?.contactId === contact.id);
       if (ann) {
         map.selectedAnnotation = ann;
@@ -810,7 +1390,38 @@ export default function MapPage() {
       calloutOverlayRef.current.remove();
       calloutOverlayRef.current = null;
     }
-  }, [geocodedContacts]);
+  }, [geocodedContacts, landmarks]);
+
+  // ---- Save landmark ----
+  const saveLandmark = useCallback(async (data: { name: string; description: string; latitude: number; longitude: number; address: string; apple_maps_url: string }) => {
+    try {
+      const result = await api.post<LandmarkData>('/landmarks', data);
+      setLandmarks((prev) => [...prev, result]);
+      setLandmarkForm(null);
+    } catch (err) {
+      console.error('Failed to save landmark:', err);
+      setLandmarkForm(null);
+    }
+  }, []);
+
+  // ---- Context menu actions ----
+  const handleAddLandmark = useCallback(() => {
+    if (contextMenu) {
+      setLandmarkForm({ lat: contextMenu.lat, lng: contextMenu.lng });
+    }
+  }, [contextMenu]);
+
+  const handleCopyCoords = useCallback(() => {
+    if (contextMenu) {
+      navigator.clipboard.writeText(`${contextMenu.lat.toFixed(6)}, ${contextMenu.lng.toFixed(6)}`);
+    }
+  }, [contextMenu]);
+
+  const handleOpenInAppleMaps = useCallback(() => {
+    if (contextMenu) {
+      window.open(`https://maps.apple.com/?ll=${contextMenu.lat},${contextMenu.lng}&z=15`, '_blank');
+    }
+  }, [contextMenu]);
 
   // ---- Filtered contacts for sidebar ----
   const filteredContacts = useMemo(() => {
@@ -888,6 +1499,11 @@ export default function MapPage() {
             >
               Contact Atlas
             </span>
+            {landmarks.length > 0 && (
+              <span className="text-[8px] font-mono text-jarvis-gold/50 tracking-wider">
+                {landmarks.length} LANDMARK{landmarks.length !== 1 ? 'S' : ''}
+              </span>
+            )}
           </div>
 
           <button
@@ -965,6 +1581,28 @@ export default function MapPage() {
         onToggleGrid={() => setGridVisible((p) => !p)}
         gridVisible={gridVisible}
       />
+
+      {/* -- Context Menu -- */}
+      {contextMenu && (
+        <MapContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          onAddLandmark={handleAddLandmark}
+          onCopyCoords={handleCopyCoords}
+          onOpenInAppleMaps={handleOpenInAppleMaps}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
+
+      {/* -- Landmark Form -- */}
+      {landmarkForm && (
+        <LandmarkForm
+          lat={landmarkForm.lat}
+          lng={landmarkForm.lng}
+          onSave={saveLandmark}
+          onCancel={() => setLandmarkForm(null)}
+        />
+      )}
 
       {/* -- Sidebar -- */}
       <div
@@ -1080,6 +1718,45 @@ export default function MapPage() {
             </div>
           )}
 
+          {/* Landmarks section */}
+          {landmarks.length > 0 && !searchQuery && !isLoading && (
+            <div className="px-4 py-4 border-t border-white/[0.04]">
+              <div className="flex items-center gap-2 mb-2">
+                <LandmarkIcon size={11} className="text-jarvis-gold/60" />
+                <p className="text-[8px] font-mono tracking-wider text-jarvis-gold/50 uppercase">{landmarks.length} LANDMARKS</p>
+              </div>
+              <div className="space-y-1">
+                {landmarks.map((lm) => (
+                  <button
+                    key={lm.id}
+                    onClick={() => {
+                      const map = mapRef.current;
+                      const mk = window.mapkit;
+                      if (!map || !mk) return;
+                      const region = new mk.CoordinateRegion(
+                        new mk.Coordinate(lm.latitude, lm.longitude),
+                        new mk.CoordinateSpan(0.01, 0.01),
+                      );
+                      map.setRegionAnimated(region, true);
+                      const ann = landmarkAnnotationsRef.current.find((a) => a.data?.landmarkId === lm.id);
+                      if (ann) map.selectedAnnotation = ann;
+                    }}
+                    className="w-full text-left px-3 py-2 rounded hover:bg-white/[0.03] transition-colors flex items-center gap-2"
+                  >
+                    <div
+                      className="w-2 h-2 rounded-full flex-shrink-0"
+                      style={{ background: lm.color || '#f0a500', boxShadow: `0 0 4px ${lm.color || '#f0a500'}44` }}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[11px] text-gray-300 truncate">{lm.name}</p>
+                      {lm.address && <p className="text-[9px] text-gray-600 truncate font-mono">{lm.address}</p>}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {contactsWithoutAddress.length > 0 && !searchQuery && !isLoading && (
             <div className="px-4 py-4 border-t border-white/[0.04]">
               <p className="hud-label mb-2">{contactsWithoutAddress.length} UNMAPPED</p>
@@ -1098,6 +1775,7 @@ export default function MapPage() {
                           src={photo}
                           alt=""
                           className="w-3.5 h-3.5 rounded-full object-cover"
+                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                         />
                       ) : null}
                       <span className="text-[9px] font-mono text-gray-600">
@@ -1121,7 +1799,7 @@ export default function MapPage() {
             <span className="text-[7px] font-mono tracking-[0.15em] text-jarvis-blue/15">
               STARK.INDUSTRIES//ATLAS
             </span>
-            <span className="text-[7px] font-mono tracking-[0.15em] text-gray-800">v3.0</span>
+            <span className="text-[7px] font-mono tracking-[0.15em] text-gray-800">v3.1</span>
           </div>
         </div>
       </div>

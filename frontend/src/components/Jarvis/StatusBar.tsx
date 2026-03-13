@@ -137,13 +137,17 @@ export default function StatusBar() {
 
         <div className="w-px h-4 bg-white/[0.06] hidden sm:block" />
 
-        {/* Activity indicator */}
-        <div className="hidden sm:flex items-center gap-1.5">
+        {/* Activity indicator — click to open diagnostics */}
+        <button
+          onClick={() => window.dispatchEvent(new CustomEvent('jarvis-diagnostics-toggle'))}
+          className="hidden sm:flex items-center gap-1.5 hover:opacity-80 transition-opacity cursor-pointer"
+          title="Open Diagnostics"
+        >
           <MiniSpectrum active={activity > 0.3} />
           <span className="text-[9px] font-mono text-jarvis-blue/40 tabular-nums">
             {Math.round(activity * 100)}%
           </span>
-        </div>
+        </button>
 
         {/* Security badge */}
         <div className="hidden sm:flex items-center gap-1">

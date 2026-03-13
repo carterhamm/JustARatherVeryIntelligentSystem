@@ -1,11 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
 import {
   MessageSquare,
-  Cpu,
   Volume2,
   VolumeX,
   Brain,
-  Download,
   Settings,
   Activity,
   LayoutGrid,
@@ -152,17 +150,11 @@ export default function CommandDock() {
           onClick={() => dispatch('jarvis-sessions-toggle')}
         />
         <DockIcon
-          icon={Cpu}
-          label="Model"
-          index={1}
-          onClick={() => dispatch('jarvis-model-toggle')}
-        />
-        <DockIcon
           icon={voiceEnabled ? Volume2 : VolumeX}
           label="Voice"
           active={voiceEnabled}
           accent="#f0a500"
-          index={2}
+          index={1}
           onClick={toggleVoice}
         />
 
@@ -174,32 +166,26 @@ export default function CommandDock() {
           label="Diagnostics"
           active={isThinking}
           accent="#ffbf00"
-          index={3}
+          index={2}
           onClick={() => dispatch('jarvis-diagnostics-toggle')}
         />
         <DockIcon
           icon={LayoutGrid}
           label="Widgets"
-          index={4}
+          index={3}
           onClick={() => dispatch('jarvis-widgets-toggle')}
+        />
+        <DockIcon
+          icon={Users}
+          label="Contacts"
+          index={4}
+          onClick={() => dispatch('jarvis-contacts-toggle')}
         />
         <DockIcon
           icon={Brain}
           label="Knowledge"
           index={5}
           onClick={() => dispatch('jarvis-knowledge-toggle')}
-        />
-        <DockIcon
-          icon={Users}
-          label="Contacts"
-          index={6}
-          onClick={() => dispatch('jarvis-contacts-toggle')}
-        />
-        <DockIcon
-          icon={Download}
-          label="Import"
-          index={7}
-          onClick={() => dispatch('jarvis-import-toggle')}
         />
 
         {/* Divider */}
@@ -208,13 +194,13 @@ export default function CommandDock() {
         <DockIcon
           icon={MapPin}
           label="Map"
-          index={8}
+          index={6}
           onClick={() => navigate('/map')}
         />
         <DockIcon
           icon={Monitor}
           label="Remote Desktop"
-          index={9}
+          index={7}
           onClick={() => window.open('/vnc/mac-mini', '_blank')}
         />
 
@@ -224,7 +210,7 @@ export default function CommandDock() {
         <DockIcon
           icon={Settings}
           label="Settings"
-          index={10}
+          index={8}
           onClick={() => dispatch('jarvis-settings-toggle')}
         />
       </div>
