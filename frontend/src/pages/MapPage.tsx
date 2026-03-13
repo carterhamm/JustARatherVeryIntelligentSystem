@@ -791,6 +791,7 @@ function LandmarkForm({
   lng,
   initialName,
   initialAddress,
+  initialAppleMapsUrl,
   onSave,
   onCancel,
 }: {
@@ -798,13 +799,14 @@ function LandmarkForm({
   lng: number;
   initialName?: string;
   initialAddress?: string;
+  initialAppleMapsUrl?: string;
   onSave: (data: { name: string; description: string; latitude: number; longitude: number; address: string; apple_maps_url: string }) => void;
   onCancel: () => void;
 }) {
   const [name, setName] = useState(initialName || '');
   const [description, setDescription] = useState('');
   const [address, setAddress] = useState(initialAddress || '');
-  const [appleMapsUrl, setAppleMapsUrl] = useState('');
+  const [appleMapsUrl, setAppleMapsUrl] = useState(initialAppleMapsUrl || '');
   const [saving, setSaving] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searching, setSearching] = useState(false);
@@ -1174,7 +1176,7 @@ export default function MapPage() {
   const [expandedContactId, setExpandedContactId] = useState<string | null>(null);
   const [gridVisible, setGridVisible] = useState(false);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
-  const [landmarkForm, setLandmarkForm] = useState<{ lat: number; lng: number; initialName?: string; initialAddress?: string } | null>(null);
+  const [landmarkForm, setLandmarkForm] = useState<{ lat: number; lng: number; initialName?: string; initialAddress?: string; initialAppleMapsUrl?: string } | null>(null);
   const [lookAroundCoords, setLookAroundCoords] = useState<{ lat: number; lng: number } | null>(null);
 
   // New state for redesign
@@ -1184,6 +1186,27 @@ export default function MapPage() {
   const [leftPanelView, setLeftPanelView] = useState<'rows' | 'contacts' | 'landmarks'>('rows');
   const [contactFilter, setContactFilter] = useState('');
 
+  // ---- Fetch user location (non-blocking, updates map center when ready) ----
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const loc = await api.get<{ source: string; latitude?: number; longitude?: number }>('/location/latest');
+        if (cancelled) return;
+        if (loc.latitude && loc.longitude && loc.source !== 'none') {
+          userLocationRef.current = { lat: loc.latitude, lng: loc.longitude };
+          // If map is already initialized, fly to user location (only on first load)
+          const map = mapRef.current;
+          const mk = window.mapkit;
+          if (map && mk && !initialFitDoneRef.current) {
+            map.setCenterAnimated(new mk.Coordinate(loc.latitude, loc.longitude), true);
+          }
+        }
+      } catch { /* no location data available */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   // ---- Load MapKit JS + initialize map ----
   useEffect(() => {
     if (!mapContainerRef.current) return;
@@ -1192,23 +1215,13 @@ export default function MapPage() {
 
     (async () => {
       try {
-        // Fetch user's latest location for initial center
-        let centerLat = 38.5;
-        let centerLng = -98.0;
-        try {
-          const loc = await api.get<{ source: string; latitude?: number; longitude?: number }>('/location/latest');
-          if (loc.latitude && loc.longitude && loc.source !== 'none') {
-            centerLat = loc.latitude;
-            centerLng = loc.longitude;
-            userLocationRef.current = { lat: centerLat, lng: centerLng };
-          }
-        } catch { /* no location data — use central US */ }
-
         const mk = await loadMapKit();
         if (cancelled || !mapContainerRef.current) return;
 
+        // Use cached user location if already fetched, otherwise central US
+        const ul = userLocationRef.current;
         const map = new mk.Map(mapContainerRef.current, {
-          center: new mk.Coordinate(centerLat, centerLng),
+          center: new mk.Coordinate(ul?.lat ?? 38.5, ul?.lng ?? -98.0),
           mapType: mk.Map.MapTypes.MutedStandard,
           colorScheme: mk.Map.ColorSchemes.Dark,
           showsCompass: mk.FeatureVisibility.Hidden,
@@ -1693,27 +1706,43 @@ export default function MapPage() {
 
     // Remove previous selected place annotation
     if (selectedPlaceAnnotationRef.current) {
-      map.removeAnnotation(selectedPlaceAnnotationRef.current);
+      try { map.removeAnnotation(selectedPlaceAnnotationRef.current); } catch { /* already removed */ }
       selectedPlaceAnnotationRef.current = null;
     }
 
     if (!selectedPlace) return;
 
-    // Add a marker annotation (native Apple Maps pin)
-    const coord = new mk.Coordinate(selectedPlace.latitude, selectedPlace.longitude);
-    const annotation = new mk.MarkerAnnotation(coord, {
-      title: selectedPlace.name,
-      subtitle: selectedPlace.formattedAddress || '',
-      color: '#00d4ff',
-      glyphColor: '#0A0E17',
-    });
+    try {
+      const coord = new mk.Coordinate(selectedPlace.latitude, selectedPlace.longitude);
 
-    map.addAnnotation(annotation);
-    selectedPlaceAnnotationRef.current = annotation;
+      // Try MarkerAnnotation (native Apple Maps pin) first, fallback to custom
+      let annotation: any;
+      if (typeof mk.MarkerAnnotation === 'function') {
+        annotation = new mk.MarkerAnnotation(coord, {
+          title: selectedPlace.name,
+          subtitle: selectedPlace.formattedAddress || '',
+          color: '#00d4ff',
+          glyphColor: '#0A0E17',
+        });
+      } else {
+        // Fallback: custom annotation with a pin icon
+        const el = document.createElement('div');
+        el.style.cssText = 'width:28px;height:28px;background:#00d4ff;border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:2px solid #0A0E17;box-shadow:0 0 12px rgba(0,212,255,0.4);';
+        annotation = new mk.Annotation(coord, () => el, {
+          title: selectedPlace.name,
+          anchorOffset: new DOMPoint(0, -14),
+        });
+      }
+
+      map.addAnnotation(annotation);
+      selectedPlaceAnnotationRef.current = annotation;
+    } catch (err) {
+      console.warn('[Map] Failed to add place annotation:', err);
+    }
 
     return () => {
       if (selectedPlaceAnnotationRef.current && mapRef.current) {
-        mapRef.current.removeAnnotation(selectedPlaceAnnotationRef.current);
+        try { mapRef.current.removeAnnotation(selectedPlaceAnnotationRef.current); } catch { /* noop */ }
         selectedPlaceAnnotationRef.current = null;
       }
     };
@@ -2516,6 +2545,7 @@ export default function MapPage() {
                     lng: selectedPlace.longitude,
                     initialName: selectedPlace.name,
                     initialAddress: selectedPlace.formattedAddress,
+                    initialAppleMapsUrl: `https://maps.apple.com/?ll=${selectedPlace.latitude},${selectedPlace.longitude}&q=${encodeURIComponent(selectedPlace.name)}`,
                   });
                 }}
                 className="w-full py-2.5 flex items-center justify-center gap-2 text-[10px] font-mono font-semibold tracking-wider bg-jarvis-gold/10 border border-jarvis-gold/20 text-jarvis-gold hover:bg-jarvis-gold/20 transition-colors uppercase"
@@ -2568,6 +2598,7 @@ export default function MapPage() {
           lng={landmarkForm.lng}
           initialName={landmarkForm.initialName}
           initialAddress={landmarkForm.initialAddress}
+          initialAppleMapsUrl={landmarkForm.initialAppleMapsUrl}
           onSave={saveLandmark}
           onCancel={() => setLandmarkForm(null)}
         />
