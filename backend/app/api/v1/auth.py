@@ -96,9 +96,20 @@ async def register(
 
 
 @router.post("/login", response_model=AuthResponse)
-async def login(payload: UserLogin, db: AsyncSession = Depends(get_db)) -> AuthResponse:
+async def login(payload: UserLogin, request: Request, db: AsyncSession = Depends(get_db)) -> AuthResponse:
     """Authenticate with email and password, receive JWT tokens with user data."""
-    return await AuthService.login(db, payload.email, payload.password)
+    response = await AuthService.login(db, payload.email, payload.password)
+
+    # Track session (best-effort, don't block login if this fails)
+    try:
+        from app.api.v1.sessions import create_session_record
+        user = await AuthService.get_user_by_email(db, payload.email)
+        if user:
+            await create_session_record(db, user, request, "password")
+    except Exception as exc:
+        logger.warning("Failed to create session record: %s", exc)
+
+    return response
 
 
 @router.post("/refresh", response_model=Token)
@@ -186,6 +197,15 @@ async def passkey_login_complete(
                     logger.warning("Device trust token invalid/expired: %s", exc)
             totp_token = create_totp_pending_token(user.id)
             return {"needs_totp": True, "totp_token": totp_token}
+
+    # Track session for passkey login
+    if user:
+        try:
+            from app.api.v1.sessions import create_session_record
+            await create_session_record(db, user, request, "passkey")
+        except Exception as exc:
+            logger.warning("Failed to create session record: %s", exc)
+
     return auth_response
 
 
@@ -248,6 +268,7 @@ async def cli_setup(
 @router.post("/cli-login", response_model=AuthResponse)
 async def cli_login(
     payload: CLIAuthRequest,
+    request: Request,
     db: AsyncSession = Depends(get_db),
 ) -> AuthResponse:
     """CLI authentication: verify SHT and username, return JWT tokens.
@@ -276,6 +297,13 @@ async def cli_login(
         )
 
     await AuthService._clear_login_attempts(cli_key)
+
+    # Track session
+    try:
+        from app.api.v1.sessions import create_session_record
+        await create_session_record(db, user, request, "cli_sht")
+    except Exception as exc:
+        logger.warning("Failed to create session record: %s", exc)
 
     return AuthResponse(
         access_token=create_access_token(user.id),

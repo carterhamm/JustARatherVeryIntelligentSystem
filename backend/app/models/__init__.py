@@ -11,6 +11,7 @@ from app.models.focus_session import FocusSession
 from app.models.habit import Habit, HabitLog
 from app.models.landmark import Landmark
 from app.models.location_history import LocationHistory
+from app.models.session import Session
 
 __all__ = [
     "Base",
@@ -28,4 +29,5 @@ __all__ = [
     "HabitLog",
     "Landmark",
     "LocationHistory",
+    "Session",
 ]

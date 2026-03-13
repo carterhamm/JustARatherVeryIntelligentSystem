@@ -216,8 +216,12 @@ export default function StatusBar() {
 
         <div className="w-px h-4 bg-white/[0.06]" />
 
-        {/* Connection */}
-        <div className="relative group flex items-center gap-1.5">
+        {/* Connection — click to view active sessions */}
+        <button
+          onClick={() => window.dispatchEvent(new CustomEvent('jarvis-sessions-manage-toggle'))}
+          className="relative group flex items-center gap-1.5 hover:opacity-80 transition-opacity cursor-pointer"
+          title="View Active Sessions"
+        >
           {wsConnected ? (
             <Wifi size={12} className="text-hud-green" />
           ) : (
@@ -232,10 +236,10 @@ export default function StatusBar() {
           {/* Hover tooltip */}
           <div className="absolute top-full right-0 mt-2 px-3 py-1.5 glass hud-clip-sm whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
             <span className="text-[9px] font-mono text-gray-300">
-              {wsConnected ? 'Connected to Stark Industries Secure Server' : 'Disconnected from Stark Industries Secure Server'}
+              {wsConnected ? 'Click to view active sessions' : 'Disconnected from Stark Industries Secure Server'}
             </span>
           </div>
-        </div>
+        </button>
       </div>
     </div>
   );
