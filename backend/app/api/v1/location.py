@@ -11,6 +11,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_current_active_user_or_service, get_db
+from app.core.encryption import decrypt_message
 from app.models.location_history import LocationHistory
 from app.models.user import User
 
@@ -48,6 +49,16 @@ class LocationTimelineResponse(BaseModel):
 
 
 # -- Helpers -----------------------------------------------------------------
+
+def _decrypt_coord(encrypted: Optional[str], fallback: float, user_id) -> float:
+    """Return decrypted coordinate if available, else the plain float column."""
+    if encrypted:
+        try:
+            return float(decrypt_message(encrypted, user_id))
+        except (ValueError, TypeError):
+            pass
+    return fallback
+
 
 def _format_location(city: Optional[str], state: Optional[str]) -> Optional[str]:
     parts = [p for p in [city, state] if p]
@@ -96,8 +107,8 @@ async def get_location_history(
             points=[
                 LocationPoint(
                     id=str(p.id),
-                    latitude=p.latitude,
-                    longitude=p.longitude,
+                    latitude=_decrypt_coord(p.encrypted_lat, p.latitude, p.user_id),
+                    longitude=_decrypt_coord(p.encrypted_lng, p.longitude, p.user_id),
                     city=p.city,
                     state=p.state,
                     country=p.country,
@@ -140,8 +151,8 @@ async def get_latest_location(
 
     return {
         "source": "history",
-        "latitude": entry.latitude,
-        "longitude": entry.longitude,
+        "latitude": _decrypt_coord(entry.encrypted_lat, entry.latitude, entry.user_id),
+        "longitude": _decrypt_coord(entry.encrypted_lng, entry.longitude, entry.user_id),
         "city": entry.city,
         "state": entry.state,
         "country": entry.country,

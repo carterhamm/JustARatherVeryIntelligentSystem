@@ -76,19 +76,26 @@ async def get_current_active_user(
             detail="Account is deactivated",
         )
 
-    # Verify user has at least one active, non-expired session
-    result_session = await db.execute(
-        select(Session).where(
-            Session.user_id == user.id,
-            Session.is_active.is_(True),
-            Session.expires_at > datetime.now(timezone.utc),
-        ).limit(1)
+    # If user has sessions and ALL are revoked/expired, reject.
+    # If user has no sessions at all (legacy login, first login), allow access.
+    from sqlalchemy import func as sa_func
+    total_sessions = await db.execute(
+        select(sa_func.count()).select_from(Session).where(Session.user_id == user.id)
     )
-    if result_session.scalar_one_or_none() is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="All sessions revoked",
+    session_count = total_sessions.scalar() or 0
+    if session_count > 0:
+        active_sessions = await db.execute(
+            select(Session).where(
+                Session.user_id == user.id,
+                Session.is_active.is_(True),
+                Session.expires_at > datetime.now(timezone.utc),
+            ).limit(1)
         )
+        if active_sessions.scalar_one_or_none() is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="All sessions revoked",
+            )
 
     return user
 

@@ -30,6 +30,9 @@ class Session(UUIDMixin, TimestampMixin, Base):
     session_token: Mapped[str] = mapped_column(
         String(64), unique=True, index=True, nullable=False,
     )
+    token_hash: Mapped[Optional[str]] = mapped_column(
+        String(128), unique=True, index=True, nullable=True,
+    )
     ip_address: Mapped[Optional[str]] = mapped_column(String(45), nullable=True)
     user_agent: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     device_type: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)

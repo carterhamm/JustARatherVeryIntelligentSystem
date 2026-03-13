@@ -586,10 +586,14 @@ async def update_location(
 
     # Log to location history for timeline
     if lat is not None and lng is not None:
+        from app.core.encryption import encrypt_message
+
         entry = LocationHistory(
             user_id=current_user.id,
             latitude=float(lat),
             longitude=float(lng),
+            encrypted_lat=encrypt_message(str(lat), current_user.id),
+            encrypted_lng=encrypt_message(str(lng), current_user.id),
             city=city,
             state=state,
             country=country,

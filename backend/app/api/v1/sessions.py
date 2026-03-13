@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import secrets
 from datetime import datetime, timedelta, timezone
@@ -81,9 +82,13 @@ async def create_session_record(
     prefs = user.preferences or {}
     loc = prefs.get("current_location", {})
 
+    plain_token = secrets.token_hex(32)
+    token_hash = hashlib.sha256(plain_token.encode()).hexdigest()
+
     session = Session(
         user_id=user.id,
-        session_token=secrets.token_hex(32),
+        session_token=plain_token,
+        token_hash=token_hash,
         ip_address=ip,
         user_agent=ua,
         device_type=device,
@@ -107,6 +112,16 @@ async def create_session_record(
 
 
 def _session_to_response(session: Session, current_token: str | None = None) -> SessionResponse:
+    # Compare using token_hash (SHA-256) when available, fall back to plain token
+    is_current = False
+    if current_token:
+        incoming_hash = hashlib.sha256(current_token.encode()).hexdigest()
+        if session.token_hash:
+            is_current = session.token_hash == incoming_hash
+        else:
+            # Legacy session without token_hash — compare plain tokens
+            is_current = session.session_token == current_token
+
     return SessionResponse(
         id=str(session.id),
         ip_address=session.ip_address,
@@ -119,7 +134,7 @@ def _session_to_response(session: Session, current_token: str | None = None) -> 
         expires_at=session.expires_at.isoformat(),
         is_active=session.is_active and session.expires_at > datetime.now(timezone.utc),
         login_method=session.login_method,
-        is_current=session.session_token == current_token if current_token else False,
+        is_current=is_current,
     )
 
 

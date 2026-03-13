@@ -896,7 +896,7 @@ function MapContextMenu({
             item.onClick();
             onClose();
           }}
-          className="w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-white/[0.06]"
+          className="ctx-menu-item w-full flex items-center gap-3 px-4 py-2.5 text-left transition-all"
         >
           <item.icon size={14} className="text-jarvis-blue/60 flex-shrink-0" />
           <span className="text-[12px] font-medium text-gray-300">{item.label}</span>
@@ -906,6 +906,14 @@ function MapContextMenu({
         @keyframes contextMenuIn {
           from { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
           to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+        }
+        .ctx-menu-item {
+          clip-path: none;
+          transition: background 0.15s ease, clip-path 0.15s ease;
+        }
+        .ctx-menu-item:hover {
+          background: rgba(255, 255, 255, 0.06);
+          clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px));
         }
       `}</style>
     </div>,
@@ -1182,7 +1190,9 @@ export default function MapPage() {
         const map = new mk.Map(mapContainerRef.current, {
           center: new mk.Coordinate(40.2969, -111.6946), // Orem, Utah
           mapType: mk.Map.MapTypes.Standard,
-          colorScheme: mk.Map.ColorSchemes.Dark,
+          // Use Light scheme so labels (roads, cities, countries) render visibly,
+          // then darken the container with CSS filter for the HUD aesthetic.
+          colorScheme: mk.Map.ColorSchemes.Light,
           showsCompass: mk.FeatureVisibility.Hidden,
           showsZoomControl: true,
           showsMapTypeControl: false,
@@ -1710,7 +1720,11 @@ export default function MapPage() {
   return (
     <div className="h-screen w-screen overflow-hidden relative" style={{ background: '#0A0E17' }}>
       {/* ---- Map container ---- */}
-      <div ref={mapContainerRef} className="absolute inset-0 z-0" />
+      <div
+        ref={mapContainerRef}
+        className="absolute inset-0 z-0"
+        style={{ filter: 'brightness(0.55) saturate(1.4) contrast(1.1)' }}
+      />
 
       {/* ---- HUD grid overlay ---- */}
       {gridVisible && (

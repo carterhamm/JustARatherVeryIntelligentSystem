@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import Float, ForeignKey, Index, String
+from sqlalchemy import Float, ForeignKey, Index, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -27,6 +27,8 @@ class LocationHistory(UUIDMixin, TimestampMixin, Base):
     )
     latitude: Mapped[float] = mapped_column(Float, nullable=False)
     longitude: Mapped[float] = mapped_column(Float, nullable=False)
+    encrypted_lat: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    encrypted_lng: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     city: Mapped[Optional[str]] = mapped_column(String(256), nullable=True)
     state: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
     country: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
