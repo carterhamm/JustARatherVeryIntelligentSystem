@@ -22,6 +22,7 @@ import {
   Plus,
   Save,
   ArrowLeft,
+  GripVertical,
 } from 'lucide-react';
 import { api } from '@/services/api';
 import clsx from 'clsx';
@@ -152,6 +153,27 @@ function EditForm({ contact, onSave, onCancel, saving }: EditFormProps) {
   const set = (field: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setForm((prev) => ({ ...prev, [field]: e.target.value }));
 
+  // Drag-to-reorder helpers
+  const dragIndexRef = useRef<number>(-1);
+
+  const handleDragStart = (index: number) => {
+    dragIndexRef.current = index;
+  };
+
+  const handleDrop = (
+    targetIndex: number,
+    items: string[],
+    setItems: React.Dispatch<React.SetStateAction<string[]>>,
+  ) => {
+    const from = dragIndexRef.current;
+    if (from < 0 || from === targetIndex) return;
+    const updated = [...items];
+    const [moved] = updated.splice(from, 1);
+    updated.splice(targetIndex, 0, moved);
+    setItems(updated);
+    dragIndexRef.current = -1;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.first_name.trim()) return;
@@ -231,11 +253,23 @@ function EditForm({ contact, onSave, onCancel, saving }: EditFormProps) {
           </div>
         </div>
 
-        {/* Phone numbers (add/remove) */}
+        {/* Phone numbers (add/remove/reorder) */}
         <FieldGroup label="PHONE" icon={<Phone size={10} />}>
           <div className="space-y-2">
             {phones.map((phone, i) => (
-              <div key={i} className="flex items-center gap-1.5">
+              <div
+                key={i}
+                className="flex items-center gap-1"
+                draggable={phones.length > 1}
+                onDragStart={() => handleDragStart(i)}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={() => handleDrop(i, phones, setPhones)}
+              >
+                {phones.length > 1 && (
+                  <div className="cursor-grab active:cursor-grabbing p-0.5 text-gray-600 hover:text-gray-400 flex-shrink-0">
+                    <GripVertical size={12} />
+                  </div>
+                )}
                 <input
                   type="tel"
                   value={phone}
@@ -251,7 +285,7 @@ function EditForm({ contact, onSave, onCancel, saving }: EditFormProps) {
                   <button
                     type="button"
                     onClick={() => setPhones(phones.filter((_, j) => j !== i))}
-                    className="p-1.5 text-red-500/50 hover:text-red-400 transition-colors"
+                    className="p-1.5 text-red-500/50 hover:text-red-400 transition-colors flex-shrink-0"
                   >
                     <Trash2 size={12} />
                   </button>
@@ -266,16 +300,28 @@ function EditForm({ contact, onSave, onCancel, saving }: EditFormProps) {
               <Plus size={10} /> Add phone
             </button>
             {phones.length > 1 && (
-              <p className="text-[8px] text-gray-600 font-mono tracking-wider">FIRST NUMBER IS PRIMARY</p>
+              <p className="text-[8px] text-gray-600 font-mono tracking-wider">DRAG TO REORDER — FIRST IS PRIMARY</p>
             )}
           </div>
         </FieldGroup>
 
-        {/* Email addresses (add/remove) */}
+        {/* Email addresses (add/remove/reorder) */}
         <FieldGroup label="EMAIL" icon={<Mail size={10} />}>
           <div className="space-y-2">
             {emails.map((email, i) => (
-              <div key={i} className="flex items-center gap-1.5">
+              <div
+                key={i}
+                className="flex items-center gap-1"
+                draggable={emails.length > 1}
+                onDragStart={() => handleDragStart(i)}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={() => handleDrop(i, emails, setEmails)}
+              >
+                {emails.length > 1 && (
+                  <div className="cursor-grab active:cursor-grabbing p-0.5 text-gray-600 hover:text-gray-400 flex-shrink-0">
+                    <GripVertical size={12} />
+                  </div>
+                )}
                 <input
                   type="email"
                   value={email}
@@ -291,7 +337,7 @@ function EditForm({ contact, onSave, onCancel, saving }: EditFormProps) {
                   <button
                     type="button"
                     onClick={() => setEmails(emails.filter((_, j) => j !== i))}
-                    className="p-1.5 text-red-500/50 hover:text-red-400 transition-colors"
+                    className="p-1.5 text-red-500/50 hover:text-red-400 transition-colors flex-shrink-0"
                   >
                     <Trash2 size={12} />
                   </button>

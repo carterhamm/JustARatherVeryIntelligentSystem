@@ -1156,7 +1156,7 @@ export default function WidgetPanel() {
     return layout.filter((w) => w.visible);
   }, [layout]);
 
-  if (!token || !visible) return null;
+  if (!token || !visible || !layoutReady) return null;
 
   return (
     <div
