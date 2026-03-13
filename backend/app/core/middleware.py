@@ -63,8 +63,12 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
     # Path prefix -> (max_requests, window_seconds)
     _PATH_LIMITS: dict[str, tuple[int, int]] = {
-        "/api/v1/auth": (5, 60),
+        "/api/v1/auth/login": (5, 60),
+        "/api/v1/auth/totp": (5, 60),
+        "/api/v1/auth/register": (5, 60),
+        "/api/v1/auth/lookup": (10, 60),
         "/api/v1/cron": (10, 60),
+        # /auth/refresh excluded — has its own per-token rate limit
     }
 
     def __init__(self, app: Callable, max_requests: int = 120, window_seconds: int = 60) -> None:  # type: ignore[override]
