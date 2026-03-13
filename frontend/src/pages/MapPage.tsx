@@ -1719,9 +1719,6 @@ export default function MapPage() {
           className="flex items-center justify-between px-3 h-11 pointer-events-auto"
           style={{
             background: 'linear-gradient(to bottom, rgba(5, 5, 16, 0.95), rgba(5, 5, 16, 0.7), transparent)',
-            borderBottom: '1px solid rgba(0, 212, 255, 0.08)',
-            backdropFilter: 'blur(16px)',
-            WebkitBackdropFilter: 'blur(16px)',
           }}
         >
           <button
