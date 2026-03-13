@@ -32,7 +32,7 @@ class CameraService:
     def _headers() -> dict[str, str]:
         """Build auth headers for the Caddy proxy."""
         headers: dict[str, str] = {}
-        token = settings.CAMERA_AUTH_TOKEN
+        token = settings.CAMERA_AUTH_TOKEN or settings.MAC_MINI_AGENT_KEY
         if token:
             headers["Authorization"] = f"Bearer {token}"
         return headers
