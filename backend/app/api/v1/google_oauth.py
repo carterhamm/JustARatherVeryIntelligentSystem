@@ -192,13 +192,25 @@ async def oauth_callback(
     # Store tokens in user preferences
     try:
         from app.models.user import User
+        from sqlalchemy import select as _select
         from sqlalchemy.orm.attributes import flag_modified
-        result = await db.execute(
-            __import__("sqlalchemy").select(User).where(
-                User.id == user_id
-            )
-        )
-        user = result.scalar_one_or_none()
+
+        # Try user_id from state first, then fall back to first active user (single-owner system)
+        user = None
+        try:
+            import uuid as _uuid
+            uid = _uuid.UUID(str(user_id))
+            result = await db.execute(_select(User).where(User.id == uid))
+            user = result.scalar_one_or_none()
+        except (ValueError, Exception):
+            pass
+
+        if not user:
+            # Fallback: get the owner (first active user)
+            result = await db.execute(_select(User).where(User.is_active.is_(True)).limit(1))
+            user = result.scalar_one_or_none()
+            logger.info("OAuth callback: user_id %s not found, using owner fallback", user_id)
+
         if user:
             prefs = dict(user.preferences or {})
             prefs["google_tokens"] = token_data
