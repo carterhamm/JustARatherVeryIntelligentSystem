@@ -190,26 +190,17 @@ async def oauth_callback(
         )
 
     # Store tokens in user preferences
+    logger.warning("OAUTH STORAGE: Starting token storage. user_id=%s, has_token=%s, has_refresh=%s",
+                    user_id, bool(token_data.get("token")), bool(token_data.get("refresh_token")))
     try:
         from app.models.user import User
         from sqlalchemy import select as _select
         from sqlalchemy.orm.attributes import flag_modified
 
-        # Try user_id from state first, then fall back to first active user (single-owner system)
-        user = None
-        try:
-            import uuid as _uuid
-            uid = _uuid.UUID(str(user_id))
-            result = await db.execute(_select(User).where(User.id == uid))
-            user = result.scalar_one_or_none()
-        except (ValueError, Exception):
-            pass
-
-        if not user:
-            # Fallback: get the owner (first active user)
-            result = await db.execute(_select(User).where(User.is_active.is_(True)).limit(1))
-            user = result.scalar_one_or_none()
-            logger.info("OAuth callback: user_id %s not found, using owner fallback", user_id)
+        # Always use the owner (first active user) — single-owner system
+        result = await db.execute(_select(User).where(User.is_active.is_(True)).limit(1))
+        user = result.scalar_one_or_none()
+        logger.warning("OAUTH STORAGE: Found user=%s", user.id if user else "NONE")
 
         if user:
             prefs = dict(user.preferences or {})
@@ -218,15 +209,18 @@ async def oauth_callback(
             user.preferences = prefs
             flag_modified(user, "preferences")
             await db.commit()
-            logger.info("Stored Google OAuth tokens for user %s", user_id)
+            await db.refresh(user)
+            # Verify it stuck
+            has_tokens = "google_tokens" in (user.preferences or {})
+            logger.warning("OAUTH STORAGE: Committed. Verified google_tokens in prefs: %s", has_tokens)
         else:
-            logger.error("User %s not found for OAuth callback", user_id)
+            logger.error("OAUTH STORAGE: No active user found!")
             return HTMLResponse(
                 content=_error_page("User not found."),
                 status_code=404,
             )
     except Exception as exc:
-        logger.exception("Failed to store Google tokens")
+        logger.exception("OAUTH STORAGE: Failed to store Google tokens: %s", exc)
         return HTMLResponse(
             content=_error_page(f"Failed to save tokens: {exc}"),
             status_code=500,
