@@ -175,6 +175,7 @@ async def oauth_callback(
 
         token_data = {
             "token": credentials.token,
+            "access_token": credentials.token,  # alias — some code uses this key
             "refresh_token": credentials.refresh_token,
             "token_uri": credentials.token_uri,
             "client_id": credentials.client_id,

@@ -1118,4 +1118,33 @@ _TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "required": [],
         },
     },
+    # -- Self-Healing / Auto-Repair ----------------------------------------
+    {
+        "name": "self_heal",
+        "description": (
+            "Diagnose and attempt to automatically fix integration issues. "
+            "Use when a tool or service fails. Can refresh OAuth tokens, "
+            "restart connections, and escalate to Claude Code on the Mac Mini "
+            "for complex fixes that JARVIS cannot resolve alone."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "issue": {
+                    "type": "string",
+                    "description": "Description of the problem to diagnose/fix.",
+                },
+                "service": {
+                    "type": "string",
+                    "description": "Which service is failing: google, calendar, gmail, imessage, redis, etc.",
+                },
+                "escalate": {
+                    "type": "boolean",
+                    "description": "If true, invoke Claude Code on Mac Mini to attempt a code-level fix.",
+                    "default": False,
+                },
+            },
+            "required": ["issue", "service"],
+        },
+    },
 ]

@@ -143,6 +143,10 @@ TOOL_CATEGORIES = {
         "description": "Habits, habit tracking, streaks, daily routines, habit log, did I exercise, workout streak",
         "tools": ["habit_tracker"],
     },
+    "self_heal": {
+        "description": "Fix broken integrations, diagnose connection issues, auto-repair, self-healing, troubleshoot errors",
+        "tools": ["self_heal", "system_health"],
+    },
 }
 
 _CATEGORY_LIST = "\n".join(

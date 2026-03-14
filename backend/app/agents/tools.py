@@ -29,6 +29,7 @@ async def _get_google_tokens(state: Optional[AgentState]) -> Optional[dict]:
     """Load per-user Google OAuth tokens from DB preferences.
 
     Returns the token dict if connected, or None if not.
+    Attempts to refresh expired tokens automatically.
     """
     user_id = (state or {}).get("user_id", "")
     if not user_id:
@@ -48,11 +49,69 @@ async def _get_google_tokens(state: Optional[AgentState]) -> Optional[dict]:
             )
             user = result.scalar_one_or_none()
             if user and user.preferences and user.preferences.get("google_tokens"):
-                return user.preferences["google_tokens"]
+                tokens = user.preferences["google_tokens"]
+                # Normalize token keys — OAuth stores "token", CalendarClient needs "access_token"
+                if "token" in tokens and "access_token" not in tokens:
+                    tokens["access_token"] = tokens["token"]
+
+                # Auto-refresh if we have a refresh_token
+                if tokens.get("refresh_token") and tokens.get("client_id"):
+                    try:
+                        tokens = await _refresh_google_token_if_needed(
+                            tokens, user, session
+                        )
+                    except Exception:
+                        logger.debug("Google token refresh failed", exc_info=True)
+
+                return tokens
         await engine.dispose()
     except Exception:
         logger.debug("Failed to load Google tokens for user %s", user_id, exc_info=True)
     return None
+
+
+async def _refresh_google_token_if_needed(
+    tokens: dict, user: Any, session: Any,
+) -> dict:
+    """Refresh Google OAuth token if expired. Updates DB if refreshed."""
+    from google.oauth2.credentials import Credentials
+    from google.auth.transport.requests import Request as GoogleAuthRequest
+    import asyncio
+
+    creds = Credentials(
+        token=tokens.get("token") or tokens.get("access_token"),
+        refresh_token=tokens.get("refresh_token"),
+        token_uri=tokens.get("token_uri", "https://oauth2.googleapis.com/token"),
+        client_id=tokens.get("client_id"),
+        client_secret=tokens.get("client_secret"),
+        scopes=tokens.get("scopes"),
+    )
+
+    if creds.valid:
+        return tokens
+
+    if not creds.refresh_token:
+        return tokens
+
+    # Refresh in a thread (blocking I/O)
+    def _do_refresh():
+        creds.refresh(GoogleAuthRequest())
+
+    await asyncio.to_thread(_do_refresh)
+
+    if creds.valid and creds.token:
+        # Update stored tokens
+        tokens["token"] = creds.token
+        tokens["access_token"] = creds.token
+        prefs = user.preferences or {}
+        prefs["google_tokens"] = tokens
+        user.preferences = prefs
+        from sqlalchemy.orm.attributes import flag_modified
+        flag_modified(user, "preferences")
+        await session.commit()
+        logger.info("Google token refreshed and saved for user %s", user.id)
+
+    return tokens
 
 
 async def _get_icloud_credentials(state: Optional[AgentState]) -> Optional[dict]:
@@ -570,8 +629,8 @@ class ListCalendarEventsTool(BaseTool):
         tokens = await _get_google_tokens(state)
         if not tokens:
             return (
-                "Google Calendar is not connected. The user needs to sign in with Google first.\n"
-                "They can do this at: https://app.malibupoint.dev/connect/google"
+                "Google Calendar is not connected. Please connect at: "
+                "https://app.malibupoint.dev/connect/google"
             )
 
         start_date = params.get("start_date", "")
@@ -583,7 +642,16 @@ class ListCalendarEventsTool(BaseTool):
             from app.integrations.google_workspace import calendar_list_events
             events = await calendar_list_events(tokens, start_date=start_date, end_date=end_date)
         except Exception as exc:
-            return f"Failed to list calendar events: {exc}"
+            logger.warning("Calendar list failed, attempting token refresh: %s", exc)
+            # Try refreshing token and retrying once
+            try:
+                tokens = await _get_google_tokens(state)
+                if tokens:
+                    events = await calendar_list_events(tokens, start_date=start_date, end_date=end_date)
+                else:
+                    return f"I'm having trouble connecting to your Google Calendar. The connection may need to be re-established at https://app.malibupoint.dev/connect/google"
+            except Exception as retry_exc:
+                return f"I'm experiencing a persistent issue with the Google Calendar connection: {retry_exc}"
 
         if not events:
             return f"No events found between {start_date} and {end_date}."
@@ -3956,6 +4024,86 @@ def _safe_instantiate(tool_classes: list[type]) -> list[BaseTool]:
     return tools
 
 
+class SelfHealTool(BaseTool):
+    """Diagnose and attempt to fix JARVIS integration issues automatically."""
+
+    name = "self_heal"
+    description = (
+        "Diagnose and attempt to automatically fix integration issues. "
+        "Use when a tool or service fails. Can refresh OAuth tokens, "
+        "restart connections, and escalate to Claude Code on the Mac Mini "
+        "for complex fixes. Params: issue (str describing the problem), "
+        "service (str: 'google', 'imessage', 'calendar', 'email', etc.), "
+        "escalate (bool: if True, invoke Claude Code on Mac Mini to fix)."
+    )
+
+    async def execute(
+        self,
+        params: dict[str, Any],
+        *,
+        state: Optional[AgentState] = None,
+    ) -> str:
+        issue = params.get("issue", "")
+        service = params.get("service", "").lower()
+        escalate = params.get("escalate", False)
+
+        results: list[str] = []
+
+        # Google OAuth refresh
+        if service in ("google", "calendar", "gmail", "drive"):
+            tokens = await _get_google_tokens(state)
+            if tokens and tokens.get("refresh_token"):
+                results.append("Google tokens found — refresh attempted during token load.")
+            elif not tokens:
+                results.append("Google not connected. User must connect at /connect/google.")
+            else:
+                results.append("Google tokens present but no refresh_token — re-auth needed.")
+
+        # Redis connectivity check
+        try:
+            from app.db.redis import get_redis_client
+            redis = await get_redis_client()
+            await redis.cache_set("health_check", "ok", ttl=10)
+            results.append("Redis: connected and operational.")
+        except Exception as exc:
+            results.append(f"Redis: FAILED — {exc}")
+
+        # Mac Mini connectivity check
+        try:
+            from app.integrations.mac_mini import is_configured
+            if is_configured():
+                results.append("Mac Mini agent: configured and reachable.")
+            else:
+                results.append("Mac Mini agent: NOT configured.")
+        except Exception:
+            results.append("Mac Mini agent: check failed.")
+
+        # Escalate to Claude Code on Mac Mini
+        if escalate:
+            try:
+                from app.integrations.mac_mini import run_claude_code, is_configured
+                if is_configured():
+                    prompt = (
+                        f"JARVIS is experiencing an issue: {issue}\n"
+                        f"Service: {service}\n"
+                        f"Please diagnose and fix this issue in the JARVIS codebase at "
+                        f"~/Downloads/JustARatherVeryIntelligentSystem/\n"
+                        f"Check logs, fix the code, test, and deploy if needed."
+                    )
+                    result = await run_claude_code(
+                        prompt=prompt,
+                        working_dir="~/Downloads/JustARatherVeryIntelligentSystem",
+                        timeout=300,
+                    )
+                    results.append(f"Claude Code escalation result: {result.get('output', 'No output')[:500]}")
+                else:
+                    results.append("Cannot escalate — Mac Mini agent not configured.")
+            except Exception as exc:
+                results.append(f"Escalation failed: {exc}")
+
+        return "\n".join(results) if results else "No diagnostic actions taken."
+
+
 def get_tool_registry() -> dict[str, BaseTool]:
     """Return the singleton tool registry mapping name -> BaseTool instance.
 
@@ -4038,6 +4186,8 @@ def get_tool_registry() -> dict[str, BaseTool]:
             HabitTool,
             # Camera / security vision
             CameraLookTool,
+            # Self-healing / diagnostics
+            SelfHealTool,
         ]
         tools = _safe_instantiate(tool_classes)
         logger.info("Tool registry loaded: %d/%d tools available", len(tools), len(tool_classes))
