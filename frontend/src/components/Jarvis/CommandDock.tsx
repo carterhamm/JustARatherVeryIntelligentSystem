@@ -165,43 +165,23 @@ export default function CommandDock() {
         <div className="w-5 h-px bg-white/[0.06] my-0.5" />
 
         <DockIcon
-          icon={Activity}
-          label="Diagnostics"
-          active={isThinking}
-          accent="#ffbf00"
-          index={2}
-          onClick={() => dispatch('jarvis-diagnostics-toggle')}
-        />
-        <DockIcon
-          icon={LayoutGrid}
-          label="Widgets"
-          index={3}
-          onClick={() => dispatch('jarvis-widgets-toggle')}
-        />
-        <DockIcon
           icon={Users}
           label="Contacts"
-          index={4}
+          index={2}
           onClick={() => dispatch('jarvis-contacts-toggle')}
-        />
-        <DockIcon
-          icon={Brain}
-          label="Knowledge"
-          index={5}
-          onClick={() => dispatch('jarvis-knowledge-toggle')}
         />
         <DockIcon
           icon={Flame}
           label="Habits"
           accent="#f0a500"
-          index={6}
+          index={3}
           onClick={() => dispatch('jarvis-habits-toggle')}
         />
         <DockIcon
           icon={Target}
           label="Focus"
           accent="#00d4ff"
-          index={7}
+          index={4}
           onClick={() => dispatch('jarvis-focus-toggle')}
         />
 
@@ -211,19 +191,19 @@ export default function CommandDock() {
         <DockIcon
           icon={MapPin}
           label="Atlas"
-          index={8}
+          index={5}
           onClick={() => navigate('/atlas')}
         />
         <DockIcon
           icon={Camera}
           label="Camera"
-          index={9}
+          index={6}
           onClick={() => navigate('/camera')}
         />
         <DockIcon
           icon={Monitor}
           label="Remote Desktop"
-          index={10}
+          index={7}
           onClick={() => window.open('/vnc/mac-mini', '_blank')}
         />
 
@@ -233,7 +213,7 @@ export default function CommandDock() {
         <DockIcon
           icon={Settings}
           label="Settings"
-          index={11}
+          index={8}
           onClick={() => dispatch('jarvis-settings-toggle')}
         />
       </div>

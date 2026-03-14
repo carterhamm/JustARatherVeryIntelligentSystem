@@ -793,12 +793,17 @@ function WidgetCard({
   children,
   onRefresh,
   urgencyLevel,
+  offline,
 }: {
   label: string;
   children: React.ReactNode;
   onRefresh?: () => void;
   urgencyLevel?: UrgencyLevel;
+  offline?: boolean;
 }) {
+  const isOnline = useUIStore((s) => s.isOnline);
+  const wsConnected = useUIStore((s) => s.wsConnected);
+  const isOffline = offline ?? (!isOnline || !wsConnected);
   const borderColor = urgencyLevel ? getUrgencyColor(urgencyLevel) : undefined;
   const borderGlow = urgencyLevel ? getUrgencyGlow(urgencyLevel) : undefined;
 
@@ -837,6 +842,7 @@ function WidgetCard({
         <div className="flex items-center gap-2">
           <div className="w-1 h-1 bg-jarvis-blue/40 rotate-45" />
           <span className="hud-label text-[8px]">{label}</span>
+          {isOffline && <WifiOff size={9} className="text-gray-600 ml-1" />}
         </div>
       </div>
       {children}
@@ -1179,27 +1185,22 @@ export default function WidgetPanel() {
         WebkitMaskImage: 'linear-gradient(to bottom, transparent 0px, black 8px, black calc(100% - 8px), transparent 100%)',
       }}
     >
-      {!isOnline || !wsConnected ? (
-        <div data-widget="offline">
-          <OfflineWidget />
+      {visibleWidgets.map((w) => (
+        <div
+          key={w.type}
+          data-widget={w.type}
+          style={{
+            transition: 'transform 0.35s ease, opacity 0.35s ease',
+          }}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            setVisible(false);
+          }}
+        >
+          {renderWidget(w.type, 'low', w.type)}
         </div>
-      ) : (
-        <>
-          {visibleWidgets.map((w) => (
-            <div
-              key={w.type}
-              data-widget={w.type}
-              style={{
-                transition: 'transform 0.35s ease, opacity 0.35s ease',
-              }}
-            >
-              {renderWidget(w.type, 'low', w.type)}
-            </div>
-          ))}
-          {/* Always show Google Connect (only renders if not connected) */}
-          <GoogleConnectWidget />
-        </>
-      )}
+      ))}
+      {(isOnline && wsConnected) && <GoogleConnectWidget />}
     </div>
   );
 }
