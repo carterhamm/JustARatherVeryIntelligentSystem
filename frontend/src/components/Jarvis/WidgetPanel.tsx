@@ -1216,7 +1216,9 @@ export default function WidgetPanel() {
   return (
     <div
       ref={panelRef}
-      className="fixed right-4 top-[72px] bottom-[24px] z-10 w-[260px] hidden xl:flex flex-col gap-3 overflow-y-auto py-2 pr-1 pointer-events-auto"
+      className="fixed right-4 top-[72px] bottom-[24px] z-10 w-[260px] hidden xl:flex flex-col overflow-y-auto py-2 pr-1 pointer-events-auto"
+      // Uniform spacing via child margin instead of gap (more predictable with clip-path)
+
       style={{
         maskImage: 'linear-gradient(to bottom, transparent 0px, black 8px, black calc(100% - 8px), transparent 100%)',
         WebkitMaskImage: 'linear-gradient(to bottom, transparent 0px, black 8px, black calc(100% - 8px), transparent 100%)',
@@ -1228,6 +1230,7 @@ export default function WidgetPanel() {
           data-widget={w.type}
           style={{
             transition: 'transform 0.35s ease, opacity 0.35s ease',
+            marginBottom: 10,
           }}
           onContextMenu={(e) => {
             e.preventDefault();
