@@ -549,7 +549,29 @@ async def ingest_feynman_lectures(
         "═══════════════════════════════════════════════════════════════"
     )
 
+    # Auto-chain: if we just finished a single volume, trigger the next
+    if volumes and len(volumes) == 1:
+        next_vol = volumes[0] + 1
+        if next_vol in FEYNMAN_VOLUMES:
+            import asyncio
+            logger.info("Auto-chaining: triggering Feynman Vol %d ingestion", next_vol)
+            asyncio.create_task(_chain_next_volume(next_vol))
+
     return results
+
+
+async def _chain_next_volume(vol_num: int) -> None:
+    """Auto-trigger ingestion of the next Feynman volume after a short delay."""
+    import asyncio
+    await asyncio.sleep(5)  # brief pause between volumes
+    try:
+        result = await ingest_feynman_lectures(volumes=[vol_num])
+        logger.info(
+            "Chained Feynman Vol %d: %d chapters ingested",
+            vol_num, result.get("chapters_ingested", 0),
+        )
+    except Exception as exc:
+        logger.warning("Chained Feynman Vol %d failed: %s", vol_num, exc)
 
 
 async def get_ingestion_status() -> dict[str, Any]:
