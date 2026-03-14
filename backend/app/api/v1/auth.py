@@ -8,7 +8,7 @@ import hashlib
 import logging
 from typing import Any
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, Request, status
 
 logger = logging.getLogger(__name__)
 from sqlalchemy import func, select
@@ -162,7 +162,7 @@ async def login(payload: UserLogin, request: Request, db: AsyncSession = Depends
 
 
 @router.post("/refresh", response_model=Token)
-async def refresh(refresh_token: str, db: AsyncSession = Depends(get_db)) -> Token:
+async def refresh(refresh_token: str = Body(..., embed=True), db: AsyncSession = Depends(get_db)) -> Token:
     """Exchange a valid refresh token for a new token pair."""
     # Rate limit: max 20 refreshes per 60 seconds per token
     token_hash = hashlib.sha256(refresh_token.encode()).hexdigest()
