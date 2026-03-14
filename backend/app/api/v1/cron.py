@@ -934,3 +934,42 @@ async def detect_trends(
         "topics_found": len(topics),
         "topics": topics,
     }
+
+
+@router.post("/ingest-feynman")
+async def ingest_feynman(
+    request: Request,
+    payload: dict[str, Any] = {},
+    current_user: User = Depends(require_service_key),
+) -> dict[str, Any]:
+    """Ingest The Feynman Lectures on Physics into the knowledge base.
+
+    Optional payload:
+        volume (int): 1, 2, or 3 to ingest a specific volume. Omit for all.
+
+    Protected by SERVICE_API_KEY. Long-running — may take 30+ minutes.
+    """
+    from app.services.feynman_ingestion import ingest_feynman_lectures
+
+    logger.info("Feynman ingestion triggered by user=%s", current_user.username)
+    log_audit("cron_feynman_ingest", "triggered", user_id=str(current_user.id), ip=request.client.host if request.client else "")
+
+    volumes = None
+    if "volume" in payload:
+        volumes = [int(payload["volume"])]
+
+    try:
+        result = await ingest_feynman_lectures(volumes=volumes)
+    except Exception as exc:
+        logger.exception("Feynman ingestion failed: %s", exc)
+        raise HTTPException(status_code=500, detail=f"Feynman ingestion error: {exc}")
+    return result
+
+
+@router.get("/ingest-feynman/status")
+async def feynman_status(
+    current_user: User = Depends(get_current_active_user_or_service),
+) -> dict[str, Any]:
+    """Check Feynman Lectures ingestion progress."""
+    from app.services.feynman_ingestion import get_ingestion_status
+    return await get_ingestion_status()

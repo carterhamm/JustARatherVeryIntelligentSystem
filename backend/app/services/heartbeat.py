@@ -1456,6 +1456,31 @@ async def run_heartbeat(db: AsyncSession) -> dict[str, Any]:
         "Heartbeat complete: method=%s noteworthy=%s threshold=%d passing=%d",
         method, noteworthy, threshold, len(passing_items),
     )
+
+    # ── Trigger learning cycle (every 30 min — alternate heartbeat runs) ──
+    try:
+        from app.db.redis import get_redis_client as _get_redis
+        _redis = await _get_redis()
+        hb_count_raw = await _redis.cache_get("jarvis:heartbeat:run_count")
+        hb_count = int(hb_count_raw) if hb_count_raw else 0
+        await _redis.cache_set("jarvis:heartbeat:run_count", str(hb_count + 1), ttl=86400 * 365)
+
+        if hb_count % 2 == 0:  # Every other heartbeat = every 30 min
+            # Check if learning cycle is already running
+            lock = await _redis.cache_get("jarvis:learning:cycle_lock")
+            if not lock:
+                import asyncio
+                from app.services.continuous_learning import run_learning_cycle
+                # Run in background — don't block the heartbeat
+                asyncio.create_task(run_learning_cycle())
+                logger.info("Heartbeat: triggered learning cycle (run #%d)", hb_count)
+                results["learning_triggered"] = True
+            else:
+                logger.info("Heartbeat: learning cycle already running, skipped")
+                results["learning_triggered"] = False
+    except Exception as exc:
+        logger.debug("Heartbeat: learning cycle trigger failed: %s", exc)
+
     return results
 
 
