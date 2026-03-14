@@ -57,6 +57,26 @@ export default function GlassInput({
         e.preventDefault();
         window.dispatchEvent(new CustomEvent('jarvis-settings-toggle'));
       }
+      // C key — contacts
+      if (e.key === 'c' && !inInput && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent('jarvis-contacts-toggle'));
+      }
+      // A key — sessions
+      if (e.key === 'a' && !inInput && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent('jarvis-sessions-toggle'));
+      }
+      // M key — model picker
+      if (e.key === 'm' && !inInput && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent('jarvis-model-toggle'));
+      }
+      // F key — Atlas
+      if (e.key === 'f' && !inInput && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault();
+        window.location.href = '/atlas';
+      }
       // Escape to blur input
       if (e.key === 'Escape' && inInput) {
         (e.target as HTMLElement).blur();

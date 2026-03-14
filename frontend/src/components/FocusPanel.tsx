@@ -833,11 +833,11 @@ export default function FocusPanel() {
 
           {/* Panel */}
           <motion.div
-            initial={{ x: '-100%' }}
-            animate={{ x: 0 }}
-            exit={{ x: '-100%' }}
+            initial={{ opacity: 0, x: -40, scale: 0.97 }}
+            animate={{ opacity: 1, x: 0, scale: 1 }}
+            exit={{ opacity: 0, x: -40, scale: 0.97 }}
             transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-            className="fixed left-5 top-5 bottom-5 w-[380px] z-50 glass-heavy hud-clip flex flex-col overflow-hidden"
+            className="fixed left-5 top-20 bottom-24 w-[380px] z-50 glass-heavy hud-clip flex flex-col overflow-hidden"
           >
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-jarvis-blue/10">

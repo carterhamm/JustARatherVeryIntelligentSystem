@@ -1685,9 +1685,16 @@ export default function MapPage() {
     };
   }, [mapSearchQuery]);
 
-  // ---- ESC key: close panel → clear search → blur input ----
+  // ---- Keyboard shortcuts: ESC + CMD+K ----
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      // CMD+K focuses search bar
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        const input = document.querySelector<HTMLInputElement>('[data-atlas-search]');
+        input?.focus();
+        return;
+      }
       if (e.key !== 'Escape') return;
       if (selectedPlace) {
         setSelectedPlace(null);
@@ -1987,7 +1994,8 @@ export default function MapPage() {
                     setSearchSuggestions([]);
                   }
                 }}
-                placeholder="Search places, businesses, addresses..."
+                placeholder="Search places, businesses, addresses... (⌘K)"
+                data-atlas-search
                 className="w-full py-2 pl-9 pr-8 text-xs font-mono bg-black/30 border border-white/[0.08] text-gray-300 placeholder-gray-600 focus:border-jarvis-blue/30 transition-colors"
                 style={{ clipPath: 'polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px))' }}
               />

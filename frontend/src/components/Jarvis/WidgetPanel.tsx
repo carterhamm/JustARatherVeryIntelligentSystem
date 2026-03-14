@@ -1176,7 +1176,42 @@ export default function WidgetPanel() {
     return layout.filter((w) => w.visible);
   }, [layout]);
 
-  if (!token || !visible || !layoutReady) return null;
+  if (!token || !layoutReady) return null;
+
+  // When hidden, render invisible right-side zone for right-click to re-show
+  if (!visible) {
+    return (
+      <>
+        <div
+          className="fixed right-0 top-[72px] bottom-[24px] z-10 w-[280px] hidden xl:block pointer-events-auto"
+          onContextMenu={(e) => {
+            e.preventDefault();
+            setCtxMenu({ x: e.clientX, y: e.clientY });
+          }}
+        />
+        {ctxMenu && createPortal(
+          <div className="fixed inset-0 z-[99999]" onClick={() => setCtxMenu(null)} onContextMenu={(e) => { e.preventDefault(); setCtxMenu(null); }}>
+            <div
+              style={{
+                position: 'fixed', left: ctxMenu.x, top: ctxMenu.y, transform: 'translate(-50%, -50%)',
+                minWidth: 160, background: 'linear-gradient(to bottom right, rgba(10,10,10,0.85), rgba(10,10,10,0.95))',
+                backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
+                clipPath: 'polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px))',
+                border: '1px solid rgba(0,212,255,0.12)', boxShadow: '0 10px 40px rgba(0,0,0,0.5)', padding: '4px',
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button onClick={() => { setVisible(true); setCtxMenu(null); }}
+                className="w-full flex items-center gap-3 px-4 py-2.5 text-left text-[12px] font-medium text-gray-300 hover:bg-white/[0.06] transition-colors">
+                <Eye size={14} className="text-jarvis-blue/60" /> Show Widgets
+              </button>
+            </div>
+          </div>,
+          document.body,
+        )}
+      </>
+    );
+  }
 
   return (
     <div

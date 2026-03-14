@@ -27,9 +27,10 @@ interface DockIconProps {
   accent?: string;
   onClick?: () => void;
   index: number;
+  expanded?: boolean;
 }
 
-function DockIcon({ icon: Icon, label, active, accent, onClick, index }: DockIconProps) {
+function DockIcon({ icon: Icon, label, active, accent, onClick, index, expanded }: DockIconProps) {
   const [hovered, setHovered] = useState(false);
   const btnRef = useRef<HTMLButtonElement>(null);
 
@@ -74,23 +75,31 @@ function DockIcon({ icon: Icon, label, active, accent, onClick, index }: DockIco
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
         className={clsx(
-          'glass-circle w-9 h-9 flex items-center justify-center transition-colors',
-          active && '!bg-jarvis-blue/15 !border-jarvis-blue/30 shadow-glow-cyan',
+          'flex items-center transition-colors',
+          expanded
+            ? 'gap-2.5 w-full px-2 py-1.5 rounded hover:bg-white/[0.04]'
+            : 'glass-circle w-9 h-9 justify-center',
+          active && !expanded && '!bg-jarvis-blue/15 !border-jarvis-blue/30 shadow-glow-cyan',
         )}
-        style={accent ? { borderColor: `${accent}33`, boxShadow: active ? `0 0 12px ${accent}33` : undefined } : undefined}
+        style={!expanded && accent ? { borderColor: `${accent}33`, boxShadow: active ? `0 0 12px ${accent}33` : undefined } : undefined}
       >
         <Icon
-          size={15}
+          size={expanded ? 14 : 15}
           className={clsx(
-            'transition-colors',
+            'transition-colors flex-shrink-0',
             active ? 'text-jarvis-blue' : 'text-gray-500',
           )}
           style={accent && active ? { color: accent } : undefined}
         />
+        {expanded && (
+          <span className="text-[9px] font-mono text-gray-400 uppercase tracking-wider truncate">
+            {label}
+          </span>
+        )}
       </button>
 
-      {/* Tooltip — to the right */}
-      {hovered && (
+      {/* Tooltip — to the right (only when not expanded) */}
+      {hovered && !expanded && (
         <div className="absolute left-full top-1/2 -translate-y-1/2 ml-3 px-2.5 py-1 glass hud-clip-sm whitespace-nowrap z-50 pointer-events-none animate-fade-in">
           <span className="text-[9px] font-mono text-gray-300 uppercase tracking-wider">
             {label}
@@ -99,7 +108,7 @@ function DockIcon({ icon: Icon, label, active, accent, onClick, index }: DockIco
       )}
 
       {/* Active indicator dot — to the left */}
-      {active && (
+      {active && !expanded && (
         <div
           className="absolute -left-1.5 top-1/2 -translate-y-1/2 w-1 h-1 rounded-full bg-jarvis-blue"
           style={accent ? { backgroundColor: accent } : undefined}
@@ -114,6 +123,22 @@ export default function CommandDock() {
   const voiceEnabled = useSettingsStore((s) => s.voiceEnabled);
   const dockRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+  const [expanded, setExpanded] = useState(false);
+
+  // D key hold to expand dock
+  useEffect(() => {
+    const down = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      if (e.key === 'd' && !e.metaKey && !e.ctrlKey && !e.repeat) setExpanded(true);
+    };
+    const up = (e: KeyboardEvent) => {
+      if (e.key === 'd') setExpanded(false);
+    };
+    window.addEventListener('keydown', down);
+    window.addEventListener('keyup', up);
+    return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); };
+  }, []);
 
   // GSAP stagger boot animation
   useEffect(() => {
@@ -145,14 +170,21 @@ export default function CommandDock() {
 
   return (
     <div className="fixed left-4 inset-y-0 z-30 pointer-events-none flex items-center">
-      <div ref={dockRef} className="glass-capsule px-2 py-2.5 flex flex-col items-center gap-1.5 pointer-events-auto">
-        <DockIcon
+      <div
+        ref={dockRef}
+        className={clsx(
+          'glass-capsule py-2.5 flex flex-col gap-1.5 pointer-events-auto transition-all duration-200',
+          expanded ? 'px-3' : 'px-2',
+        )}
+        style={{ width: expanded ? 160 : undefined }}
+      >
+        <DockIcon expanded={expanded}
           icon={MessageSquare}
           label="Sessions"
           index={0}
           onClick={() => dispatch('jarvis-sessions-toggle')}
         />
-        <DockIcon
+        <DockIcon expanded={expanded}
           icon={voiceEnabled ? Volume2 : VolumeX}
           label="Voice"
           active={voiceEnabled}
@@ -164,20 +196,20 @@ export default function CommandDock() {
         {/* Divider */}
         <div className="w-5 h-px bg-white/[0.06] my-0.5" />
 
-        <DockIcon
+        <DockIcon expanded={expanded}
           icon={Users}
           label="Contacts"
           index={2}
           onClick={() => dispatch('jarvis-contacts-toggle')}
         />
-        <DockIcon
+        <DockIcon expanded={expanded}
           icon={Flame}
           label="Habits"
           accent="#f0a500"
           index={3}
           onClick={() => dispatch('jarvis-habits-toggle')}
         />
-        <DockIcon
+        <DockIcon expanded={expanded}
           icon={Target}
           label="Focus"
           accent="#00d4ff"
@@ -188,19 +220,19 @@ export default function CommandDock() {
         {/* Divider */}
         <div className="w-5 h-px bg-white/[0.06] my-0.5" />
 
-        <DockIcon
+        <DockIcon expanded={expanded}
           icon={MapPin}
           label="Atlas"
           index={5}
           onClick={() => navigate('/atlas')}
         />
-        <DockIcon
+        <DockIcon expanded={expanded}
           icon={Camera}
           label="Camera"
           index={6}
           onClick={() => navigate('/camera')}
         />
-        <DockIcon
+        <DockIcon expanded={expanded}
           icon={Monitor}
           label="Remote Desktop"
           index={7}
@@ -210,7 +242,7 @@ export default function CommandDock() {
         {/* Divider */}
         <div className="w-5 h-px bg-white/[0.06] my-0.5" />
 
-        <DockIcon
+        <DockIcon expanded={expanded}
           icon={Settings}
           label="Settings"
           index={8}
