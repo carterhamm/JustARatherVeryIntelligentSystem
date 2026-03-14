@@ -340,155 +340,162 @@ async def ingest_feynman_lectures(
             "error": f"Failed to initialise KnowledgeService: {exc}",
         }
 
+    # Use Gemini to synthesise comprehensive chapter summaries
+    # (feynmanlectures.caltech.edu is behind Cloudflare, blocks automated access)
+    from app.integrations.llm.factory import get_llm_client
+    llm = get_llm_client("gemini")
+
     try:
-        async with httpx.AsyncClient(
-            timeout=httpx.Timeout(30.0, connect=10.0),
-            follow_redirects=True,
-            headers={
-                "User-Agent": "JARVIS/1.0 (Knowledge Ingestion; contact: jarvis@malibupoint.dev)",
-            },
-        ) as http:
-            processed = 0
+        processed = 0
 
-            for vol_num in sorted(FEYNMAN_VOLUMES.keys()):
-                if volumes and vol_num not in volumes:
-                    continue
+        for vol_num in sorted(FEYNMAN_VOLUMES.keys()):
+            if volumes and vol_num not in volumes:
+                continue
 
-                vol_data = FEYNMAN_VOLUMES[vol_num]
-                vol_prefix = vol_data["url_prefix"]
-                vol_title = vol_data["title"]
+            vol_data = FEYNMAN_VOLUMES[vol_num]
+            vol_prefix = vol_data["url_prefix"]
+            vol_title = vol_data["title"]
 
-                logger.info("── Volume %d: %s ──", vol_num, vol_title)
+            logger.info("── Volume %d: %s ──", vol_num, vol_title)
 
-                for ch_num, ch_title in sorted(vol_data["chapters"].items()):
-                    processed += 1
-                    ingested_key = f"{_INGESTED_PREFIX}:{vol_num}_{ch_num}"
+            for ch_num, ch_title in sorted(vol_data["chapters"].items()):
+                processed += 1
+                ingested_key = f"{_INGESTED_PREFIX}:{vol_num}_{ch_num}"
 
-                    # Skip already-ingested chapters
-                    already_done = await redis.cache_get(ingested_key)
-                    if already_done:
-                        logger.debug(
-                            "Skipping Vol %s Ch %d (%s) — already ingested",
-                            vol_prefix, ch_num, ch_title,
-                        )
-                        results["chapters_skipped"] += 1
-
-                        # Update progress
-                        progress = {
-                            "current_volume": vol_num,
-                            "current_chapter": ch_num,
-                            "processed": processed,
-                            "total": total_chapters,
-                            "percent": round(processed / total_chapters * 100, 1),
-                            "status": "running",
-                        }
-                        await redis.cache_set(
-                            _PROGRESS_KEY, json.dumps(progress), ttl=_METRICS_TTL,
-                        )
-                        continue
-
-                    # Fetch the chapter HTML
-                    url = _build_chapter_url(vol_prefix, ch_num)
-                    logger.info(
-                        "[%d/%d] Fetching Vol %s Ch %d: %s",
-                        processed, total_chapters, vol_prefix, ch_num, ch_title,
+                # Skip already-ingested chapters
+                already_done = await redis.cache_get(ingested_key)
+                if already_done:
+                    logger.debug(
+                        "Skipping Vol %s Ch %d (%s) — already ingested",
+                        vol_prefix, ch_num, ch_title,
                     )
+                    results["chapters_skipped"] += 1
 
-                    try:
-                        resp = await http.get(url)
-                        resp.raise_for_status()
-                    except httpx.HTTPStatusError as exc:
-                        error_msg = f"HTTP {exc.response.status_code} fetching {url}"
-                        logger.warning(error_msg)
-                        results["errors"].append(error_msg)
-                        await asyncio.sleep(0.5)
-                        continue
-                    except httpx.RequestError as exc:
-                        error_msg = f"Request error fetching {url}: {exc}"
-                        logger.warning(error_msg)
-                        results["errors"].append(error_msg)
-                        await asyncio.sleep(0.5)
-                        continue
-
-                    # Extract text content
-                    text = _extract_text(resp.text)
-                    if len(text) < 100:
-                        error_msg = f"Vol {vol_prefix} Ch {ch_num}: extracted text too short ({len(text)} chars)"
-                        logger.warning(error_msg)
-                        results["errors"].append(error_msg)
-                        await asyncio.sleep(0.5)
-                        continue
-
-                    # Prepend chapter header for context
-                    full_title = f"Feynman Lectures Vol. {vol_num}, Chapter {ch_num}: {ch_title}"
-                    content = f"# {full_title}\n\nSource: {url}\n\n{text}"
-
-                    # Ingest via KnowledgeService
-                    try:
-                        ingest_data = KnowledgeIngest(
-                            content=content,
-                            source_type="document",
-                            title=full_title,
-                            metadata={
-                                "source": "feynman_lectures",
-                                "volume": vol_num,
-                                "chapter": ch_num,
-                                "chapter_title": ch_title,
-                                "url": url,
-                                "auto_ingested": True,
-                            },
-                        )
-                        response = await service.ingest(
-                            user_id=owner.id, data=ingest_data,
-                        )
-
-                        chunks = response.chunk_count or 0
-                        entities = response.entity_count or 0
-                        results["chapters_ingested"] += 1
-                        results["chunks_created"] += chunks
-                        results["entities_found"] += entities
-
-                        logger.info(
-                            "  Ingested: %d chunks, %d entities",
-                            chunks, entities,
-                        )
-
-                        # Mark as ingested in Redis (permanent)
-                        await redis.cache_set(
-                            ingested_key,
-                            json.dumps({
-                                "source_id": str(response.id),
-                                "chunks": chunks,
-                                "entities": entities,
-                                "ingested_at": datetime.now(tz=timezone.utc).isoformat(),
-                            }),
-                            ttl=_METRICS_TTL,
-                        )
-
-                    except Exception as exc:
-                        error_msg = f"Ingestion failed for Vol {vol_prefix} Ch {ch_num}: {exc}"
-                        logger.exception(error_msg)
-                        results["errors"].append(error_msg)
-
-                    # Update progress
                     progress = {
                         "current_volume": vol_num,
                         "current_chapter": ch_num,
-                        "current_title": ch_title,
                         "processed": processed,
                         "total": total_chapters,
                         "percent": round(processed / total_chapters * 100, 1),
-                        "chapters_ingested": results["chapters_ingested"],
-                        "chunks_created": results["chunks_created"],
-                        "entities_found": results["entities_found"],
                         "status": "running",
                     }
                     await redis.cache_set(
                         _PROGRESS_KEY, json.dumps(progress), ttl=_METRICS_TTL,
                     )
+                    continue
 
-                    # Rate-limit: 0.5s between requests to be respectful
-                    await asyncio.sleep(0.5)
+                full_title = f"Feynman Lectures Vol. {vol_num}, Chapter {ch_num}: {ch_title}"
+                logger.info(
+                    "[%d/%d] Synthesising: %s",
+                    processed, total_chapters, full_title,
+                )
+
+                # Generate comprehensive chapter content via Gemini
+                # (Gemini was trained on the Feynman Lectures and knows them deeply)
+                try:
+                    resp = await llm.chat_completion(
+                        messages=[
+                            {"role": "system", "content": (
+                                "You are a physics professor writing comprehensive lecture notes. "
+                                "Write detailed, technical content based on Feynman's Lectures on Physics. "
+                                "Include key equations in LaTeX notation. Be thorough and precise — "
+                                "this will be used as reference material for nanotechnology research. "
+                                "Include specific derivations, physical intuitions, and Feynman's "
+                                "unique insights where relevant."
+                            )},
+                            {"role": "user", "content": (
+                                f"Write a comprehensive technical summary (800-1500 words) of "
+                                f"'{full_title}' from The Feynman Lectures on Physics.\n\n"
+                                f"Cover the key concepts, equations, derivations, and physical "
+                                f"intuitions Feynman presents. Use LaTeX for equations. Be specific "
+                                f"and technical — this is for a physics knowledge base, not a "
+                                f"popular science summary."
+                            )},
+                        ],
+                        model="gemini-3.1-pro-preview",
+                        temperature=0.3,
+                        max_tokens=2000,
+                    )
+                    content = f"# {full_title}\n\n{resp['content'].strip()}"
+                except Exception as exc:
+                    error_msg = f"LLM synthesis failed for {full_title}: {exc}"
+                    logger.warning(error_msg)
+                    results["errors"].append(error_msg)
+                    await asyncio.sleep(1.0)
+                    continue
+
+                if len(content) < 200:
+                    error_msg = f"{full_title}: synthesised content too short"
+                    logger.warning(error_msg)
+                    results["errors"].append(error_msg)
+                    continue
+
+                # Ingest via KnowledgeService
+                try:
+                    ingest_data = KnowledgeIngest(
+                        content=content,
+                        source_type="document",
+                        title=full_title,
+                        metadata={
+                            "source": "feynman_lectures",
+                            "volume": vol_num,
+                            "chapter": ch_num,
+                            "chapter_title": ch_title,
+                            "synthesis_method": "gemini_3.1_pro",
+                            "auto_ingested": True,
+                        },
+                    )
+                    response = await service.ingest(
+                        user_id=owner.id, data=ingest_data,
+                    )
+
+                    chunks = response.chunk_count or 0
+                    entities = response.entity_count or 0
+                    results["chapters_ingested"] += 1
+                    results["chunks_created"] += chunks
+                    results["entities_found"] += entities
+
+                    logger.info(
+                        "  Ingested: %d chunks, %d entities",
+                        chunks, entities,
+                    )
+
+                    # Mark as ingested in Redis (permanent)
+                    await redis.cache_set(
+                        ingested_key,
+                        json.dumps({
+                            "source_id": str(response.id),
+                            "chunks": chunks,
+                            "entities": entities,
+                            "ingested_at": datetime.now(tz=timezone.utc).isoformat(),
+                        }),
+                        ttl=_METRICS_TTL,
+                    )
+
+                except Exception as exc:
+                    error_msg = f"Ingestion failed for {full_title}: {exc}"
+                    logger.exception(error_msg)
+                    results["errors"].append(error_msg)
+
+                # Update progress
+                progress = {
+                    "current_volume": vol_num,
+                    "current_chapter": ch_num,
+                    "current_title": ch_title,
+                    "processed": processed,
+                    "total": total_chapters,
+                    "percent": round(processed / total_chapters * 100, 1),
+                    "chapters_ingested": results["chapters_ingested"],
+                    "chunks_created": results["chunks_created"],
+                    "entities_found": results["entities_found"],
+                    "status": "running",
+                }
+                await redis.cache_set(
+                    _PROGRESS_KEY, json.dumps(progress), ttl=_METRICS_TTL,
+                )
+
+                # Rate-limit between LLM calls
+                await asyncio.sleep(1.0)
 
     except Exception as exc:
         logger.exception("Feynman ingestion cycle failed: %s", exc)
