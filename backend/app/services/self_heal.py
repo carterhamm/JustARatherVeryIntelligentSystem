@@ -479,6 +479,87 @@ def _hash_error(summary: str) -> str:
     return hashlib.sha256(summary.encode()).hexdigest()[:16]
 
 
+async def _check_learning_health() -> dict[str, Any]:
+    """Check the continuous learning system is functioning.
+
+    Verifies: last cycle ran recently, no stuck states, knowledge base accessible.
+    """
+    try:
+        from app.db.redis import get_redis_client
+        redis = await get_redis_client()
+
+        result: dict[str, Any] = {"status": "ok"}
+
+        # Check last learning cycle
+        last_cycle_raw = await redis.cache_get("jarvis:learning:last_cycle")
+        if last_cycle_raw:
+            last_cycle = json.loads(last_cycle_raw)
+            result["last_cycle_ts"] = last_cycle.get("timestamp", "")
+            result["last_cycle_status"] = last_cycle.get("status", "")
+            result["last_cycle_errors"] = len(last_cycle.get("errors", []))
+        else:
+            result["last_cycle_ts"] = None
+            result["status"] = "never_run"
+
+        # Check last research cycle
+        last_research = await redis.cache_get("jarvis:research:last_run")
+        result["last_research"] = last_research
+
+        # Check Qdrant accessibility
+        try:
+            from app.db.qdrant import get_qdrant_store
+            qdrant = get_qdrant_store()
+            count = await qdrant.count()
+            result["qdrant_points"] = count
+            result["qdrant_ok"] = True
+        except Exception as exc:
+            result["qdrant_ok"] = False
+            result["qdrant_error"] = str(exc)
+            result["status"] = "degraded"
+
+        return result
+    except Exception as exc:
+        return {"status": "error", "error": str(exc)}
+
+
+async def _lookup_past_fixes(error_summary: str) -> Optional[str]:
+    """Search the knowledge base for similar past errors and their fixes.
+
+    Returns relevant context if found, or None.
+    """
+    try:
+        from app.db.qdrant import get_qdrant_store
+        from app.graphrag.vector_store import VectorStore
+
+        qdrant = get_qdrant_store()
+        vector_store = VectorStore(qdrant_store=qdrant)
+
+        # Search for similar error contexts in the knowledge base
+        query = f"error fix solution: {error_summary[:500]}"
+        results = await vector_store.search_similar(
+            query=query,
+            limit=3,
+            min_score=0.6,
+        )
+
+        if not results:
+            return None
+
+        context_parts = []
+        for r in results:
+            text = r.get("text", "")[:300]
+            source = r.get("payload", {}).get("title", "unknown")
+            score = r.get("score", 0)
+            if text:
+                context_parts.append(f"[{source}] (relevance: {score:.2f}): {text}")
+
+        return "\n".join(context_parts) if context_parts else None
+
+    except Exception as exc:
+        logger.debug("Knowledge base lookup for past fixes failed: %s", exc)
+        return None
+
+
 # ═════════════════════════════════════════════════════════════════════════════
 # Main entry point
 # ═════════════════════════════════════════════════════════════════════════════
@@ -530,6 +611,14 @@ async def run_self_heal() -> dict[str, Any]:
         deploy = {"found": False, "error": str(exc)}
         result["deploy"] = deploy
 
+    # ── Phase 1c: Check learning system health ───────────────────────────
+    try:
+        learning_health = await _check_learning_health()
+        result["learning"] = learning_health
+    except Exception as exc:
+        logger.debug("Self-heal learning check failed: %s", exc)
+        result["learning"] = {"status": "check_failed"}
+
     # ── Phase 1b: Fetch deploy logs ─────────────────────────────────────
     log_errors: list[dict[str, str]] = []
     try:
@@ -554,6 +643,12 @@ async def run_self_heal() -> dict[str, Any]:
         result["healthy"] = False
         result["error_count"] = len(log_errors) + (0 if health.get("healthy") else 1)
         result["error_summary"] = error_summary[:1000]
+
+        # ── Phase 2a.5: Check knowledge base for similar past fixes ────
+        kb_context = await _lookup_past_fixes(error_summary)
+        if kb_context:
+            error_summary += f"\n\n--- Past fix context from knowledge base ---\n{kb_context}"
+            result["kb_context_found"] = True
 
         # ── Phase 2b: Anti-spam check ───────────────────────────────────
         error_key = _hash_error(error_summary)
@@ -673,18 +768,28 @@ async def get_system_health() -> dict[str, Any]:
     except Exception:
         report["last_heartbeat"] = None
 
+    # Learning system health
+    try:
+        learning = await _check_learning_health()
+        report["learning"] = learning
+    except Exception as exc:
+        report["learning"] = {"status": "check_failed", "error": str(exc)}
+
     # Overall verdict
     backend_ok = report.get("backend", {}).get("healthy", False)
     deploy_ok = report.get("railway_deploy", {}).get("status", "").upper() in (
         "SUCCESS", "DEPLOYING", "BUILDING",
     )
     mini_ok = report.get("mac_mini", {}).get("reachable", False)
+    learning_ok = report.get("learning", {}).get("status") in ("ok", "never_run")
 
     report["overall"] = "nominal" if (backend_ok and deploy_ok) else "degraded"
     report["components"] = {
         "backend": "up" if backend_ok else "down",
         "railway_deploy": report.get("railway_deploy", {}).get("status", "unknown"),
         "mac_mini": "up" if mini_ok else "down",
+        "learning": report.get("learning", {}).get("status", "unknown"),
+        "qdrant": "up" if report.get("learning", {}).get("qdrant_ok") else "unknown",
     }
 
     return report

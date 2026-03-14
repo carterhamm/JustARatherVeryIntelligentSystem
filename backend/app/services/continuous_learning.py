@@ -202,6 +202,9 @@ async def run_learning_cycle(
 
     await _update_metrics(results, redis)
 
+    # ── Phase 5: Notify Mr. Stark via iMessage ─────────────────────
+    await _notify_learning_results(results)
+
     logger.info("═══════════════════════════════════════════════════════")
     logger.info(
         "CONTINUOUS LEARNING: cycle complete — "
@@ -528,6 +531,66 @@ async def _update_metrics(
 
     except Exception:
         logger.debug("Failed to update learning metrics", exc_info=True)
+
+
+async def _notify_learning_results(results: dict[str, Any]) -> None:
+    """Send an iMessage to Mr. Stark with a summary of the learning cycle.
+
+    Only sends if there's something interesting to report (insights,
+    new trending topics, or notable findings). Skips boring cycles.
+    """
+    try:
+        from app.config import settings
+        from app.integrations.mac_mini import send_imessage, is_configured
+
+        if not is_configured() or not settings.OWNER_PHONE:
+            return
+
+        # Only notify if something interesting happened
+        total_ingested = results.get("total_ingested", 0)
+        dialogue = results.get("phases", {}).get("dialogue", {})
+        insights_count = dialogue.get("insights_found", 0)
+        trending = results.get("phases", {}).get("trending", {})
+        trending_count = trending.get("topics_found", 0)
+
+        # Skip notification if nothing notable
+        if total_ingested == 0 and insights_count == 0 and trending_count == 0:
+            return
+
+        from zoneinfo import ZoneInfo
+        now = datetime.now(tz=ZoneInfo("America/Denver")).strftime("%I:%M %p")
+
+        lines = [f"Learning Cycle Complete ({now})"]
+        lines.append(f"Ingested {total_ingested} documents, discovered {results.get('total_entities', 0)} entities")
+
+        # Research topic
+        research = results.get("phases", {}).get("research", {})
+        if research.get("status") == "ok" and research.get("topic"):
+            lines.append(f"\nResearched: {research['topic']}")
+
+        # Trending topics
+        if trending_count > 0:
+            trend_details = trending.get("details", [])
+            trend_names = [t.get("label", t.get("topic", "")) for t in trend_details[:3]]
+            if trend_names:
+                lines.append(f"Trending: {', '.join(trend_names)}")
+
+        # Dialogue insights (the most interesting part)
+        if insights_count > 0:
+            lines.append(f"\n{insights_count} insight(s) from internal debate on '{dialogue.get('topic', '')}'")
+
+        # Errors
+        errors = results.get("errors", [])
+        if errors:
+            lines.append(f"\n({len(errors)} phase(s) had errors)")
+
+        message = "\n".join(lines)
+
+        await send_imessage(to=settings.OWNER_PHONE, text=message)
+        logger.info("Learning notification sent to owner")
+
+    except Exception as exc:
+        logger.debug("Learning notification failed (non-critical): %s", exc)
 
 
 async def get_learning_metrics() -> dict[str, Any]:
