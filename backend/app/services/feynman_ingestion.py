@@ -278,12 +278,17 @@ async def _build_knowledge_service():
 
 async def ingest_feynman_lectures(
     volumes: Optional[list[int]] = None,
+    force: bool = False,
 ) -> dict[str, Any]:
     """Ingest The Feynman Lectures on Physics into the JARVIS knowledge base.
+
+    Uses Gemini 3.1 Pro to synthesise comprehensive chapter summaries with
+    equations in LaTeX (feynmanlectures.caltech.edu blocks automated access).
 
     Args:
         volumes: Optional list of volume numbers (1, 2, 3) to ingest.
                  None or empty means ingest all three volumes.
+        force: If True, clear stale locks and progress before starting.
 
     Returns:
         Summary dict with chapters_ingested, chapters_skipped,
@@ -293,6 +298,12 @@ async def ingest_feynman_lectures(
     from app.schemas.knowledge import KnowledgeIngest
 
     redis = await get_redis_client()
+
+    # Force-clear stale state if requested
+    if force:
+        await redis.cache_delete(_LOCK_KEY)
+        await redis.cache_delete(_PROGRESS_KEY)
+        logger.info("Force-cleared Feynman ingestion lock and progress")
 
     # Acquire lock to prevent concurrent ingestion runs
     lock_val = await redis.cache_get(_LOCK_KEY)

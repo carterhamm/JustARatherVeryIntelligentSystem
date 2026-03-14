@@ -959,7 +959,8 @@ async def ingest_feynman(
         volumes = [int(payload["volume"])]
 
     try:
-        result = await ingest_feynman_lectures(volumes=volumes)
+        force = payload.get("force", False)
+        result = await ingest_feynman_lectures(volumes=volumes, force=force)
     except Exception as exc:
         logger.exception("Feynman ingestion failed: %s", exc)
         raise HTTPException(status_code=500, detail=f"Feynman ingestion error: {exc}")
