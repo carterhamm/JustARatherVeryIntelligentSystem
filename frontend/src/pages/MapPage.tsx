@@ -1163,7 +1163,7 @@ export default function MapPage() {
   const [leftPanelView, setLeftPanelView] = useState<'rows' | 'contacts' | 'landmarks'>('rows');
   const [contactFilter, setContactFilter] = useState('');
 
-  // ---- Load MapKit JS + initialize map ----
+  // ---- Parallel init: MapKit + API + geocoding all at once ----
   useEffect(() => {
     if (!mapContainerRef.current) return;
 
@@ -1171,11 +1171,36 @@ export default function MapPage() {
 
     (async () => {
       try {
-        const mk = await loadMapKit();
+        // Fire MapKit load and API fetch simultaneously
+        const [mkResult, dataResult] = await Promise.allSettled([
+          loadMapKit(),
+          Promise.allSettled([
+            api.get<Contact[]>('/contacts', { offset: 0, limit: 200 }),
+            api.get<LandmarkData[]>('/landmarks'),
+          ]),
+        ]);
+
         if (cancelled || !mapContainerRef.current) return;
 
+        // Process API data
+        let fetchedContacts: Contact[] = [];
+        if (dataResult.status === 'fulfilled') {
+          const [contactResult, landmarkResult] = dataResult.value;
+          if (contactResult.status === 'fulfilled') {
+            fetchedContacts = contactResult.value;
+            setContacts(fetchedContacts);
+          }
+          if (landmarkResult.status === 'fulfilled') setLandmarks(landmarkResult.value);
+        }
+
+        // Init map (MapKit must be loaded for this)
+        if (mkResult.status !== 'fulfilled') {
+          setIsLoading(false);
+          return;
+        }
+        const mk = mkResult.value;
         const map = new mk.Map(mapContainerRef.current, {
-          center: new mk.Coordinate(40.29, -111.69), // Orem, Utah
+          center: new mk.Coordinate(40.29, -111.69),
           mapType: mk.Map.MapTypes.MutedStandard,
           colorScheme: mk.Map.ColorSchemes.Dark,
           showsCompass: mk.FeatureVisibility.Hidden,
@@ -1189,15 +1214,11 @@ export default function MapPage() {
           cameraZoomRange: new mk.CameraZoomRange(200, 20000000),
           padding: new mk.Padding(0, 0, 0, 0),
         });
-
-        try { map.pointOfInterestFilter = null; } catch { /* older API */ }
+        try { map.pointOfInterestFilter = null; } catch {}
 
         mapRef.current = map;
-
-        // Create search object
         mapSearchObjRef.current = new mk.Search({ language: 'en' });
 
-        // Dismiss contact callout when map pans/zooms
         map.addEventListener('region-change-start', () => {
           if (calloutOverlayRef.current) {
             calloutOverlayRef.current.remove();
@@ -1206,8 +1227,48 @@ export default function MapPage() {
         });
 
         if (!cancelled) setMapReady(true);
+
+        // Geocode immediately — both MapKit and contacts are ready
+        if (cancelled || fetchedContacts.length === 0) {
+          setIsLoading(false);
+          return;
+        }
+
+        const withAddress = fetchedContacts.filter((c) => c.address?.trim() || (c.street && c.city));
+        if (withAddress.length === 0) {
+          setIsLoading(false);
+          return;
+        }
+
+        lastContactIdsRef.current = fetchedContacts.map((c) => c.id).sort().join(',');
+        const cache = loadGeocodeCache();
+        const results: GeocodedContact[] = [];
+        let loadingDismissed = false;
+        setGeocodeProgress({ done: 0, total: withAddress.length });
+
+        for (let i = 0; i < withAddress.length; i++) {
+          if (cancelled) return;
+          const c = withAddress[i];
+          const addr = c.address?.trim() || [c.street, c.city, c.state, c.postal_code].filter(Boolean).join(', ');
+          const coords = await geocodeAddress(addr, cache);
+          if (coords && !(Math.abs(coords.lat) < 10 && Math.abs(coords.lng) < 10)) {
+            results.push({ ...c, lat: coords.lat, lng: coords.lng });
+          }
+          if (!cancelled) {
+            setGeocodeProgress({ done: i + 1, total: withAddress.length });
+            if (results.length > 0 && (i % 5 === 4 || i === withAddress.length - 1)) {
+              setGeocodedContacts([...results]);
+              if (!loadingDismissed) { loadingDismissed = true; setIsLoading(false); }
+            }
+          }
+        }
+        if (!cancelled) {
+          setGeocodedContacts([...results]);
+          setIsLoading(false);
+        }
       } catch (err) {
-        console.error('[MapKit] Init failed:', err);
+        console.error('[ATLAS] Init failed:', err);
+        setIsLoading(false);
       }
     })();
 
@@ -1372,7 +1433,7 @@ export default function MapPage() {
     return () => map.removeEventListener('single-tap', handler);
   }, [mapReady]);
 
-  // ---- Fetch contacts + landmarks ----
+  // ---- Background refresh (contacts + landmarks, no loading overlay) ----
   const fetchMapData = useCallback(async () => {
     try {
       const [contactResult, landmarkResult] = await Promise.allSettled([
@@ -1381,77 +1442,9 @@ export default function MapPage() {
       ]);
       if (contactResult.status === 'fulfilled') setContacts(contactResult.value);
       if (landmarkResult.status === 'fulfilled') setLandmarks(landmarkResult.value);
-    } catch {
-      // silently fail
-    }
-    // Don't setIsLoading(false) here — wait for geocoding to finish
+    } catch { /* silently fail */ }
   }, []);
-
-  useEffect(() => {
-    setIsLoading(true);
-    fetchMapData();
-  }, [fetchMapData]);
   useAutoRefresh(fetchMapData, 5 * 60 * 1000);
-
-  // ---- Geocode contacts with addresses ----
-  useEffect(() => {
-    if (!mapReady) return;
-    if (contacts.length === 0) {
-      // API returned but no contacts — stop loading
-      if (lastContactIdsRef.current === '') setIsLoading(false);
-      return;
-    }
-
-    const contactIds = contacts.map((c) => c.id).sort().join(',');
-    if (contactIds === lastContactIdsRef.current) return;
-    lastContactIdsRef.current = contactIds;
-
-    let cancelled = false;
-
-    const withAddress = contacts.filter((c) => c.address?.trim() || (c.street && c.city));
-    if (withAddress.length === 0) {
-      // No addresses to geocode — dismiss loading
-      setIsLoading(false);
-      return;
-    }
-    setGeocodeProgress({ done: 0, total: withAddress.length });
-
-    (async () => {
-      const cache = loadGeocodeCache();
-      const results: GeocodedContact[] = [];
-      let loadingDismissed = false;
-
-      for (let i = 0; i < withAddress.length; i++) {
-        if (cancelled) return;
-        const c = withAddress[i];
-        const addrToGeocode =
-          c.address?.trim() ||
-          [c.street, c.city, c.state, c.postal_code].filter(Boolean).join(', ');
-        const coords = await geocodeAddress(addrToGeocode, cache);
-        if (coords && !(Math.abs(coords.lat) < 10 && Math.abs(coords.lng) < 10)) {
-          results.push({ ...c, lat: coords.lat, lng: coords.lng });
-        }
-        if (!cancelled) {
-          setGeocodeProgress({ done: i + 1, total: withAddress.length });
-          // Push contacts incrementally every 5 so they appear during geocoding
-          if (results.length > 0 && (i % 5 === 4 || i === withAddress.length - 1)) {
-            setGeocodedContacts([...results]);
-            // Dismiss loading overlay on first batch of results
-            if (!loadingDismissed) {
-              loadingDismissed = true;
-              setIsLoading(false);
-            }
-          }
-        }
-      }
-      if (!cancelled) {
-        setGeocodedContacts([...results]);
-        setIsLoading(false);
-      }
-    })();
-
-    return () => { cancelled = true; };
-  }, [contacts, mapReady]);
 
   // ---- Place contact annotations ----
   useEffect(() => {
