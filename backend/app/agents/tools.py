@@ -766,6 +766,123 @@ class SetReminderTool(BaseTool):
         )
 
 
+class ListRemindersTool(BaseTool):
+    """List upcoming reminders from the database."""
+
+    name = "list_reminders"
+    description = (
+        "List upcoming or all reminders for the user. Use to find existing reminders "
+        "before rescheduling or deleting them. "
+        "Params: include_delivered (bool, default false), limit (int, default 20)."
+    )
+
+    async def execute(self, params: dict[str, Any], *, state: Optional[AgentState] = None) -> str:
+        from sqlalchemy import select
+        from app.db.session import async_session_factory
+        from app.models.reminder import Reminder
+        import uuid as _uuid
+
+        user_id_str = (state or {}).get("user_id", "")
+        if not user_id_str:
+            return "No user context available."
+
+        try:
+            uid = _uuid.UUID(str(user_id_str))
+        except ValueError:
+            return "Invalid user ID."
+
+        include_delivered = params.get("include_delivered", False)
+        limit = min(params.get("limit", 20), 50)
+
+        async with async_session_factory() as session:
+            query = select(Reminder).where(Reminder.user_id == uid)
+            if not include_delivered:
+                query = query.where(Reminder.delivered_at.is_(None))
+            query = query.order_by(Reminder.remind_at.asc()).limit(limit)
+            result = await session.execute(query)
+            reminders = list(result.scalars().all())
+
+        if not reminders:
+            return "No upcoming reminders found."
+
+        lines = []
+        for r in reminders:
+            status = "delivered" if r.delivered_at else "scheduled"
+            lines.append(
+                f"- ID: {r.id}\n"
+                f"  Message: {r.message}\n"
+                f"  Remind at: {r.remind_at.isoformat()}\n"
+                f"  Status: {status}"
+            )
+        return f"Found {len(reminders)} reminders:\n\n" + "\n".join(lines)
+
+
+class UpdateReminderTool(BaseTool):
+    """Update or reschedule an existing reminder."""
+
+    name = "update_reminder"
+    description = (
+        "Update an existing reminder — reschedule it, change its message, or mark it done. "
+        "Params: reminder_id (str, required), remind_at (ISO datetime, optional), "
+        "message (str, optional), cancel (bool, optional — marks as delivered/done)."
+    )
+
+    async def execute(self, params: dict[str, Any], *, state: Optional[AgentState] = None) -> str:
+        from sqlalchemy import select
+        from sqlalchemy.orm.attributes import flag_modified
+        from app.db.session import async_session_factory
+        from app.models.reminder import Reminder
+        import uuid as _uuid
+
+        reminder_id_str = params.get("reminder_id", "")
+        if not reminder_id_str:
+            return "Missing required 'reminder_id' parameter."
+
+        try:
+            rid = _uuid.UUID(str(reminder_id_str))
+        except ValueError:
+            return f"Invalid reminder_id: {reminder_id_str}"
+
+        async with async_session_factory() as session:
+            result = await session.execute(select(Reminder).where(Reminder.id == rid))
+            reminder = result.scalar_one_or_none()
+
+            if not reminder:
+                return f"Reminder {reminder_id_str} not found."
+
+            changes = []
+
+            if params.get("remind_at"):
+                try:
+                    new_dt = params["remind_at"]
+                    if isinstance(new_dt, str):
+                        if new_dt.endswith("Z"):
+                            new_dt = datetime.fromisoformat(new_dt.replace("Z", "+00:00"))
+                        else:
+                            new_dt = datetime.fromisoformat(new_dt)
+                        if new_dt.tzinfo is None:
+                            new_dt = new_dt.replace(tzinfo=timezone.utc)
+                    reminder.remind_at = new_dt
+                    changes.append(f"Rescheduled to: {reminder.remind_at.isoformat()}")
+                except (ValueError, TypeError) as exc:
+                    return f"Invalid remind_at format: {exc}"
+
+            if params.get("message"):
+                reminder.message = params["message"]
+                changes.append(f"Message updated to: {reminder.message}")
+
+            if params.get("cancel"):
+                reminder.delivered_at = datetime.now(timezone.utc)
+                changes.append("Marked as done/cancelled")
+
+            await session.commit()
+
+        if not changes:
+            return "No changes specified."
+
+        return f"Reminder updated:\n" + "\n".join(f"  - {c}" for c in changes)
+
+
 # ═════════════════════════════════════════════════════════════════════════
 # Smart home tool
 # ═════════════════════════════════════════════════════════════════════════
@@ -4200,6 +4317,9 @@ def get_tool_registry() -> dict[str, BaseTool]:
             HabitTool,
             # Camera / security vision
             CameraLookTool,
+            # Reminder management
+            ListRemindersTool,
+            UpdateReminderTool,
             # Self-healing / diagnostics
             SelfHealTool,
         ]

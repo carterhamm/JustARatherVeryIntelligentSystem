@@ -72,8 +72,8 @@ TOOL_CATEGORIES = {
         "tools": ["send_imessage"],
     },
     "reminders": {
-        "description": "Reminders, to-do lists, tasks",
-        "tools": ["set_reminder"],
+        "description": "Reminders, to-do lists, tasks, reschedule reminder, update reminder",
+        "tools": ["set_reminder", "list_reminders", "update_reminder"],
     },
     "code_dev": {
         "description": "GitHub, code, repositories, pull requests, issues",

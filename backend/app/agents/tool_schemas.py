@@ -1125,6 +1125,60 @@ _TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "required": [],
         },
     },
+    # -- List Reminders -----------------------------------------------------
+    {
+        "name": "list_reminders",
+        "description": (
+            "List upcoming reminders from the JARVIS database. Use to find existing "
+            "reminders before rescheduling or updating them."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "include_delivered": {
+                    "type": "boolean",
+                    "description": "Include already-delivered reminders.",
+                    "default": False,
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Max reminders to return.",
+                    "default": 20,
+                },
+            },
+            "required": [],
+        },
+    },
+    # -- Update Reminder ---------------------------------------------------
+    {
+        "name": "update_reminder",
+        "description": (
+            "Update or reschedule an existing reminder. Can change time, message, "
+            "or cancel it. Must provide reminder_id (get from list_reminders first)."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "reminder_id": {
+                    "type": "string",
+                    "description": "UUID of the reminder to update.",
+                },
+                "remind_at": {
+                    "type": "string",
+                    "description": "New datetime in ISO format (e.g. 2026-03-17T15:30:00-06:00).",
+                },
+                "message": {
+                    "type": "string",
+                    "description": "New message text for the reminder.",
+                },
+                "cancel": {
+                    "type": "boolean",
+                    "description": "If true, mark the reminder as done/cancelled.",
+                },
+            },
+            "required": ["reminder_id"],
+        },
+    },
     # -- Self-Healing / Auto-Repair ----------------------------------------
     {
         "name": "self_heal",
