@@ -770,6 +770,7 @@ function LandmarkForm({
   lng,
   initialName,
   initialAddress,
+  initialAppleMapsUrl,
   onSave,
   onCancel,
 }: {
@@ -777,13 +778,14 @@ function LandmarkForm({
   lng: number;
   initialName?: string;
   initialAddress?: string;
+  initialAppleMapsUrl?: string;
   onSave: (data: { name: string; description: string; latitude: number; longitude: number; address: string; apple_maps_url: string }) => void;
   onCancel: () => void;
 }) {
   const [name, setName] = useState(initialName || '');
   const [description, setDescription] = useState('');
   const [address, setAddress] = useState(initialAddress || '');
-  const [appleMapsUrl, setAppleMapsUrl] = useState('');
+  const [appleMapsUrl, setAppleMapsUrl] = useState(initialAppleMapsUrl || '');
   const [saving, setSaving] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searching, setSearching] = useState(false);
@@ -1151,7 +1153,7 @@ export default function MapPage() {
   const [expandedContactId, setExpandedContactId] = useState<string | null>(null);
   // grid removed
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
-  const [landmarkForm, setLandmarkForm] = useState<{ lat: number; lng: number; initialName?: string; initialAddress?: string } | null>(null);
+  const [landmarkForm, setLandmarkForm] = useState<{ lat: number; lng: number; initialName?: string; initialAddress?: string; initialAppleMapsUrl?: string } | null>(null);
   const [lookAroundCoords, setLookAroundCoords] = useState<{ lat: number; lng: number } | null>(null);
 
   // New state for redesign
@@ -1421,6 +1423,10 @@ export default function MapPage() {
         }
         if (!cancelled) {
           setGeocodeProgress({ done: i + 1, total: withAddress.length });
+          // Push contacts incrementally every 5 so they appear during geocoding
+          if (results.length > 0 && (i % 5 === 4 || i === withAddress.length - 1)) {
+            setGeocodedContacts([...results]);
+          }
         }
       }
       if (!cancelled) {
@@ -1471,17 +1477,49 @@ export default function MapPage() {
       annotation.addEventListener('select', () => {
         annotationJustSelectedRef.current = true;
         setTimeout(() => { annotationJustSelectedRef.current = false; }, 300);
-        setSelectedContactId(c.id);
+
+        // If multiple contacts at this location, cycle through them
+        const groupContacts = locationGroups.get(locKey) || [c];
+        const currentIdx = groupContacts.findIndex((gc) => gc.id === selectedContactId);
+        const nextContact = groupContacts[(currentIdx + 1) % groupContacts.length];
+
+        setSelectedContactId(nextContact.id);
+
+        // Animate the pin: shrink → swap → expand
+        if (groupContacts.length > 1) {
+          const el = annotation.element;
+          if (el?.firstElementChild) {
+            const inner = el.firstElementChild as HTMLElement;
+            inner.style.transition = 'transform 0.15s ease-in';
+            inner.style.transform = 'scale(0.5)';
+            setTimeout(() => {
+              // Update the avatar
+              const photo = getPhotoDataUri(nextContact);
+              const initials = getInitials(nextContact);
+              if (photo) {
+                const img = inner.querySelector('img');
+                if (img) { (img as HTMLImageElement).src = photo; }
+                else { inner.innerHTML = `<img src="${photo}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" />`; }
+              } else {
+                const txt = inner.querySelector('div') || inner;
+                txt.textContent = initials;
+              }
+              inner.style.transition = 'transform 0.2s ease-out';
+              inner.style.transform = 'scale(1)';
+            }, 150);
+          }
+        }
+
         // Show contact details in right panel
-        const addr = getDisplayAddress(c);
+        const addr = getDisplayAddress(nextContact);
         setSelectedPlace({
-          name: `${c.first_name} ${c.last_name || ''}`.trim(),
-          latitude: c.lat,
-          longitude: c.lng,
-          formattedAddress: addr || getShortLocation(c),
-          phone: c.phone || '',
-          url: c.url || '',
-          category: c.company ? (c.title ? `${c.title} at ${c.company}` : c.company) : '',
+          name: `${nextContact.first_name} ${nextContact.last_name || ''}`.trim(),
+          latitude: nextContact.lat,
+          longitude: nextContact.lng,
+          formattedAddress: addr || getShortLocation(nextContact),
+          phone: nextContact.phone || '',
+          url: nextContact.url || '',
+          category: nextContact.company ? (nextContact.title ? `${nextContact.title} at ${nextContact.company}` : nextContact.company) : '',
         });
       });
 
@@ -1638,18 +1676,27 @@ export default function MapPage() {
     };
   }, [mapSearchQuery]);
 
-  // ---- ESC key closes right panel ----
+  // ---- ESC key: close panel → clear search → blur input ----
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
+      if (e.key !== 'Escape') return;
+      if (selectedPlace) {
         setSelectedPlace(null);
-        setSearchSuggestions([]);
+        return;
+      }
+      if (mapSearchQuery || searchSuggestions.length > 0) {
         setMapSearchQuery('');
+        setSearchSuggestions([]);
+        return;
+      }
+      // Blur the search input if focused
+      if (document.activeElement instanceof HTMLInputElement) {
+        document.activeElement.blur();
       }
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, []);
+  }, [selectedPlace, mapSearchQuery, searchSuggestions]);
 
   // ---- Helper: region from contacts ----
   function regionFromContacts(contacts: GeocodedContact[]) {
@@ -2147,7 +2194,7 @@ export default function MapPage() {
               {geocodedContacts.length > 0 ? (
                 <div
                   className="flex gap-3 overflow-x-auto py-2 hide-scrollbar items-center"
-                  style={{ minHeight: 76 }}
+                  style={{ minHeight: 83 }}
                 >
                   {geocodedContacts.map((c) => {
                     const photo = getPhotoDataUri(c);
@@ -2410,70 +2457,82 @@ export default function MapPage() {
           />
 
           <div className="p-3 space-y-3">
-            {/* Name */}
-            <h3 className="text-sm font-semibold text-gray-200 leading-snug">
+            {/* Name — click to copy */}
+            <button
+              onClick={() => navigator.clipboard.writeText(selectedPlace.name)}
+              className="text-sm font-semibold text-gray-200 leading-snug hover:text-jarvis-blue transition-colors text-left cursor-copy"
+              title="Click to copy"
+            >
               {selectedPlace.name}
-            </h3>
+            </button>
 
             {/* Category */}
             {selectedPlace.category && (
-              <div className="flex items-center gap-2">
+              <button
+                onClick={() => navigator.clipboard.writeText(selectedPlace.category!)}
+                className="flex items-center gap-2 cursor-copy hover:opacity-80 transition-opacity"
+                title="Click to copy"
+              >
                 <Building2 size={11} className="text-jarvis-blue/40 flex-shrink-0" />
                 <span className="text-[10px] font-mono text-jarvis-blue/50">
                   {selectedPlace.category}
                 </span>
-              </div>
+              </button>
             )}
 
             {/* Address */}
             {selectedPlace.formattedAddress && (
-              <div className="flex items-start gap-2">
+              <button
+                onClick={() => navigator.clipboard.writeText(selectedPlace.formattedAddress!)}
+                className="flex items-start gap-2 text-left cursor-copy hover:opacity-80 transition-opacity"
+                title="Click to copy"
+              >
                 <MapPin size={11} className="text-jarvis-blue/40 flex-shrink-0 mt-0.5" />
                 <span className="text-[10px] font-mono text-gray-400 leading-relaxed">
                   {selectedPlace.formattedAddress}
                 </span>
-              </div>
+              </button>
             )}
 
             {/* Phone */}
             {selectedPlace.phone && (
-              <div className="flex items-center gap-2">
+              <button
+                onClick={() => navigator.clipboard.writeText(selectedPlace.phone!)}
+                className="flex items-center gap-2 cursor-copy hover:opacity-80 transition-opacity"
+                title="Click to copy"
+              >
                 <Phone size={11} className="text-jarvis-blue/40 flex-shrink-0" />
-                <a
-                  href={`tel:${selectedPlace.phone}`}
-                  className="text-[10px] font-mono text-gray-400 hover:text-jarvis-blue transition-colors"
-                >
+                <span className="text-[10px] font-mono text-gray-400">
                   {selectedPlace.phone}
-                </a>
-              </div>
+                </span>
+              </button>
             )}
 
             {/* Website */}
             {selectedPlace.url && (
-              <div className="flex items-center gap-2">
+              <button
+                onClick={() => navigator.clipboard.writeText(selectedPlace.url!)}
+                className="flex items-center gap-2 cursor-copy hover:opacity-80 transition-opacity text-left"
+                title="Click to copy"
+              >
                 <Globe size={11} className="text-jarvis-blue/40 flex-shrink-0" />
-                <a
-                  href={selectedPlace.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-[10px] font-mono text-jarvis-blue/60 truncate hover:text-jarvis-blue transition-colors"
-                >
+                <span className="text-[10px] font-mono text-jarvis-blue/60 truncate">
                   {selectedPlace.url.replace(/^https?:\/\/(www\.)?/, '')}
-                </a>
-              </div>
+                </span>
+              </button>
             )}
 
             {/* Coordinates */}
-            <div className="flex items-center gap-2">
+            <button
+              onClick={() => navigator.clipboard.writeText(`${selectedPlace.latitude.toFixed(6)}, ${selectedPlace.longitude.toFixed(6)}`)}
+              className="flex items-center gap-2 cursor-copy hover:opacity-80 transition-opacity"
+              title="Click to copy"
+            >
               <Copy size={11} className="text-gray-600 flex-shrink-0" />
-              <button
-                onClick={() => navigator.clipboard.writeText(`${selectedPlace.latitude.toFixed(6)}, ${selectedPlace.longitude.toFixed(6)}`)}
-                className="text-[9px] font-mono text-gray-600 hover:text-gray-400 transition-colors"
-                title="Copy coordinates"
-              >
+              <span className="text-[9px] font-mono text-gray-600">
                 {selectedPlace.latitude.toFixed(5)}, {selectedPlace.longitude.toFixed(5)}
-              </button>
-            </div>
+              </span>
+            </button>
 
             <div
               style={{ height: 1, background: 'linear-gradient(90deg, transparent, rgba(0,212,255,0.08), transparent)' }}
@@ -2488,6 +2547,7 @@ export default function MapPage() {
                     lng: selectedPlace.longitude,
                     initialName: selectedPlace.name,
                     initialAddress: selectedPlace.formattedAddress,
+                    initialAppleMapsUrl: `https://maps.apple.com/?ll=${selectedPlace.latitude},${selectedPlace.longitude}&q=${encodeURIComponent(selectedPlace.name)}`,
                   });
                 }}
                 className="w-full py-2.5 flex items-center justify-center gap-2 text-[10px] font-mono font-semibold tracking-wider bg-jarvis-gold/10 border border-jarvis-gold/20 text-jarvis-gold hover:bg-jarvis-gold/20 transition-colors uppercase"
@@ -2540,6 +2600,7 @@ export default function MapPage() {
           lng={landmarkForm.lng}
           initialName={landmarkForm.initialName}
           initialAddress={landmarkForm.initialAddress}
+          initialAppleMapsUrl={landmarkForm.initialAppleMapsUrl}
           onSave={saveLandmark}
           onCancel={() => setLandmarkForm(null)}
         />
