@@ -4155,6 +4155,55 @@ def _safe_instantiate(tool_classes: list[type]) -> list[BaseTool]:
     return tools
 
 
+class LearningStatusTool(BaseTool):
+    """Report on JARVIS's continuous learning progress and knowledge growth."""
+
+    name = "learning_status"
+    description = (
+        "Check JARVIS's learning status: how many documents ingested, entities "
+        "discovered, dialogue sessions run, and knowledge base size. Use when "
+        "the user asks what JARVIS has been learning, how smart JARVIS is getting, "
+        "or wants a learning/knowledge growth report."
+    )
+
+    async def execute(
+        self,
+        params: dict[str, Any],
+        *,
+        state: Optional[AgentState] = None,
+    ) -> str:
+        try:
+            from app.services.continuous_learning import get_learning_metrics
+            metrics = await get_learning_metrics()
+
+            lines = [
+                "## JARVIS Learning Status",
+                "",
+                f"**Knowledge base**: {metrics.get('knowledge_base_size', 0):,} document chunks",
+                f"**Total documents ingested**: {metrics.get('total_documents_ingested', 0)}",
+                f"**Entities discovered**: {metrics.get('total_entities_discovered', 0)}",
+                f"**Dialogue sessions**: {metrics.get('total_dialogue_sessions', 0)}",
+                "",
+                f"**Today**: {metrics.get('today_cycles', 0)} learning cycles, "
+                f"{metrics.get('today_ingested', 0)} docs ingested, "
+                f"{metrics.get('today_entities', 0)} entities",
+                "",
+            ]
+
+            last = metrics.get("last_cycle", {})
+            if last.get("timestamp"):
+                lines.append(f"**Last cycle**: {last['timestamp'][:16]} — "
+                             f"status: {last.get('status', '?')}, "
+                             f"ingested: {last.get('ingested', 0)}, "
+                             f"phases: {', '.join(last.get('phases', []))}")
+            else:
+                lines.append("**Last cycle**: never run")
+
+            return "\n".join(lines)
+        except Exception as exc:
+            return f"Learning status unavailable: {exc}"
+
+
 class SelfHealTool(BaseTool):
     """Diagnose and attempt to fix JARVIS integration issues automatically."""
 
@@ -4322,6 +4371,8 @@ def get_tool_registry() -> dict[str, BaseTool]:
             UpdateReminderTool,
             # Self-healing / diagnostics
             SelfHealTool,
+            # Continuous learning status
+            LearningStatusTool,
         ]
         tools = _safe_instantiate(tool_classes)
         logger.info("Tool registry loaded: %d/%d tools available", len(tools), len(tool_classes))

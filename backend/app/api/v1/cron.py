@@ -746,3 +746,191 @@ async def self_heal_status(
         "today_log": today_log,
         "today_run_count": len(today_log),
     }
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Continuous Learning — enhanced research + ingestion + dialogue
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+@router.post("/learning-cycle")
+async def learning_cycle(
+    request: Request,
+    current_user: User = Depends(require_service_key),
+) -> dict[str, Any]:
+    """Execute a full continuous learning cycle.
+
+    Runs the enhanced research pipeline:
+    1. Standard research (fixed topic rotation) + auto-ingest into Qdrant/Neo4j
+    2. Trending topic detection + research + ingestion
+    3. Deep web scraping of article URLs for richer content
+    4. Internal dialogue (dual-LLM debate) for deeper insights
+
+    This replaces the basic research-cycle for more comprehensive learning.
+    Intended to be called by a Railway cron service (e.g. every 2-4 hours).
+
+    Protected by SERVICE_API_KEY.
+    """
+    from app.services.continuous_learning import run_learning_cycle
+
+    logger.info("Learning cycle triggered by user=%s", current_user.username)
+    log_audit("cron_learning_cycle", "triggered", user_id=str(current_user.id), ip=request.client.host if request.client else "")
+    try:
+        result = await run_learning_cycle(
+            include_trending=True,
+            include_deep_scrape=True,
+            include_dialogue=True,
+        )
+    except Exception as exc:
+        logger.exception("Learning cycle failed: %s", exc)
+        raise HTTPException(status_code=500, detail=f"Learning cycle error: {exc}")
+    return result
+
+
+@router.post("/internal-dialogue")
+async def internal_dialogue(
+    request: Request,
+    payload: dict[str, Any] = {},
+    current_user: User = Depends(require_service_key),
+) -> dict[str, Any]:
+    """Run an internal dialogue session on the most recent research finding.
+
+    JARVIS debates with a neutral analyst to extract deeper insights.
+    Insights are automatically stored in the knowledge base.
+
+    Optional payload:
+        topic (str): specific topic to discuss
+        summary (str): specific content to discuss
+        rounds (int): number of debate rounds (default 3)
+
+    Protected by SERVICE_API_KEY.
+    """
+    from app.services.internal_dialogue import run_dialogue_session
+
+    logger.info("Internal dialogue triggered by user=%s", current_user.username)
+    log_audit("cron_internal_dialogue", "triggered", user_id=str(current_user.id), ip=request.client.host if request.client else "")
+
+    topic = payload.get("topic", "")
+    summary = payload.get("summary", "")
+    rounds = payload.get("rounds", 3)
+
+    # If no topic/summary provided, find the latest research finding
+    if not topic or not summary:
+        try:
+            r = await get_redis_client()
+            from app.services.research_daemon import RESEARCH_TOPICS
+            best_ts = ""
+            for t in RESEARCH_TOPICS:
+                raw = await r.cache_get(f"jarvis:research:latest:{t['name']}")
+                if raw:
+                    try:
+                        finding = json.loads(raw)
+                        ts = finding.get("timestamp", "")
+                        if ts > best_ts:
+                            best_ts = ts
+                            topic = finding.get("label", t["label"])
+                            summary = finding.get("summary", "")
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+        except Exception as exc:
+            logger.warning("Could not find latest finding: %s", exc)
+
+    if not summary:
+        return {"status": "no_content", "message": "No research findings available for dialogue."}
+
+    try:
+        result = await run_dialogue_session(
+            topic=topic,
+            summary=summary,
+            rounds=rounds,
+            use_local_llm=True,
+        )
+
+        # Auto-ingest insights into knowledge base
+        insights = result.get("insights", [])
+        if insights:
+            from app.services.continuous_learning import ingest_research_finding
+            insight_lines = [f"- [{i.get('category', 'general')}] {i['insight']}" for i in insights]
+            await ingest_research_finding({
+                "topic": f"dialogue_{topic.lower().replace(' ', '_')[:30]}",
+                "label": f"Dialogue Insights: {topic}",
+                "summary": f"# Dialogue Insights: {topic}\n\n" + "\n".join(insight_lines),
+                "source": "internal_dialogue",
+                "date": datetime.now(tz=_MTN).strftime("%Y-%m-%d"),
+            })
+
+    except Exception as exc:
+        logger.exception("Internal dialogue failed: %s", exc)
+        raise HTTPException(status_code=500, detail=f"Dialogue error: {exc}")
+
+    return result
+
+
+@router.get("/learning/status")
+async def learning_status(
+    current_user: User = Depends(get_current_active_user_or_service),
+) -> dict[str, Any]:
+    """Return JARVIS's continuous learning metrics and progress.
+
+    Shows: total documents ingested, entities discovered, knowledge base size,
+    today's learning activity, and last cycle details.
+    """
+    from app.services.continuous_learning import get_learning_metrics
+
+    metrics = await get_learning_metrics()
+
+    # Also get trending topics if available
+    trending = []
+    try:
+        r = await get_redis_client()
+        raw = await r.cache_get("jarvis:learning:trends")
+        if raw:
+            trending = json.loads(raw)
+    except Exception:
+        pass
+
+    # Dialogue history count
+    dialogue_count = 0
+    try:
+        r = await get_redis_client()
+        raw = await r.cache_get("jarvis:learning:dialogue_count")
+        dialogue_count = int(raw) if raw else 0
+    except Exception:
+        pass
+
+    return {
+        **metrics,
+        "trending_topics": [
+            {"name": t.get("name", ""), "label": t.get("label", ""), "relevance": t.get("relevance_score", 0)}
+            for t in trending[:5]
+        ],
+        "dialogue_sessions_total": dialogue_count,
+    }
+
+
+@router.post("/learning/detect-trends")
+async def detect_trends(
+    request: Request,
+    current_user: User = Depends(require_service_key),
+) -> dict[str, Any]:
+    """Detect trending topics relevant to Mr. Stark's interests.
+
+    Searches the web for trending news in tech, science, and business,
+    then scores each topic by relevance to configured interests.
+
+    Protected by SERVICE_API_KEY.
+    """
+    from app.services.trend_detector import detect_trending_topics
+
+    logger.info("Trend detection triggered by user=%s", current_user.username)
+    try:
+        topics = await detect_trending_topics(max_topics=5)
+    except Exception as exc:
+        logger.exception("Trend detection failed: %s", exc)
+        raise HTTPException(status_code=500, detail=f"Trend detection error: {exc}")
+
+    return {
+        "status": "ok",
+        "topics_found": len(topics),
+        "topics": topics,
+    }

@@ -147,6 +147,10 @@ TOOL_CATEGORIES = {
         "description": "Fix broken integrations, diagnose connection issues, auto-repair, self-healing, troubleshoot errors",
         "tools": ["self_heal", "system_health"],
     },
+    "learning": {
+        "description": "JARVIS learning progress, knowledge growth, what has JARVIS learned, how smart is JARVIS, continuous learning status",
+        "tools": ["learning_status", "research_briefing"],
+    },
 }
 
 _CATEGORY_LIST = "\n".join(

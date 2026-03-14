@@ -299,6 +299,26 @@ async def run_research_cycle() -> dict[str, Any]:
     await redis.cache_set(_KEY_LAST_RUN, now.isoformat(), ttl=_SEVEN_DAYS * 52)
     logger.info("Redis SET %s = %s", _KEY_LAST_RUN, now.isoformat())
 
+    # ── Auto-ingest into Qdrant/Neo4j (continuous learning) ─────────
+    ingestion_result = None
+    try:
+        from app.services.continuous_learning import ingest_research_finding
+        ingestion_result = await ingest_research_finding({
+            "topic": topic["name"],
+            "label": topic["label"],
+            "summary": summary,
+            "source": "research_daemon",
+            "date": date_str,
+        })
+        if ingestion_result:
+            logger.info(
+                "Auto-ingested research into knowledge base: chunks=%d, entities=%d",
+                ingestion_result.get("chunk_count", 0),
+                ingestion_result.get("entity_count", 0),
+            )
+    except Exception as exc:
+        logger.warning("Auto-ingestion failed (non-critical): %s", exc)
+
     total_s = (_time.perf_counter() - cycle_start)
     logger.info("═══════════════════════════════════════════════════════")
     logger.info(
@@ -319,6 +339,9 @@ async def run_research_cycle() -> dict[str, Any]:
         "queries_successful": successful_queries,
         "total_time_ms": round(total_s * 1000),
         "summary_preview": summary[:200],
+        "ingested": ingestion_result is not None,
+        "ingestion_chunks": ingestion_result.get("chunk_count", 0) if ingestion_result else 0,
+        "ingestion_entities": ingestion_result.get("entity_count", 0) if ingestion_result else 0,
     }
 
 

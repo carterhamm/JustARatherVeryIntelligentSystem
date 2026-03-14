@@ -1179,6 +1179,20 @@ _TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "required": ["reminder_id"],
         },
     },
+    # -- Learning Status ---------------------------------------------------
+    {
+        "name": "learning_status",
+        "description": (
+            "Check JARVIS's continuous learning status and knowledge growth. "
+            "Reports documents ingested, entities discovered, dialogue sessions, "
+            "and knowledge base size. Use when asked about JARVIS's learning progress."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+        },
+    },
     # -- Self-Healing / Auto-Repair ----------------------------------------
     {
         "name": "self_heal",
