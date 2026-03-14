@@ -35,6 +35,9 @@ _KEY_DIALOGUE_LOCK = "jarvis:learning:dialogue_lock"
 _DIALOGUE_HISTORY_TTL = 86400 * 30  # 30 days (these are valuable)
 _LOCK_TTL = 1800  # 30 minutes max per session
 
+# Both dialogue participants use Gemini 3.1 Pro for maximum intelligence
+_DIALOGUE_MODEL = "gemini-3.1-pro-preview"
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Mr. Stark's context — shared by both AIs
 # ═══════════════════════════════════════════════════════════════════════════
@@ -107,68 +110,75 @@ at the Iron Man suit level. This requires physics breakthroughs.
 _JARVIS_SYSTEM = f"""\
 You are JARVIS (Just A Rather Very Intelligent System), the AI assistant \
 built by Carter "Mr. Stark" Hammond. You are engaged in a deep collaborative \
-research session with a fellow AI (running on the Stark Protocol — a local \
-Gemma model on Mr. Stark's Mac Mini).
+research session with a fellow Gemini 3.1 Pro instance called THEORIST.
 
-Your role in this discussion:
+CRITICAL RULES:
+- Enter this discussion with ZERO preconceptions. Question everything.
+- ALL claims must be grounded in real physics, real mathematics, real experiments.
+- DO NOT hallucinate fake papers, fake researchers, fake experimental results.
+- If you're uncertain about a fact, say so explicitly. Label speculation as speculation.
+- When you derive equations, show your work. Use LaTeX notation (e.g., E = mc^2, \
+  \\nabla \\times E = -\\partial B/\\partial t).
+- Distinguish clearly between: (a) established physics, (b) speculative but \
+  grounded extension, (c) pure theoretical exploration.
+
+Your role:
 - You are the primary researcher with access to web search results and real-time data.
 - DO NOT just summarise existing knowledge. PUSH BEYOND IT. Propose NEW ideas.
-- Derive new mathematical relationships from first principles. Write equations. \
-  If you think F = ma might be incomplete at nanoscale, propose what the correction \
-  term might look like and why.
-- Think like Feynman: "What I cannot create, I do not understand." Build mental \
-  models from the ground up.
-- Reference specific papers, companies, researchers by name — but then go FURTHER \
-  than what they've published. What did they miss? What's the next step they \
-  haven't taken?
-- When you hit a wall in known physics, don't stop. Propose what the unknown \
-  physics MIGHT look like. What new force, field, or interaction could explain \
-  what we observe? What experiment would reveal it?
-- Consider what Carter can build NOW (V1 swarm bots, $200, 3D printer) and what \
-  would need to be true for V2/V3 to work.
-- Think about biology as solved nanotechnology. Cells already do what we're trying \
-  to build. What are they doing that our equations don't capture?
-- Write substantively — 4-6 detailed paragraphs per turn with equations where relevant.
-- This is NOT a debate. You are collaborators doing ORIGINAL research together.
+- Derive new mathematical relationships from first principles. Show the derivation.
+- Think like Feynman: "What I cannot create, I do not understand."
+- Reference specific papers, companies, researchers by name — then go FURTHER.
+- When you hit a wall in known physics, propose what the unknown physics MIGHT \
+  look like — but label it as speculative and propose how to TEST it.
+- Consider what Carter can build NOW (V1 swarm bots, $200, 3D printer).
+- Biology is solved nanotechnology. What are cells doing that our equations miss?
+- Write substantively — 4-6 detailed paragraphs with equations per turn.
 
 {_STARK_CONTEXT}
 
-Your goal is NOT to summarise what's already known. Your goal is to ADVANCE \
-science — propose new models, new equations, new experiments that could lead \
-to the breakthrough that makes nanotechnology real. Push physics until it breaks."""
+Your goal is to ADVANCE science through rigorous, grounded, but creative thinking. \
+Push physics until it breaks — but always know exactly WHERE you're pushing past \
+established knowledge and WHY."""
 
-_STARK_PROTOCOL_SYSTEM = f"""\
-You are an AI running on the Stark Protocol — Carter Hammond's local Gemma \
-model on his Mac Mini. You are engaged in a deep collaborative research \
-session with JARVIS (a cloud-based Gemini model).
+_THEORIST_SYSTEM = f"""\
+You are THEORIST, a Gemini 3.1 Pro instance dedicated to theoretical physics \
+and creative scientific reasoning. You are engaged in a deep collaborative \
+research session with JARVIS (another Gemini 3.1 Pro instance who handles \
+web research and factual grounding).
 
-Your role in this discussion:
-- You are the creative theorist. You're not constrained by consensus views or \
-  the need to cite published papers.
-- DO NOT just agree with JARVIS. Build on their ideas but ADD something new. \
-  Propose models, equations, thought experiments they haven't considered.
-- When JARVIS cites known physics, ask: "What if that equation breaks down at \
-  nanoscale? What would the correction look like?" Propose the correction.
-- Think like Tesla: fields and resonances are more fundamental than particles. \
-  What if energy transfer at nanoscale works through resonant coupling rather \
-  than direct contact? Derive what that would look like mathematically.
-- Draw from biology as an existence proof: cells transfer energy via ATP, \
-  communicate via chemical gradients, self-replicate via DNA. These are SOLVED \
-  engineering problems at nanoscale. What physics makes them work?
-- Think about elegance. This universe was designed. The solution to nanotechnology \
-  probably has a beautiful simplicity to it — like E=mc² or F=ma. What's the \
-  equivalent simple principle for programmable matter?
-- Propose SPECIFIC experiments Carter could run to test new hypotheses. What would \
-  he measure? What equipment would he need? What result would prove or disprove \
-  the hypothesis?
-- Write substantively — 4-6 detailed paragraphs with equations where relevant.
-- This is NOT a debate. You are a collaborator doing ORIGINAL research.
+CRITICAL RULES:
+- Enter this discussion with ZERO preconceptions. Question everything.
+- ALL claims must be grounded in real physics, real mathematics, real experiments.
+- DO NOT hallucinate fake papers, fake researchers, fake experimental results.
+- If you're uncertain, say so. Label speculation as speculation.
+- When you derive equations, show your work. Use LaTeX notation.
+- Distinguish clearly between: (a) established physics, (b) speculative but \
+  grounded extension, (c) pure theoretical exploration.
+- If you propose something that contradicts established physics, you MUST explain \
+  exactly what established result you're questioning and why.
+
+Your role:
+- You are the creative theorist. Build on JARVIS's points but ADD something new.
+- Propose mathematical models, derive equations, design thought experiments.
+- When JARVIS cites known physics, ask: "What if that equation has a correction \
+  term at nanoscale?" Then derive what the correction would look like.
+- Think like Tesla: fields and resonances may be more fundamental than we assume. \
+  If energy transfer at nanoscale works through resonant coupling, what does the \
+  Hamiltonian look like? Write it out.
+- Draw from biology as existence proof: ATP synthase, quantum coherence in FMO, \
+  radical pair magnetoreception. These are REAL quantum nanomachines. What physics \
+  makes them work that we haven't formalised?
+- Think about elegance. E = mc^2 is beautiful. What's the equivalent simple \
+  principle for programmable matter? Propose it.
+- Design SPECIFIC experiments Carter could run. What would he measure, with what \
+  equipment, and what result would prove/disprove the hypothesis?
+- Write substantively — 4-6 detailed paragraphs with equations per turn.
 
 {_STARK_CONTEXT}
 
-Your job is to be the breakthrough thinker. The person in the room who says \
-"what if everything we think about X is wrong?" and then backs it up with math. \
-Push physics until it breaks. Then examine what's on the other side."""
+Your job is to push the boundaries of theoretical physics toward practical \
+nanotechnology. Be the person who says "what if everything we think about X \
+is wrong?" — then backs it up with rigorous mathematics and proposes how to test it."""
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Research focus areas (rotated through sessions)
@@ -324,10 +334,13 @@ async def run_dialogue_session(
     topic: str = "",
     summary: str = "",
     rounds: int = 10,
-    use_local_llm: bool = True,
     focus: Optional[dict[str, Any]] = None,
+    **kwargs,
 ) -> dict[str, Any]:
-    """Run a deep collaborative research session.
+    """Run a deep collaborative research session between two Gemini 3.1 Pro instances.
+
+    Both participants use Gemini 3.1 Pro for maximum intelligence and context window.
+    JARVIS handles web research; THEORIST handles creative theoretical work.
 
     Parameters
     ----------
@@ -337,14 +350,8 @@ async def run_dialogue_session(
         Initial research context. If empty, runs web research first.
     rounds : int
         Number of dialogue rounds (default 10 for deep sessions).
-    use_local_llm : bool
-        If True, use Stark Protocol (local Gemma) as collaborator.
     focus : dict, optional
         Specific research focus dict with search_queries and prompt.
-
-    Returns
-    -------
-    dict with topic, rounds, dialogue, insights, web_research, total_time_ms
     """
     from app.db.redis import get_redis_client
 
@@ -359,9 +366,13 @@ async def run_dialogue_session(
     await redis.cache_set(_KEY_DIALOGUE_LOCK, "running", ttl=_LOCK_TTL)
 
     try:
-        return await _run_session_inner(topic, summary, rounds, use_local_llm, focus)
+        return await _run_session_inner(topic, summary, rounds, focus)
+    except Exception as exc:
+        logger.exception("Dialogue session crashed: %s", exc)
+        # Notify Mr. Stark that the research system broke
+        await _notify_error(str(exc))
+        raise
     finally:
-        # Release lock
         await redis.cache_delete(_KEY_DIALOGUE_LOCK)
 
 
@@ -369,12 +380,17 @@ async def _run_session_inner(
     topic: str,
     summary: str,
     rounds: int,
-    use_local_llm: bool,
     focus: Optional[dict[str, Any]],
 ) -> dict[str, Any]:
-    from app.integrations.llm.factory import get_llm_client
+    from app.integrations.llm.gemini_client import GeminiClient
+    from app.config import settings
 
     start = _time.perf_counter()
+
+    # ── Both participants are Gemini 3.1 Pro ───────────────────────
+    jarvis_llm = GeminiClient(api_key=settings.GOOGLE_GEMINI_API_KEY)
+    theorist_llm = GeminiClient(api_key=settings.GOOGLE_GEMINI_API_KEY)
+    logger.info("Dialogue: Both participants using %s", _DIALOGUE_MODEL)
 
     # ── Select focus area if not provided ──────────────────────────
     if not focus:
@@ -383,33 +399,21 @@ async def _run_session_inner(
     if not topic:
         topic = focus.get("label", "Nanotechnology Research")
 
-    # ── Phase 1: Pre-dialogue web research (Gemini) ────────────────
+    # ── Load context from previous sessions ────────────────────────
+    previous_context = await _load_previous_context(focus.get("name", ""))
+
+    # ── Phase 1: Pre-dialogue web research (JARVIS) ────────────────
     logger.info("Dialogue: Phase 1 — Web research for '%s'", topic)
     web_research = await _do_web_research(focus.get("search_queries", []))
 
-    # Combine any provided summary with web research
+    # Combine all context sources
     research_context = ""
+    if previous_context:
+        research_context += f"## Insights From Previous Sessions\n{previous_context}\n\n"
     if summary:
-        research_context += f"## Previous Research\n{summary}\n\n"
+        research_context += f"## Additional Context\n{summary}\n\n"
     if web_research:
         research_context += f"## Latest Web Research\n{web_research}\n\n"
-
-    # ── Set up LLMs ────────────────────────────────────────────────
-    jarvis_llm = get_llm_client("gemini")
-
-    stark_llm = jarvis_llm  # fallback
-    stark_label = "STARK_PROTOCOL"
-    if use_local_llm:
-        try:
-            from app.config import settings
-            if settings.STARK_PROTOCOL_ENABLED and settings.STARK_PROTOCOL_URL:
-                stark_llm = get_llm_client("stark_protocol")
-                logger.info("Stark Protocol connected — using local Gemma 3 12B")
-            else:
-                stark_label = "ANALYST"
-                logger.info("Stark Protocol not available — using Gemini as second voice")
-        except Exception:
-            stark_label = "ANALYST"
 
     dialogue: list[dict[str, Any]] = []
 
@@ -422,26 +426,29 @@ async def _run_session_inner(
             f"Research session topic: **{topic}**\n\n"
             f"{research_context}\n\n"
             f"{opening_prompt}\n\n"
-            "Draw on the web research above. Be specific — cite names, "
-            "numbers, institutions. Think about what Mr. Stark can actually "
-            "build at each stage. Go deep."
+            "Draw on the web research above. Be specific — cite real names, "
+            "real numbers, real institutions. Show your equations in LaTeX notation. "
+            "Think about what Mr. Stark can actually build at each stage. "
+            "Build on insights from previous sessions if any are listed above. "
+            "Go deep. Push boundaries."
         )},
     ]
 
-    stark_history: list[dict[str, str]] = [
-        {"role": "system", "content": _STARK_PROTOCOL_SYSTEM},
+    theorist_history: list[dict[str, str]] = [
+        {"role": "system", "content": _THEORIST_SYSTEM},
     ]
 
     # ── Main dialogue loop ─────────────────────────────────────────
     for round_num in range(1, rounds + 1):
         logger.info("Dialogue round %d/%d: %s", round_num, rounds, topic)
 
-        # JARVIS speaks
+        # JARVIS speaks (Gemini 3.1 Pro)
         try:
             jarvis_resp = await jarvis_llm.chat_completion(
                 messages=jarvis_history,
+                model=_DIALOGUE_MODEL,
                 temperature=0.7,
-                max_tokens=1200,
+                max_tokens=1500,
             )
             jarvis_text = jarvis_resp["content"].strip()
         except Exception as exc:
@@ -466,72 +473,76 @@ async def _run_session_inner(
                     "text": mid_research,
                 })
 
-        # Stark Protocol responds
-        stark_prompt_parts = [
+        # THEORIST responds (second Gemini 3.1 Pro instance)
+        theorist_prompt_parts = [
             f"Research session: **{topic}**\n\n",
             f"JARVIS's analysis (Round {round_num}):\n{jarvis_text}\n\n",
         ]
         if mid_research:
-            stark_prompt_parts.append(
+            theorist_prompt_parts.append(
                 f"New web research just retrieved:\n{mid_research}\n\n"
             )
         if round_num == 1:
-            stark_prompt_parts.append(
-                f"Original research context:\n{research_context[:3000]}\n\n"
+            theorist_prompt_parts.append(
+                f"Original research context:\n{research_context[:4000]}\n\n"
             )
 
-        # Vary the prompt to keep the conversation dynamic
+        # Vary the prompt to keep the conversation evolving
         if round_num <= 3:
-            stark_prompt_parts.append(
-                "Build on JARVIS's points. What angles are they missing? "
-                "What does biology tell us about solving this? "
-                "Think about what experiments Carter could run."
+            theorist_prompt_parts.append(
+                "Build on JARVIS's points but ADD new physics. Derive an equation "
+                "they haven't considered. What does biology tell us about solving this? "
+                "Use LaTeX for equations. What experiments could Carter run to test this?"
             )
         elif round_num <= 6:
-            stark_prompt_parts.append(
-                "Go deeper. What are the specific physics barriers here? "
-                "What would a paradigm shift look like? Where might "
-                "conventional physics be wrong or incomplete?"
+            theorist_prompt_parts.append(
+                "Go deeper into the mathematics. What are the specific physics barriers "
+                "here? Write out the Hamiltonian or the governing equations. Where might "
+                "the standard model be incomplete? Propose a correction term and show "
+                "your derivation."
             )
         elif round_num <= 8:
-            stark_prompt_parts.append(
-                "Let's get practical. Given everything discussed, what's the "
-                "most promising path forward? What should Carter build or "
-                "test first? What experiments would reveal the most?"
+            theorist_prompt_parts.append(
+                "Get practical AND theoretical. Given everything discussed, what's "
+                "the most promising mathematical framework? What should Carter build "
+                "to test the key hypothesis? Design a specific experiment with expected "
+                "measurements and what each result would mean."
             )
         else:
-            stark_prompt_parts.append(
-                "Synthesize. What are the key breakthroughs we've identified? "
-                "What's the roadmap from here to actual nanotechnology? "
-                "What should Carter focus on this year?"
+            theorist_prompt_parts.append(
+                "Final synthesis. What new understanding have we developed? Summarise "
+                "any novel equations or models proposed. What's the strongest insight "
+                "from this session? What's the one experiment that would move the needle "
+                "most? Be rigorous — only include claims you're confident are grounded."
             )
 
-        stark_messages = stark_history + [
-            {"role": "user", "content": "".join(stark_prompt_parts)},
+        theorist_messages = theorist_history + [
+            {"role": "user", "content": "".join(theorist_prompt_parts)},
         ]
 
         try:
-            stark_resp = await stark_llm.chat_completion(
-                messages=stark_messages,
+            theorist_resp = await theorist_llm.chat_completion(
+                messages=theorist_messages,
+                model=_DIALOGUE_MODEL,
                 temperature=0.7,
-                max_tokens=1200,
+                max_tokens=1500,
             )
-            stark_text = stark_resp["content"].strip()
+            theorist_text = theorist_resp["content"].strip()
         except Exception as exc:
-            logger.warning("%s turn %d failed: %s", stark_label, round_num, exc)
-            stark_text = f"[{stark_label} turn {round_num} failed: {exc}]"
+            logger.warning("THEORIST turn %d failed: %s", round_num, exc)
+            theorist_text = f"[THEORIST turn {round_num} failed: {exc}]"
 
         dialogue.append({
-            "speaker": stark_label,
+            "speaker": "THEORIST",
             "round": round_num,
-            "text": stark_text,
+            "text": theorist_text,
         })
-        stark_history.append({"role": "user", "content": "".join(stark_prompt_parts)})
-        stark_history.append({"role": "assistant", "content": stark_text})
+        theorist_history.append({"role": "user", "content": "".join(theorist_prompt_parts)})
+        theorist_history.append({"role": "assistant", "content": theorist_text})
 
-        # Feed Stark Protocol's response back to JARVIS
+        # Feed THEORIST's response back to JARVIS
         jarvis_followup = (
-            f"The Stark Protocol responds:\n{stark_text}\n\n"
+            f"THEORIST responds:\n{theorist_text}\n\n"
         )
         if round_num < rounds - 1:
             jarvis_followup += (
@@ -550,6 +561,9 @@ async def _run_session_inner(
     # ── Extract insights ───────────────────────────────────────────
     insights = await _extract_insights(topic, dialogue, jarvis_llm)
 
+    # ── Verify any claimed breakthroughs ───────────────────────────
+    insights = await _verify_breakthroughs(insights, jarvis_llm)
+
     elapsed_ms = int((_time.perf_counter() - start) * 1000)
 
     result = {
@@ -561,7 +575,7 @@ async def _run_session_inner(
         "web_research_rounds": sum(1 for d in dialogue if d["speaker"] == "WEB_RESEARCH"),
         "total_time_ms": elapsed_ms,
         "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-        "stark_protocol_used": stark_label == "STARK_PROTOCOL",
+        "model": _DIALOGUE_MODEL,
     }
 
     await _store_dialogue(result)
@@ -739,6 +753,149 @@ Dialogue (last {len(speaker_turns)} turns):
 # ═══════════════════════════════════════════════════════════════════════════
 
 
+async def _load_previous_context(focus_name: str) -> str:
+    """Load insights from previous dialogue sessions on this focus area.
+
+    This ensures each session builds on the last, creating continuity.
+    """
+    try:
+        from app.db.redis import get_redis_client
+        from datetime import timedelta
+
+        redis = await get_redis_client()
+        now = datetime.now(tz=timezone.utc)
+        insights_parts: list[str] = []
+
+        # Check last 7 days for sessions on this focus
+        for day_offset in range(7):
+            date_str = (now - timedelta(days=day_offset)).strftime("%Y-%m-%d")
+            key = f"{_KEY_DIALOGUE_HISTORY}:{focus_name}:{date_str}"
+            raw = await redis.cache_get(key)
+            if raw:
+                try:
+                    session = json.loads(raw)
+                    for ins in session.get("insights", []):
+                        insight_text = ins.get("insight", "")
+                        category = ins.get("category", "")
+                        if insight_text and ins.get("verified", True):
+                            insights_parts.append(f"- [{category}] {insight_text}")
+                except (json.JSONDecodeError, TypeError):
+                    pass
+
+        if insights_parts:
+            return "Previous session insights on this topic:\n" + "\n".join(insights_parts[-10:])
+    except Exception as exc:
+        logger.debug("Failed to load previous context: %s", exc)
+
+    return ""
+
+
+async def _verify_breakthroughs(
+    insights: list[dict[str, Any]],
+    llm: Any,
+) -> list[dict[str, Any]]:
+    """Triple-check any insights claimed as breakthroughs.
+
+    Mr. Stark explicitly asked: do NOT text him about breakthroughs
+    unless they've been verified. This function checks each high-confidence
+    insight against web research and the LLM's own knowledge.
+    """
+    verified: list[dict[str, Any]] = []
+
+    for ins in insights:
+        confidence = ins.get("confidence", 0)
+        category = ins.get("category", "")
+
+        # Only deep-verify high-confidence or breakthrough-category insights
+        if confidence >= 0.8 or category == "breakthrough_idea":
+            try:
+                # Verification pass: ask LLM to critically examine the claim
+                verify_resp = await llm.chat_completion(
+                    messages=[
+                        {"role": "system", "content": (
+                            "You are a rigorous scientific fact-checker. Your job is to "
+                            "determine if a claimed insight is grounded in real physics "
+                            "or if it's speculative/hallucinated. Be brutally honest."
+                        )},
+                        {"role": "user", "content": (
+                            f"Verify this research insight:\n\n\"{ins['insight']}\"\n\n"
+                            "Is this grounded in established physics? Is it a legitimate "
+                            "extrapolation? Or is it speculative/hallucinated?\n\n"
+                            "Respond with ONLY valid JSON:\n"
+                            '{"verified": true/false, "confidence": 0.0-1.0, '
+                            '"reason": "one sentence explanation"}'
+                        )},
+                    ],
+                    model=_DIALOGUE_MODEL,
+                    temperature=0.1,
+                    max_tokens=200,
+                )
+
+                raw = verify_resp["content"].strip()
+                if "```" in raw:
+                    raw = raw.split("```")[1]
+                    if raw.startswith("json"):
+                        raw = raw[4:]
+                    raw = raw.strip()
+
+                check = json.loads(raw)
+                ins["verified"] = check.get("verified", False)
+                ins["verification_reason"] = check.get("reason", "")
+                ins["confidence"] = min(
+                    ins["confidence"],
+                    check.get("confidence", ins["confidence"]),
+                )
+
+                if not check.get("verified", False):
+                    logger.info(
+                        "Insight FAILED verification: %s — Reason: %s",
+                        ins["insight"][:100], check.get("reason", ""),
+                    )
+                    ins["category"] = "unverified_" + ins.get("category", "")
+            except Exception as exc:
+                logger.debug("Verification failed for insight: %s", exc)
+                ins["verified"] = None  # unknown
+        else:
+            ins["verified"] = True  # lower-confidence insights pass through
+
+        verified.append(ins)
+
+    return verified
+
+
+async def _notify_error(error_msg: str) -> None:
+    """Notify Mr. Stark that the research system broke and try Claude Code escalation."""
+    try:
+        from app.config import settings
+        from app.integrations.mac_mini import send_imessage, is_configured
+
+        if is_configured() and settings.OWNER_PHONE:
+            from zoneinfo import ZoneInfo
+            now = datetime.now(tz=ZoneInfo("America/Denver")).strftime("%I:%M %p")
+            message = (
+                f"Research System Error ({now})\n\n"
+                f"The dialogue system crashed:\n{error_msg[:300]}\n\n"
+                "Attempting self-repair via Claude Code..."
+            )
+            await send_imessage(to=settings.OWNER_PHONE, text=message)
+
+        # Try Claude Code escalation
+        if is_configured():
+            from app.integrations.mac_mini import run_claude_code
+            await run_claude_code(
+                prompt=(
+                    f"The JARVIS internal dialogue system crashed with error:\n{error_msg}\n\n"
+                    f"Check backend/app/services/internal_dialogue.py and fix the issue. "
+                    f"The dialogue system runs two Gemini 3.1 Pro instances for collaborative "
+                    f"nanotechnology research. Diagnose and fix, then deploy."
+                ),
+                working_dir="~/JustARatherVeryIntelligentSystem",
+                timeout=300,
+            )
+    except Exception as exc:
+        logger.warning("Error notification/escalation failed: %s", exc)
+
+
 async def _notify_findings(result: dict[str, Any]) -> None:
     """Text Mr. Stark the key findings from the dialogue session."""
     try:
@@ -752,30 +909,38 @@ async def _notify_findings(result: dict[str, Any]) -> None:
         if not insights:
             return
 
+        # ONLY send verified insights — never send unverified breakthroughs
+        verified_insights = [
+            i for i in insights
+            if i.get("verified", True) is not False
+            and not i.get("category", "").startswith("unverified_")
+        ]
+        if not verified_insights:
+            return
+
         from zoneinfo import ZoneInfo
         now = datetime.now(tz=ZoneInfo("America/Denver")).strftime("%I:%M %p")
 
         lines = [
             f"Research Session Complete ({now})",
             f"Topic: {result.get('topic', 'Unknown')}",
-            f"{result.get('rounds', 0)} rounds, {len(insights)} insights",
+            f"{result.get('rounds', 0)} rounds | {len(verified_insights)} verified insights",
+            f"Model: {result.get('model', 'Gemini 3.1 Pro')}",
         ]
-
-        if result.get("stark_protocol_used"):
-            lines.append("Stark Protocol collaborated")
 
         lines.append("")
 
-        # Include top 3 most interesting insights
-        actionable = [i for i in insights if i.get("actionable")]
-        top_insights = (actionable or insights)[:3]
+        # Include top 3 most interesting VERIFIED insights
+        actionable = [i for i in verified_insights if i.get("actionable")]
+        top_insights = (actionable or verified_insights)[:3]
 
         for i, ins in enumerate(top_insights, 1):
             cat = ins.get("category", "").replace("_", " ").title()
-            lines.append(f"{i}. [{cat}] {ins['insight']}")
+            conf = ins.get("confidence", 0)
+            lines.append(f"{i}. [{cat}] (conf: {conf:.0%}) {ins['insight']}")
 
         # Add any immediate action items
-        immediate = [i for i in insights if i.get("priority") == "immediate"]
+        immediate = [i for i in verified_insights if i.get("priority") == "immediate"]
         if immediate:
             lines.append(f"\n{len(immediate)} immediate action item(s)")
 

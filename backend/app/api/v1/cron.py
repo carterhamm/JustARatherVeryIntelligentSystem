@@ -973,3 +973,46 @@ async def feynman_status(
     """Check Feynman Lectures ingestion progress."""
     from app.services.feynman_ingestion import get_ingestion_status
     return await get_ingestion_status()
+
+
+@router.post("/ingest-foundational")
+async def ingest_foundational(
+    request: Request,
+    payload: dict[str, Any] = {},
+    current_user: User = Depends(require_service_key),
+) -> dict[str, Any]:
+    """Ingest foundational research (Tesla, Pendry, quantum biology, DNA nanotech).
+
+    Optional payload:
+        targets (list[str]): specific target names to ingest.
+            e.g. ["tesla_wireless_energy", "pendry_negative_refraction"]
+        Available targets: tesla_wireless_energy, tesla_resonance,
+            tesla_electromagnetic, tesla_patents, tesla_energy_vision,
+            pendry_negative_refraction, pendry_cloaking, metamaterials_energy,
+            metamaterials_acoustic, quantum_biology_foundations,
+            dna_nanotech_foundation
+
+    Protected by SERVICE_API_KEY.
+    """
+    from app.services.foundational_research import ingest_foundational_research
+
+    logger.info("Foundational research ingestion triggered by user=%s", current_user.username)
+    log_audit("cron_foundational_ingest", "triggered", user_id=str(current_user.id), ip=request.client.host if request.client else "")
+
+    targets = payload.get("targets")
+
+    try:
+        result = await ingest_foundational_research(targets=targets)
+    except Exception as exc:
+        logger.exception("Foundational research ingestion failed: %s", exc)
+        raise HTTPException(status_code=500, detail=f"Foundational ingestion error: {exc}")
+    return result
+
+
+@router.get("/ingest-foundational/status")
+async def foundational_status(
+    current_user: User = Depends(get_current_active_user_or_service),
+) -> dict[str, Any]:
+    """Check foundational research ingestion status."""
+    from app.services.foundational_research import get_foundational_status
+    return await get_foundational_status()
