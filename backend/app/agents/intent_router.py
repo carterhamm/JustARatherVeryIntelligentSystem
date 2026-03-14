@@ -37,15 +37,15 @@ TOOL_CATEGORIES = {
     },
     "calendar": {
         "description": "Calendar events, scheduling, availability",
-        "tools": ["create_calendar_event", "list_calendar_events", "mac_calendars_list", "mac_events_fetch", "mac_events_create"],
+        "tools": ["list_calendar_events", "create_calendar_event"],
     },
     "weather": {
         "description": "Weather conditions, forecasts, temperature",
-        "tools": ["weather", "mac_weather_current", "mac_weather_forecast"],
+        "tools": ["weather"],
     },
     "navigation": {
         "description": "Directions, maps, travel time, distance, places, location, how far, navigate",
-        "tools": ["navigate", "google_maps", "mac_maps_search", "mac_maps_directions", "mac_maps_eta", "mac_location_current", "mac_location_geocode"],
+        "tools": ["navigate", "google_maps"],
     },
     "web_search": {
         "description": "Searching the internet, looking up current information, research",
@@ -65,15 +65,15 @@ TOOL_CATEGORIES = {
     },
     "contacts": {
         "description": "Contact information, people lookup, phone numbers",
-        "tools": ["mac_contacts_me", "mac_contacts_search", "mac_contacts_create"],
+        "tools": ["search_contacts"],
     },
     "messages": {
         "description": "iMessage, SMS, text messages, send a message, send a text",
-        "tools": ["mac_messages_fetch", "send_imessage"],
+        "tools": ["send_imessage"],
     },
     "reminders": {
         "description": "Reminders, to-do lists, tasks",
-        "tools": ["set_reminder", "mac_reminders_lists", "mac_reminders_fetch", "mac_reminders_create"],
+        "tools": ["set_reminder"],
     },
     "code_dev": {
         "description": "GitHub, code, repositories, pull requests, issues",
