@@ -16,6 +16,7 @@ export interface Conversation {
   message_count: number;
   model?: string;
   model_provider?: string;
+  metadata_?: { channel?: string } | null;
 }
 
 interface ChatState {

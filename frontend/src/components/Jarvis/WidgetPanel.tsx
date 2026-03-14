@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 import {
   Cloud, Sun, CloudRain, CloudSnow, CloudLightning, CloudDrizzle, Wind, Droplets,
@@ -1097,6 +1098,7 @@ export default function WidgetPanel() {
   const panelRef = useRef<HTMLDivElement>(null);
   const token = useAuthStore((s) => s.token);
   const isOnline = useUIStore((s) => s.isOnline);
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
   const wsConnected = useUIStore((s) => s.wsConnected);
   const [visible, setVisible] = useState(true);
   const [layout, setLayout] = useState<WidgetLayoutItem[] | null>(null);
@@ -1194,13 +1196,49 @@ export default function WidgetPanel() {
           }}
           onContextMenu={(e) => {
             e.preventDefault();
-            setVisible(false);
+            setCtxMenu({ x: e.clientX, y: e.clientY });
           }}
         >
           {renderWidget(w.type, 'low', w.type)}
         </div>
       ))}
       {(isOnline && wsConnected) && <GoogleConnectWidget />}
+
+      {/* Widget context menu */}
+      {ctxMenu && createPortal(
+        <div
+          className="fixed inset-0 z-[99999]"
+          onClick={() => setCtxMenu(null)}
+          onContextMenu={(e) => { e.preventDefault(); setCtxMenu(null); }}
+        >
+          <div
+            style={{
+              position: 'fixed',
+              left: ctxMenu.x,
+              top: ctxMenu.y,
+              transform: 'translate(-50%, -50%)',
+              minWidth: 160,
+              background: 'linear-gradient(to bottom right, rgba(10, 10, 10, 0.85), rgba(10, 10, 10, 0.95))',
+              backdropFilter: 'blur(20px)',
+              WebkitBackdropFilter: 'blur(20px)',
+              clipPath: 'polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px))',
+              border: '1px solid rgba(0, 212, 255, 0.12)',
+              boxShadow: '0 10px 40px rgba(0,0,0,0.5)',
+              padding: '4px',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => { setVisible(false); setCtxMenu(null); }}
+              className="w-full flex items-center gap-3 px-4 py-2.5 text-left text-[12px] font-medium text-gray-300 hover:bg-white/[0.06] transition-colors"
+            >
+              <EyeOff size={14} className="text-jarvis-blue/60" />
+              Hide Widgets
+            </button>
+          </div>
+        </div>,
+        document.body,
+      )}
     </div>
   );
 }

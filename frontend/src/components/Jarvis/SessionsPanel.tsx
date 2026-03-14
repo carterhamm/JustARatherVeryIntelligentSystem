@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Plus, MessageSquare, Trash2, X } from 'lucide-react';
+import { Plus, MessageSquare, Trash2, X, Smartphone, Globe, Terminal, Phone } from 'lucide-react';
 import { useChatStore, type Conversation, type Message } from '@/stores/chatStore';
 import { api } from '@/services/api';
 import clsx from 'clsx';
@@ -176,13 +176,23 @@ export default function SessionsPanel() {
                       )}
                     >
                       <div className="flex items-start gap-3 min-w-0">
-                        <MessageSquare
-                          size={13}
-                          className={clsx('mt-0.5 flex-shrink-0', {
-                            'text-jarvis-blue': currentConversation?.id === conv.id,
-                            'text-gray-700': currentConversation?.id !== conv.id,
-                          })}
-                        />
+                        {(() => {
+                          const channel = conv.metadata_?.channel;
+                          const IconComp = channel === 'imessage' ? Smartphone
+                            : channel === 'cli' ? Terminal
+                            : channel === 'phone' ? Phone
+                            : MessageSquare;
+                          const isActive = currentConversation?.id === conv.id;
+                          return (
+                            <IconComp
+                              size={13}
+                              className={clsx('mt-1 flex-shrink-0', {
+                                'text-jarvis-blue': isActive,
+                                'text-gray-700': !isActive,
+                              })}
+                            />
+                          );
+                        })()}
                         <div className="flex-1 min-w-0">
                           <p
                             className={clsx('text-sm truncate', {
@@ -195,6 +205,11 @@ export default function SessionsPanel() {
                           <p className="text-[9px] text-gray-600 mt-0.5 font-mono">
                             {formatTimestamp(conv.updated_at)}
                             {conv.message_count > 0 && ` · ${conv.message_count} msgs`}
+                            {conv.metadata_?.channel && conv.metadata_.channel !== 'web' && (
+                              <span className="text-jarvis-blue/40 ml-1">
+                                · {conv.metadata_.channel === 'imessage' ? 'iMessage' : conv.metadata_.channel}
+                              </span>
+                            )}
                           </p>
                         </div>
                         <button

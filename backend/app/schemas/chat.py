@@ -61,6 +61,7 @@ class ConversationResponse(BaseModel):
     last_message_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
+    metadata_: Optional[dict] = None
 
 
 class ConversationListResponse(BaseModel):
