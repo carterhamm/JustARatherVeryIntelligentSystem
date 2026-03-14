@@ -21,7 +21,7 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.core.dependencies import get_current_active_user, get_db
+from app.core.dependencies import get_current_active_user, get_current_active_user_or_service, get_db
 from app.models.user import User
 
 logger = logging.getLogger("jarvis.widgets")
@@ -552,7 +552,7 @@ async def _cache_email_result(redis, cache_key: str, result: dict) -> None:
 
 @router.post("/icloud/connect")
 async def connect_icloud(
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_current_active_user_or_service),
     db: AsyncSession = Depends(get_db),
     apple_id: str = "",
     app_password: str = "",
