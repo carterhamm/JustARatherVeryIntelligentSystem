@@ -958,13 +958,22 @@ async def ingest_feynman(
     if "volume" in payload:
         volumes = [int(payload["volume"])]
 
-    try:
-        force = payload.get("force", False)
-        result = await ingest_feynman_lectures(volumes=volumes, force=force)
-    except Exception as exc:
-        logger.exception("Feynman ingestion failed: %s", exc)
-        raise HTTPException(status_code=500, detail=f"Feynman ingestion error: {exc}")
-    return result
+    import asyncio
+    force = payload.get("force", False)
+
+    # Run in background — this takes 30+ minutes for all chapters
+    async def _run():
+        try:
+            await ingest_feynman_lectures(volumes=volumes, force=force)
+        except Exception as exc:
+            logger.exception("Feynman ingestion background task failed: %s", exc)
+
+    asyncio.create_task(_run())
+    return {
+        "status": "started",
+        "message": f"Feynman ingestion started in background for volumes {volumes or [1,2,3]}",
+        "check_progress": "/api/v1/cron/ingest-feynman/status",
+    }
 
 
 @router.get("/ingest-feynman/status")
@@ -1000,14 +1009,21 @@ async def ingest_foundational(
     logger.info("Foundational research ingestion triggered by user=%s", current_user.username)
     log_audit("cron_foundational_ingest", "triggered", user_id=str(current_user.id), ip=request.client.host if request.client else "")
 
+    import asyncio
     targets = payload.get("targets")
 
-    try:
-        result = await ingest_foundational_research(targets=targets)
-    except Exception as exc:
-        logger.exception("Foundational research ingestion failed: %s", exc)
-        raise HTTPException(status_code=500, detail=f"Foundational ingestion error: {exc}")
-    return result
+    async def _run():
+        try:
+            await ingest_foundational_research(targets=targets)
+        except Exception as exc:
+            logger.exception("Foundational research background task failed: %s", exc)
+
+    asyncio.create_task(_run())
+    return {
+        "status": "started",
+        "message": "Foundational research ingestion started in background",
+        "check_progress": "/api/v1/cron/ingest-foundational/status",
+    }
 
 
 @router.get("/ingest-foundational/status")
