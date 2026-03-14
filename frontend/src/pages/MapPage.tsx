@@ -236,7 +236,7 @@ function loadMapKit(): Promise<any> {
     }
 
     const script = document.createElement('script');
-    script.src = 'https://cdn.apple-mapkit.com/mk/5.x.x/mapkit.js';
+    script.src = 'https://cdn.apple-mapkit.com/mk/5.x.x/mapkit.js?libraries=look-around';
     script.crossOrigin = 'anonymous';
     script.onload = () => {
       try {

@@ -87,14 +87,16 @@ class ApiClient {
           } catch (refreshError: any) {
             this.refreshQueue.forEach(({ reject }) => reject(refreshError));
             this.refreshQueue = [];
-            // Only logout if refresh genuinely failed (not rate limited)
             const refreshStatus = refreshError?.response?.status;
-            if (refreshStatus === 429) {
-              // Rate limited — don't logout, just fail this request
-              return Promise.reject(refreshError);
+            // Only logout on definitive auth failures (401/403 from refresh endpoint)
+            // NOT on network errors, 429, 500, etc.
+            if (refreshStatus === 401 || refreshStatus === 403) {
+              useAuthStore.getState().logout();
+              // Use soft redirect, not hard reload
+              if (window.location.pathname !== '/login') {
+                window.location.replace('/login');
+              }
             }
-            useAuthStore.getState().logout();
-            window.location.href = '/login';
             return Promise.reject(refreshError);
           } finally {
             this.isRefreshing = false;
