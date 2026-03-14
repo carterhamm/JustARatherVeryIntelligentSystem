@@ -33,12 +33,14 @@ async def _get_google_tokens(state: Optional[AgentState]) -> Optional[dict]:
     """
     import uuid as _uuid
     user_id_str = (state or {}).get("user_id", "")
+    logger.warning("_get_google_tokens called with user_id=%s", user_id_str)
     if not user_id_str:
+        logger.warning("_get_google_tokens: No user_id in state")
         return None
     try:
         user_uuid = _uuid.UUID(str(user_id_str))
     except (ValueError, AttributeError):
-        logger.debug("Invalid user_id for Google tokens: %s", user_id_str)
+        logger.warning("_get_google_tokens: Invalid user_id: %s", user_id_str)
         return None
 
     try:
@@ -51,13 +53,16 @@ async def _get_google_tokens(state: Optional[AgentState]) -> Optional[dict]:
                 select(User).where(User.id == user_uuid)
             )
             user = result.scalar_one_or_none()
-            if not user or not user.preferences:
-                logger.debug("No user or preferences for %s", user_uuid)
+            if not user:
+                logger.warning("_get_google_tokens: No user found for UUID %s", user_uuid)
+                return None
+            if not user.preferences:
+                logger.warning("_get_google_tokens: User %s has no preferences", user_uuid)
                 return None
 
             tokens = user.preferences.get("google_tokens")
             if not tokens:
-                logger.debug("No google_tokens in preferences for %s", user_uuid)
+                logger.warning("_get_google_tokens: No google_tokens in preferences for %s. Keys: %s", user_uuid, list(user.preferences.keys()))
                 return None
 
             # Normalize token keys — OAuth stores "token", CalendarClient needs "access_token"
