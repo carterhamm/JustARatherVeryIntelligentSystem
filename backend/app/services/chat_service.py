@@ -684,19 +684,32 @@ class ChatService:
         Same tool access as _agentic_stream but collects results into a string.
         Used by phone calls, REST POST /chat, and any non-streaming channel.
         """
+        from app.agents.coordinator import coordinate
         from app.agents.intent_router import get_tools_for_intent, route_intent
         from app.agents.tool_schemas import get_anthropic_tools
         from app.agents.tools import get_tool_registry
 
+        # Try multi-agent coordination for complex requests
+        user_message = ""
+        for msg in reversed(history):
+            if msg.get("role") == "user":
+                user_message = msg.get("content", "")
+                break
+
+        if user_message:
+            try:
+                coordinated = await coordinate(user_message, history, str(user_id))
+                if coordinated is not None:
+                    logger.info("Multi-agent coordination produced response")
+                    return coordinated
+            except Exception:
+                logger.warning("Coordinator failed, falling back to standard path", exc_info=True)
+
+        # Standard single-agent path
         all_tools = get_anthropic_tools()
 
         # Route intent via Cerebras
         try:
-            user_message = ""
-            for msg in reversed(history):
-                if msg.get("role") == "user":
-                    user_message = msg.get("content", "")
-                    break
             if user_message:
                 tool_names = await route_intent(user_message)
                 tools = get_tools_for_intent(tool_names, all_tools)
