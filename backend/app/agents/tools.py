@@ -31,42 +31,51 @@ async def _get_google_tokens(state: Optional[AgentState]) -> Optional[dict]:
     Returns the token dict if connected, or None if not.
     Attempts to refresh expired tokens automatically.
     """
-    user_id = (state or {}).get("user_id", "")
-    if not user_id:
+    import uuid as _uuid
+    user_id_str = (state or {}).get("user_id", "")
+    if not user_id_str:
         return None
     try:
+        user_uuid = _uuid.UUID(str(user_id_str))
+    except (ValueError, AttributeError):
+        logger.debug("Invalid user_id for Google tokens: %s", user_id_str)
+        return None
+
+    try:
         from sqlalchemy import select
-        from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession as _AS
-        from sqlalchemy.orm import sessionmaker
-        from app.config import settings
+        from app.db.session import async_session_factory
         from app.models.user import User
 
-        engine = create_async_engine(settings.DATABASE_URL)
-        async_session = sessionmaker(engine, class_=_AS, expire_on_commit=False)
-        async with async_session() as session:
+        async with async_session_factory() as session:
             result = await session.execute(
-                select(User).where(User.id == user_id)
+                select(User).where(User.id == user_uuid)
             )
             user = result.scalar_one_or_none()
-            if user and user.preferences and user.preferences.get("google_tokens"):
-                tokens = user.preferences["google_tokens"]
-                # Normalize token keys — OAuth stores "token", CalendarClient needs "access_token"
-                if "token" in tokens and "access_token" not in tokens:
-                    tokens["access_token"] = tokens["token"]
+            if not user or not user.preferences:
+                logger.debug("No user or preferences for %s", user_uuid)
+                return None
 
-                # Auto-refresh if we have a refresh_token
-                if tokens.get("refresh_token") and tokens.get("client_id"):
-                    try:
-                        tokens = await _refresh_google_token_if_needed(
-                            tokens, user, session
-                        )
-                    except Exception:
-                        logger.debug("Google token refresh failed", exc_info=True)
+            tokens = user.preferences.get("google_tokens")
+            if not tokens:
+                logger.debug("No google_tokens in preferences for %s", user_uuid)
+                return None
 
-                return tokens
-        await engine.dispose()
+            # Normalize token keys — OAuth stores "token", CalendarClient needs "access_token"
+            if "token" in tokens and "access_token" not in tokens:
+                tokens["access_token"] = tokens["token"]
+
+            # Auto-refresh if we have a refresh_token
+            if tokens.get("refresh_token") and tokens.get("client_id"):
+                try:
+                    tokens = await _refresh_google_token_if_needed(
+                        tokens, user, session
+                    )
+                except Exception:
+                    logger.debug("Google token refresh failed", exc_info=True)
+
+            return tokens
     except Exception:
-        logger.debug("Failed to load Google tokens for user %s", user_id, exc_info=True)
+        logger.warning("Failed to load Google tokens for user %s", user_id_str, exc_info=True)
     return None
 
 
