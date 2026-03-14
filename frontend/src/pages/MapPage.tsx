@@ -1383,9 +1383,8 @@ export default function MapPage() {
       if (landmarkResult.status === 'fulfilled') setLandmarks(landmarkResult.value);
     } catch {
       // silently fail
-    } finally {
-      setIsLoading(false);
     }
+    // Don't setIsLoading(false) here — wait for geocoding to finish
   }, []);
 
   useEffect(() => {
@@ -1396,7 +1395,12 @@ export default function MapPage() {
 
   // ---- Geocode contacts with addresses ----
   useEffect(() => {
-    if (contacts.length === 0 || !mapReady) return;
+    if (!mapReady) return;
+    if (contacts.length === 0) {
+      // API returned but no contacts — stop loading
+      if (lastContactIdsRef.current === '') setIsLoading(false);
+      return;
+    }
 
     const contactIds = contacts.map((c) => c.id).sort().join(',');
     if (contactIds === lastContactIdsRef.current) return;
@@ -1405,11 +1409,17 @@ export default function MapPage() {
     let cancelled = false;
 
     const withAddress = contacts.filter((c) => c.address?.trim() || (c.street && c.city));
+    if (withAddress.length === 0) {
+      // No addresses to geocode — dismiss loading
+      setIsLoading(false);
+      return;
+    }
     setGeocodeProgress({ done: 0, total: withAddress.length });
 
     (async () => {
       const cache = loadGeocodeCache();
       const results: GeocodedContact[] = [];
+      let loadingDismissed = false;
 
       for (let i = 0; i < withAddress.length; i++) {
         if (cancelled) return;
@@ -1426,11 +1436,17 @@ export default function MapPage() {
           // Push contacts incrementally every 5 so they appear during geocoding
           if (results.length > 0 && (i % 5 === 4 || i === withAddress.length - 1)) {
             setGeocodedContacts([...results]);
+            // Dismiss loading overlay on first batch of results
+            if (!loadingDismissed) {
+              loadingDismissed = true;
+              setIsLoading(false);
+            }
           }
         }
       }
       if (!cancelled) {
         setGeocodedContacts([...results]);
+        setIsLoading(false);
       }
     })();
 
