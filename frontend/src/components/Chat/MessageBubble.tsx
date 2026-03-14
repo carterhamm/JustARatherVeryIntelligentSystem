@@ -77,6 +77,8 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
     text = text.replace(/\[Local time:[^\]]*\]\s*/gi, '');
     // Remove [Source: ...] metadata
     text = text.replace(/\[Source:[^\]]*\]\s*/gi, '');
+    // Remove [Mar 14, 07:30 PM] style timestamps prepended for LLM context
+    text = text.replace(/^\[\w{3} \d{1,2}, \d{1,2}:\d{2} [AP]M\]\s*/i, '');
     return text.trim();
   }, [message.content]);
 

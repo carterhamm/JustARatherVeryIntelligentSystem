@@ -1058,8 +1058,26 @@ class ChatService:
             combined_prompt += f"\n\nAdditional instructions:\n{system_prompt}"
         history.append({"role": "system", "content": combined_prompt})
 
+        # Check if this is an iMessage conversation (include timestamps for context)
+        is_imessage = False
+        if messages:
+            # Check conversation metadata for channel
+            try:
+                conv_result = await self.db.execute(
+                    select(Conversation).where(Conversation.id == conversation_id)
+                )
+                conv = conv_result.scalar_one_or_none()
+                if conv and conv.metadata_:
+                    is_imessage = conv.metadata_.get("channel") == "imessage"
+            except Exception:
+                pass
+
         for msg in messages:
             content = decrypt_message(msg.content, user_id) if user_id else msg.content
+            # For iMessage, prepend timestamp so LLM understands time context
+            if is_imessage and msg.created_at:
+                ts = msg.created_at.strftime("%b %d, %I:%M %p")
+                content = f"[{ts}] {content}"
             history.append({"role": msg.role, "content": content})
 
         return history
