@@ -15,8 +15,15 @@ def get_anthropic_tools() -> list[dict[str, Any]]:
 
     Each tool has: name, description, input_schema (JSON Schema).
     These are passed to the Claude Messages API ``tools`` parameter.
+
+    Excludes iMCP (mac_*) tools when running on Railway (no macOS).
     """
-    return [t for t in _TOOL_DEFINITIONS if t is not None]
+    import os
+    on_railway = bool(os.environ.get("RAILWAY_SERVICE_ID"))
+    return [
+        t for t in _TOOL_DEFINITIONS
+        if t is not None and (not on_railway or not t["name"].startswith("mac_"))
+    ]
 
 
 def get_anthropic_tools_by_name(names: list[str]) -> list[dict[str, Any]]:
