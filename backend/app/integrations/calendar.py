@@ -419,8 +419,12 @@ class CalendarClient:
         if not dt_str:
             return datetime.now(tz=timezone.utc).isoformat()
 
-        # Already has timezone info
-        if "+" in dt_str or dt_str.endswith("Z"):
+        # Already has timezone info (Z, +HH:MM, or -HH:MM offset)
+        if dt_str.endswith("Z"):
+            return dt_str
+        # Check for timezone offset like +05:00 or -06:00 at the end
+        import re
+        if re.search(r'[+-]\d{2}:\d{2}$', dt_str):
             return dt_str
 
         # Date-only: append start of day in UTC
@@ -429,7 +433,7 @@ class CalendarClient:
 
         # Datetime without timezone: assume UTC
         if "T" in dt_str:
-            return f"{dt_str}Z" if not dt_str.endswith("Z") else dt_str
+            return f"{dt_str}Z"
 
         return dt_str
 
