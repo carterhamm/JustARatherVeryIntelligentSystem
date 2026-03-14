@@ -477,111 +477,85 @@ function LookAroundPanel({
       return;
     }
 
-    try {
-      if (typeof mk.LookAround !== 'function') {
-        setStatus('unavailable');
-        return;
-      }
+    // Determine which Look Around constructor is available
+    const LAConstructor = mk.LookAround || mk.LookAroundPreview;
+    if (typeof LAConstructor !== 'function') {
+      setStatus('unavailable');
+      return;
+    }
 
-      let cancelled = false;
-      const container = containerRef.current;
+    let cancelled = false;
+    const container = containerRef.current;
 
-      // Wider search radius (~500m) with more offsets in a spiral pattern
-      const offsets = [
-        [0, 0],
-        // Ring 1: ~100m
-        [0.001, 0], [-0.001, 0], [0, 0.001], [0, -0.001],
-        [0.0007, 0.0007], [-0.0007, 0.0007], [0.0007, -0.0007], [-0.0007, -0.0007],
-        // Ring 2: ~200m
-        [0.002, 0], [-0.002, 0], [0, 0.002], [0, -0.002],
-        [0.0015, 0.0015], [-0.0015, 0.0015], [0.0015, -0.0015], [-0.0015, -0.0015],
-        // Ring 3: ~350m
-        [0.003, 0], [-0.003, 0], [0, 0.003], [0, -0.003],
-        [0.002, 0.002], [-0.002, 0.002], [0.002, -0.002], [-0.002, -0.002],
-        // Ring 4: ~500m
-        [0.005, 0], [-0.005, 0], [0, 0.005], [0, -0.005],
-        [0.004, 0.003], [-0.004, 0.003], [0.004, -0.003], [-0.004, -0.003],
-        // Ring 5: ~750m
-        [0.007, 0], [-0.007, 0], [0, 0.007], [0, -0.007],
-        [0.005, 0.005], [-0.005, 0.005], [0.005, -0.005], [-0.005, -0.005],
-        // Ring 6: ~1km
-        [0.01, 0], [-0.01, 0], [0, 0.01], [0, -0.01],
-        [0.007, 0.007], [-0.007, 0.007], [0.007, -0.007], [-0.007, -0.007],
-      ];
-
-      const tryLookAround = (latOff: number, lngOff: number): Promise<boolean> => {
-        return new Promise((resolve) => {
-          if (cancelled || !container) { resolve(false); return; }
-          const coord = new mk.Coordinate(lat + latOff, lng + lngOff);
-          const la = new mk.LookAround(container, coord, {
+    const tryLA = (location: any): Promise<boolean> => {
+      return new Promise((resolve) => {
+        if (cancelled || !container) { resolve(false); return; }
+        try {
+          const la = new LAConstructor(container, location, {
             showsDialogControl: true,
             showsCloseControl: false,
           });
           let settled = false;
           la.addEventListener('error', () => {
-            if (!settled) { settled = true; la.destroy(); resolve(false); }
+            if (!settled) { settled = true; try { la.destroy(); } catch {} resolve(false); }
           });
           la.addEventListener('load', () => {
             if (!settled) { settled = true; lookAroundRef.current = la; resolve(true); }
           });
           setTimeout(() => {
-            if (!settled) { settled = true; la.destroy(); resolve(false); }
-          }, 4000);
-        });
-      };
-
-      // First try reverse geocode to find nearest road, then search at road coords
-      const tryWithRoadSearch = async (): Promise<boolean> => {
-        return new Promise((resolveRoad) => {
-          const geocoder = new mk.Geocoder({ language: 'en' });
-          geocoder.reverseLookup(new mk.Coordinate(lat, lng), async (error: any, data: any) => {
-            if (error || !data?.results?.length) {
-              resolveRoad(false);
-              return;
-            }
-            const r = data.results[0];
-            if (r.coordinate) {
-              const roadLat = r.coordinate.latitude;
-              const roadLng = r.coordinate.longitude;
-              if (Math.abs(roadLat - lat) > 0.0001 || Math.abs(roadLng - lng) > 0.0001) {
-                const ok = await tryLookAround(roadLat - lat, roadLng - lng);
-                resolveRoad(ok);
-                return;
-              }
-            }
-            resolveRoad(false);
-          });
-        });
-      };
-
-      (async () => {
-        // Try road-based coordinates first
-        if (!cancelled) {
-          const roadOk = await tryWithRoadSearch();
-          if (roadOk) {
-            if (!cancelled) setStatus('active');
-            return;
-          }
+            if (!settled) { settled = true; try { la.destroy(); } catch {} resolve(false); }
+          }, 5000);
+        } catch {
+          resolve(false);
         }
-        // Then try spiral offsets
-        for (const [latOff, lngOff] of offsets) {
-          if (cancelled) return;
-          const ok = await tryLookAround(latOff, lngOff);
-          if (ok) {
-            if (!cancelled) setStatus('active');
-            return;
-          }
-        }
-        if (!cancelled) setStatus('unavailable');
-      })();
+      });
+    };
 
-      return () => {
-        cancelled = true;
-        if (lookAroundRef.current?.destroy) lookAroundRef.current.destroy();
-      };
-    } catch {
-      setStatus('unavailable');
-    }
+    (async () => {
+      // Strategy 1: Search for a nearby place and use its Place object
+      try {
+        const search = new mk.Search({ language: 'en' });
+        const placeResult = await new Promise<any>((resolve) => {
+          search.search(
+            { coordinate: new mk.Coordinate(lat, lng) },
+            (err: any, data: any) => {
+              if (!err && data?.places?.length) resolve(data.places[0]);
+              else resolve(null);
+            },
+            { region: new mk.CoordinateRegion(new mk.Coordinate(lat, lng), new mk.CoordinateSpan(0.01, 0.01)) },
+          );
+        });
+        if (cancelled) return;
+        if (placeResult) {
+          const ok = await tryLA(placeResult);
+          if (ok) { if (!cancelled) setStatus('active'); return; }
+        }
+      } catch { /* search failed — try coordinates */ }
+
+      // Strategy 2: Try direct coordinate at the location
+      if (cancelled) return;
+      const ok = await tryLA(new mk.Coordinate(lat, lng));
+      if (ok) { if (!cancelled) setStatus('active'); return; }
+
+      // Strategy 3: Try nearby offsets with raw coordinates
+      const offsets = [
+        [0.002, 0], [-0.002, 0], [0, 0.002], [0, -0.002],
+        [0.005, 0], [-0.005, 0], [0, 0.005], [0, -0.005],
+        [0.01, 0], [-0.01, 0], [0, 0.01], [0, -0.01],
+      ];
+      for (const [dLat, dLng] of offsets) {
+        if (cancelled) return;
+        const offsetOk = await tryLA(new mk.Coordinate(lat + dLat, lng + dLng));
+        if (offsetOk) { if (!cancelled) setStatus('active'); return; }
+      }
+
+      if (!cancelled) setStatus('unavailable');
+    })();
+
+    return () => {
+      cancelled = true;
+      if (lookAroundRef.current?.destroy) try { lookAroundRef.current.destroy(); } catch {}
+    };
   }, [lat, lng]);
 
   useEffect(() => {
@@ -1497,84 +1471,18 @@ export default function MapPage() {
       annotation.addEventListener('select', () => {
         annotationJustSelectedRef.current = true;
         setTimeout(() => { annotationJustSelectedRef.current = false; }, 300);
-
         setSelectedContactId(c.id);
-
-        if (calloutOverlayRef.current) {
-          calloutOverlayRef.current.remove();
-          calloutOverlayRef.current = null;
-        }
-
-        const callout = createCalloutElement(c);
-        callout.style.position = 'absolute';
-        callout.style.zIndex = '1000';
-        callout.style.pointerEvents = 'auto';
-
-        const closeBtn = document.createElement('button');
-        closeBtn.innerHTML = '&times;';
-        closeBtn.style.cssText =
-          'position:absolute;top:4px;right:8px;background:none;border:none;color:rgba(0,212,255,0.4);font-size:18px;cursor:pointer;padding:4px;line-height:1;';
-        closeBtn.addEventListener('mouseenter', () => {
-          closeBtn.style.color = '#00d4ff';
+        // Show contact details in right panel
+        const addr = getDisplayAddress(c);
+        setSelectedPlace({
+          name: `${c.first_name} ${c.last_name || ''}`.trim(),
+          latitude: c.lat,
+          longitude: c.lng,
+          formattedAddress: addr || getShortLocation(c),
+          phone: c.phone || '',
+          url: c.url || '',
+          category: c.company ? (c.title ? `${c.title} at ${c.company}` : c.company) : '',
         });
-        closeBtn.addEventListener('mouseleave', () => {
-          closeBtn.style.color = 'rgba(0,212,255,0.4)';
-        });
-        closeBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          callout.remove();
-          calloutOverlayRef.current = null;
-          map.selectedAnnotation = null;
-        });
-        callout.appendChild(closeBtn);
-
-        const footer = document.createElement('div');
-        footer.style.cssText = 'margin-top:8px;padding-top:6px;border-top:1px solid rgba(0,212,255,0.06);display:flex;justify-content:flex-end;';
-        const laBtn = document.createElement('button');
-        laBtn.style.cssText = 'display:flex;align-items:center;gap:4px;font-family:monospace;font-size:9px;color:rgba(0,212,255,0.5);background:none;border:none;cursor:pointer;padding:2px 4px;transition:color 0.2s;';
-        laBtn.innerHTML = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>LOOK AROUND`;
-        laBtn.addEventListener('mouseenter', () => { laBtn.style.color = '#00d4ff'; });
-        laBtn.addEventListener('mouseleave', () => { laBtn.style.color = 'rgba(0,212,255,0.5)'; });
-        laBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          setLookAroundCoords({ lat: c.lat, lng: c.lng });
-        });
-        footer.appendChild(laBtn);
-        callout.appendChild(footer);
-
-        const layer = calloutLayerRef.current;
-        const mapContainer = mapContainerRef.current;
-        if (layer && mapContainer) {
-          layer.appendChild(callout);
-          const point = map.convertCoordinateToPointOnPage(coord);
-          const containerRect = mapContainer.getBoundingClientRect();
-          const calloutRect = callout.getBoundingClientRect();
-          const cw = calloutRect.width;
-          const ch = calloutRect.height;
-          const pad = 8;
-
-          let left = point.x - containerRect.left - cw / 2;
-          let top = point.y - containerRect.top - ch - 24;
-
-          // Clamp within map bounds, keeping clear of top bar (70px) and edges
-          left = Math.max(pad, Math.min(left, containerRect.width - cw - pad));
-          top = Math.max(74, Math.min(top, containerRect.height - ch - pad));
-
-          if (point.y - containerRect.top - ch - 24 < pad) {
-            top = point.y - containerRect.top + 30;
-          }
-
-          callout.style.left = `${left}px`;
-          callout.style.top = `${top}px`;
-          calloutOverlayRef.current = callout;
-        }
-      });
-
-      annotation.addEventListener('deselect', () => {
-        if (calloutOverlayRef.current) {
-          calloutOverlayRef.current.remove();
-          calloutOverlayRef.current = null;
-        }
       });
 
       newAnnotations.push(annotation);
@@ -1730,6 +1638,19 @@ export default function MapPage() {
     };
   }, [mapSearchQuery]);
 
+  // ---- ESC key closes right panel ----
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setSelectedPlace(null);
+        setSearchSuggestions([]);
+        setMapSearchQuery('');
+      }
+    };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, []);
+
   // ---- Helper: region from contacts ----
   function regionFromContacts(contacts: GeocodedContact[]) {
     const mk = window.mapkit;
@@ -1764,6 +1685,15 @@ export default function MapPage() {
     const centerLng = (minLng + maxLng) / 2;
     const spanLat = Math.max(maxLat - minLat, 0.01) * 1.4;
     const spanLng = Math.max(maxLng - minLng, 0.01) * 1.4;
+
+    // Safety: if computed center is outside North America or span is absurdly wide,
+    // just show Orem area instead of zooming to Africa/ocean
+    if (centerLat < 15 || centerLat > 75 || centerLng < -170 || centerLng > -50 || spanLat > 40 || spanLng > 60) {
+      return new mk.CoordinateRegion(
+        new mk.Coordinate(40.29, -111.69),
+        new mk.CoordinateSpan(0.5, 0.5),
+      );
+    }
 
     return new mk.CoordinateRegion(
       new mk.Coordinate(centerLat, centerLng),
@@ -2216,7 +2146,8 @@ export default function MapPage() {
               </div>
               {geocodedContacts.length > 0 ? (
                 <div
-                  className="flex gap-3 overflow-x-auto pb-1 hide-scrollbar"
+                  className="flex gap-3 overflow-x-auto py-2 hide-scrollbar items-center"
+                  style={{ minHeight: 76 }}
                 >
                   {geocodedContacts.map((c) => {
                     const photo = getPhotoDataUri(c);
@@ -2225,10 +2156,10 @@ export default function MapPage() {
                         key={c.id}
                         onClick={() => flyToContact(c)}
                         className={clsx(
-                          'flex flex-col items-center gap-1 flex-shrink-0 transition-all',
+                          'flex flex-col items-center gap-1.5 flex-shrink-0 transition-all',
                           selectedContactId === c.id && 'scale-105',
                         )}
-                        style={{ width: 56 }}
+                        style={{ width: 60 }}
                         title={`${c.first_name} ${c.last_name || ''}`}
                       >
                         <div
@@ -2299,13 +2230,14 @@ export default function MapPage() {
               </div>
               {landmarks.length > 0 ? (
                 <div
-                  className="flex gap-2 overflow-x-auto pb-1 hide-scrollbar"
+                  className="flex gap-2 overflow-x-auto py-2 hide-scrollbar items-center"
+                  style={{ minHeight: 40 }}
                 >
                   {landmarks.map((lm) => (
                     <button
                       key={lm.id}
                       onClick={() => flyToLandmark(lm)}
-                      className="flex items-center gap-1.5 flex-shrink-0 px-2.5 py-1.5 hover:bg-white/[0.04] transition-colors"
+                      className="flex items-center gap-1.5 flex-shrink-0 px-3 py-2 hover:bg-white/[0.04] transition-colors"
                     >
                       <div
                         className="w-2.5 h-2.5 rounded-full flex-shrink-0"
