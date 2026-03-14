@@ -104,6 +104,62 @@ RESEARCH_TOPICS: list[dict[str, Any]] = [
             "Mars colonisation space exploration progress",
         ],
     },
+    # ── Nanotech-focused topics (core mission) ──────────────────
+    {
+        "name": "nanobot_research",
+        "label": "Nanobot & Nanomachine Research",
+        "queries": [
+            "nanobot nanomachine research breakthrough 2026",
+            "self-assembling nanoscale robot latest",
+            "programmable matter catom research progress",
+            "DNA nanotechnology programmable nanorobot",
+        ],
+    },
+    {
+        "name": "graphene_advanced",
+        "label": "Advanced Graphene Applications",
+        "queries": [
+            "graphene supercapacitor energy density breakthrough 2026",
+            "graphene manufacturing scale production",
+            "graphene composite shape-shifting material",
+        ],
+    },
+    {
+        "name": "swarm_robotics",
+        "label": "Modular Swarm Robotics",
+        "queries": [
+            "modular swarm robot self-reconfiguring 2026",
+            "swarm intelligence coordination algorithm breakthrough",
+            "centimeter scale modular robot communication",
+        ],
+    },
+    {
+        "name": "quantum_biology",
+        "label": "Quantum Biology & Biomimicry",
+        "queries": [
+            "quantum biology enzyme tunneling 2026",
+            "quantum coherence photosynthesis application",
+            "biomimetic nanoscale engineering breakthrough",
+        ],
+    },
+    {
+        "name": "compact_energy",
+        "label": "Compact Energy & Fusion",
+        "queries": [
+            "compact fusion reactor progress 2026",
+            "betavoltaic nuclear battery miniaturisation",
+            "wireless energy transfer nanoscale research",
+        ],
+    },
+    {
+        "name": "metamaterials",
+        "label": "Metamaterials & Field Manipulation",
+        "queries": [
+            "metamaterials electromagnetic breakthrough 2026",
+            "acoustic metamaterial actuation nanoscale",
+            "near-field energy transfer Pendry research",
+        ],
+    },
 ]
 
 # Redis key constants

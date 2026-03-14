@@ -55,8 +55,35 @@ async def run_learning_cycle(
     from app.services.research_daemon import run_research_cycle, RESEARCH_TOPICS
     from app.db.redis import get_redis_client
 
-    cycle_start = _time.perf_counter()
     redis = await get_redis_client()
+
+    # ── Acquire lock (prevent overlapping cycles) ──────────────────
+    lock_key = "jarvis:learning:cycle_lock"
+    lock_val = await redis.cache_get(lock_key)
+    if lock_val:
+        logger.info("Learning cycle already running — skipping to prevent overlap")
+        return {"status": "skipped", "reason": "Another cycle is already running"}
+
+    await redis.cache_set(lock_key, "running", ttl=1800)  # 30-min max lock
+
+    try:
+        return await _run_learning_cycle_inner(
+            include_trending, include_deep_scrape, include_dialogue, redis,
+        )
+    finally:
+        await redis.cache_delete(lock_key)
+
+
+async def _run_learning_cycle_inner(
+    include_trending: bool,
+    include_deep_scrape: bool,
+    include_dialogue: bool,
+    redis: Any,
+) -> dict[str, Any]:
+    """Inner learning cycle (called with lock held)."""
+    from app.services.research_daemon import run_research_cycle, RESEARCH_TOPICS
+
+    cycle_start = _time.perf_counter()
     now = datetime.now(tz=timezone.utc)
 
     logger.info("═══════════════════════════════════════════════════════")
