@@ -18,7 +18,6 @@ import {
   ChevronUp,
   ChevronRight,
   Crosshair,
-  Layers,
   Landmark as LandmarkIcon,
   Copy,
   ExternalLink,
@@ -1176,7 +1175,7 @@ export default function MapPage() {
   const [geocodeProgress, setGeocodeProgress] = useState({ done: 0, total: 0 });
   const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
   const [expandedContactId, setExpandedContactId] = useState<string | null>(null);
-  const [gridVisible, setGridVisible] = useState(false);
+  // grid removed
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [landmarkForm, setLandmarkForm] = useState<{ lat: number; lng: number; initialName?: string; initialAddress?: string } | null>(null);
   const [lookAroundCoords, setLookAroundCoords] = useState<{ lat: number; lng: number } | null>(null);
@@ -1966,18 +1965,6 @@ export default function MapPage() {
       {/* ---- Map container ---- */}
       <div ref={mapContainerRef} className="absolute inset-0 z-0" />
 
-      {/* ---- HUD grid overlay ---- */}
-      {gridVisible && (
-        <div
-          className="absolute inset-0 z-[5] pointer-events-none"
-          style={{
-            backgroundImage:
-              'linear-gradient(rgba(0,212,255,0.07) 1px, transparent 1px), linear-gradient(90deg, rgba(0,212,255,0.07) 1px, transparent 1px)',
-            backgroundSize: '80px 80px',
-          }}
-        />
-      )}
-
       {/* ---- Top Bar: gradient + back, search, controls ---- */}
       <div
         className="absolute top-0 left-0 right-0 z-20 pointer-events-none"
@@ -2077,17 +2064,6 @@ export default function MapPage() {
             >
               <Crosshair size={14} className="text-jarvis-blue/50" />
             </button>
-            <button
-              onClick={() => setGridVisible((p) => !p)}
-              className={clsx(
-                'w-8 h-8 flex items-center justify-center hover:bg-white/[0.05] transition-colors',
-                gridVisible && 'bg-jarvis-blue/10',
-              )}
-              title="Toggle grid"
-              style={{ clipPath: 'polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px))' }}
-            >
-              <Layers size={14} className="text-jarvis-blue/50" />
-            </button>
           </div>
         </div>
       </div>
@@ -2132,19 +2108,74 @@ export default function MapPage() {
       {isLoading && (
         <div
           className="absolute inset-0 z-30 flex items-center justify-center"
-          style={{ background: 'rgba(10, 14, 23, 0.9)' }}
+          style={{ background: 'rgba(5, 5, 16, 0.95)' }}
         >
-          <div className="text-center boot-1">
-            <div className="relative w-16 h-16 mx-auto mb-4">
-              <div className="absolute inset-0 rounded-full border border-jarvis-blue/20 animate-spin-slow" />
-              <div className="absolute inset-2 rounded-full border border-jarvis-blue/10 animate-spin-reverse" />
-              <div className="absolute inset-0 flex items-center justify-center">
-                <MapPin size={20} className="text-jarvis-blue/60" />
+          <div className="text-center">
+            {/* Concentric spinning rings */}
+            <div className="relative w-28 h-28 mx-auto mb-6">
+              {/* Outer ring */}
+              <div
+                className="absolute inset-0 rounded-full animate-spin-slow"
+                style={{
+                  border: '1.5px solid transparent',
+                  borderTopColor: 'rgba(0, 212, 255, 0.5)',
+                  borderRightColor: 'rgba(0, 212, 255, 0.15)',
+                }}
+              />
+              {/* Middle ring — counter-rotate */}
+              <div
+                className="absolute inset-3 rounded-full animate-spin-reverse"
+                style={{
+                  border: '1.5px solid transparent',
+                  borderTopColor: 'rgba(0, 212, 255, 0.35)',
+                  borderLeftColor: 'rgba(0, 212, 255, 0.1)',
+                }}
+              />
+              {/* Inner ring */}
+              <div
+                className="absolute inset-6 rounded-full animate-spin-slow"
+                style={{
+                  border: '1px solid transparent',
+                  borderBottomColor: 'rgba(0, 212, 255, 0.25)',
+                  borderRightColor: 'rgba(0, 212, 255, 0.08)',
+                  animationDuration: '2s',
+                }}
+              />
+              {/* Core glow */}
+              <div className="absolute inset-9 rounded-full flex items-center justify-center">
+                <div
+                  className="w-6 h-6 rounded-full"
+                  style={{
+                    background: 'radial-gradient(circle, rgba(0,212,255,0.3) 0%, rgba(0,212,255,0.05) 60%, transparent 100%)',
+                    boxShadow: '0 0 20px rgba(0, 212, 255, 0.2)',
+                    animation: 'pulse 2s ease-in-out infinite',
+                  }}
+                />
+              </div>
+              {/* Corner accents */}
+              <div className="absolute -top-1 -left-1 w-3 h-3 border-t border-l border-jarvis-blue/30" />
+              <div className="absolute -top-1 -right-1 w-3 h-3 border-t border-r border-jarvis-blue/30" />
+              <div className="absolute -bottom-1 -left-1 w-3 h-3 border-b border-l border-jarvis-blue/30" />
+              <div className="absolute -bottom-1 -right-1 w-3 h-3 border-b border-r border-jarvis-blue/30" />
+            </div>
+            {/* Title */}
+            <div className="space-y-2">
+              <span
+                className="text-[11px] font-mono font-semibold tracking-[0.35em] text-jarvis-blue/60 uppercase block"
+                style={{ textShadow: '0 0 12px rgba(0, 212, 255, 0.2)' }}
+              >
+                A.T.L.A.S.
+              </span>
+              <span className="text-[8px] font-mono tracking-[0.2em] text-jarvis-blue/25 uppercase block">
+                Advanced Tactical Location &amp; Analysis System
+              </span>
+              <div className="flex items-center justify-center gap-2 mt-3">
+                <Loader size={10} className="animate-spin text-jarvis-blue/30" />
+                <span className="text-[8px] font-mono tracking-wider text-gray-600">
+                  INITIALIZING
+                </span>
               </div>
             </div>
-            <span className="text-[10px] font-mono tracking-[0.25em] text-jarvis-blue/40">
-              INITIALIZING A.T.L.A.S.
-            </span>
           </div>
         </div>
       )}

@@ -76,26 +76,30 @@ async def get_current_active_user(
             detail="Account is deactivated",
         )
 
-    # If user has sessions and ALL are revoked/expired, reject.
-    # If user has no sessions at all (legacy login, first login), allow access.
-    from sqlalchemy import func as sa_func
-    total_sessions = await db.execute(
-        select(sa_func.count()).select_from(Session).where(Session.user_id == user.id)
+    # Only reject if user has explicitly revoked ALL sessions (is_active=False).
+    # Don't reject on expired sessions — the JWT itself handles expiry.
+    active_sessions = await db.execute(
+        select(Session).where(
+            Session.user_id == user.id,
+            Session.is_active.is_(True),
+        ).limit(1)
     )
-    session_count = total_sessions.scalar() or 0
-    if session_count > 0:
-        active_sessions = await db.execute(
+    has_any_active = active_sessions.scalar_one_or_none()
+    # Check if user has sessions at all (count only revoked ones)
+    if has_any_active is None:
+        revoked_sessions = await db.execute(
             select(Session).where(
                 Session.user_id == user.id,
-                Session.is_active.is_(True),
-                Session.expires_at > datetime.now(timezone.utc),
+                Session.is_active.is_(False),
             ).limit(1)
         )
-        if active_sessions.scalar_one_or_none() is None:
+        if revoked_sessions.scalar_one_or_none() is not None:
+            # User has sessions but ALL are explicitly revoked
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="All sessions revoked",
             )
+        # No sessions at all = legacy/first login, allow access
 
     return user
 

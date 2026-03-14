@@ -42,7 +42,16 @@ class ApiClient {
       async (error) => {
         const originalRequest = error.config;
 
-        if (error.response?.status === 401 && !originalRequest._retry) {
+        const status = error.response?.status;
+
+        // On 429 (rate limited), wait and retry once instead of failing
+        if (status === 429 && !originalRequest._rateLimitRetry) {
+          originalRequest._rateLimitRetry = true;
+          await new Promise((r) => setTimeout(r, 2000));
+          return this.client(originalRequest);
+        }
+
+        if (status === 401 && !originalRequest._retry) {
           originalRequest._retry = true;
 
           if (this.isRefreshing) {
@@ -75,9 +84,15 @@ class ApiClient {
 
             originalRequest.headers.Authorization = `Bearer ${access_token}`;
             return this.client(originalRequest);
-          } catch (refreshError) {
+          } catch (refreshError: any) {
             this.refreshQueue.forEach(({ reject }) => reject(refreshError));
             this.refreshQueue = [];
+            // Only logout if refresh genuinely failed (not rate limited)
+            const refreshStatus = refreshError?.response?.status;
+            if (refreshStatus === 429) {
+              // Rate limited — don't logout, just fail this request
+              return Promise.reject(refreshError);
+            }
             useAuthStore.getState().logout();
             window.location.href = '/login';
             return Promise.reject(refreshError);

@@ -164,14 +164,14 @@ async def login(payload: UserLogin, request: Request, db: AsyncSession = Depends
 @router.post("/refresh", response_model=Token)
 async def refresh(refresh_token: str, db: AsyncSession = Depends(get_db)) -> Token:
     """Exchange a valid refresh token for a new token pair."""
-    # Rate limit: max 5 refreshes per 60 seconds per token
+    # Rate limit: max 20 refreshes per 60 seconds per token
     token_hash = hashlib.sha256(refresh_token.encode()).hexdigest()
     try:
         redis = await get_redis_client()
         rate_key = f"refresh_rate:{token_hash}"
         count_str = await redis.cache_get(rate_key)
         count = int(count_str) if count_str else 0
-        if count >= 5:
+        if count >= 20:
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail="Token refresh rate limit exceeded.",
