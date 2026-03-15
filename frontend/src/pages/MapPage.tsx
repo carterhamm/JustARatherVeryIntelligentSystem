@@ -23,6 +23,8 @@ import {
   ExternalLink,
   Eye,
   Navigation,
+  Trash2,
+  Pencil,
 } from 'lucide-react';
 import clsx from 'clsx';
 
@@ -238,7 +240,7 @@ function loadMapKit(): Promise<any> {
     }
 
     const script = document.createElement('script');
-    script.src = 'https://cdn.apple-mapkit.com/mk/5.x.x/mapkit.js?libraries=look-around';
+    script.src = 'https://cdn.apple-mapkit.com/mk/5.x.x/mapkit.js';
     script.crossOrigin = 'anonymous';
     script.onload = () => {
       try {
@@ -817,6 +819,108 @@ function MapContextMenu({
 }
 
 // ---------------------------------------------------------------------------
+// Landmark Context Menu (right-click in list)
+// ---------------------------------------------------------------------------
+
+function LandmarkContextMenu({
+  x,
+  y,
+  landmark,
+  onEdit,
+  onDelete,
+  onClose,
+}: {
+  x: number;
+  y: number;
+  landmark: LandmarkData;
+  onEdit: (lm: LandmarkData) => void;
+  onDelete: (lm: LandmarkData) => void;
+  onClose: () => void;
+}) {
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        onClose();
+      }
+    };
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('mousedown', handleClick);
+    document.addEventListener('keydown', handleEsc);
+    return () => {
+      document.removeEventListener('mousedown', handleClick);
+      document.removeEventListener('keydown', handleEsc);
+    };
+  }, [onClose]);
+
+  useEffect(() => {
+    let timer = setTimeout(onClose, 5000);
+    const reset = () => {
+      clearTimeout(timer);
+      timer = setTimeout(onClose, 5000);
+    };
+    const el = menuRef.current;
+    el?.addEventListener('mousemove', reset);
+    return () => {
+      clearTimeout(timer);
+      el?.removeEventListener('mousemove', reset);
+    };
+  }, [onClose]);
+
+  const items = [
+    { icon: Pencil, label: 'Edit Landmark', onClick: () => onEdit(landmark) },
+    { icon: Trash2, label: 'Delete Landmark', onClick: () => onDelete(landmark), danger: true },
+  ];
+
+  return (
+    <div
+      ref={menuRef}
+      className="animate-fade-in"
+      style={{
+        position: 'fixed',
+        left: x,
+        top: y,
+        zIndex: 99999,
+        minWidth: 180,
+        background: 'linear-gradient(to bottom right, rgba(10, 10, 10, 0.75), rgba(10, 10, 10, 0.9))',
+        backdropFilter: 'blur(20px) saturate(180%)',
+        WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+        clipPath: 'polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px))',
+        border: '1px solid rgba(240, 165, 0, 0.15)',
+        boxShadow: '0 10px 40px rgba(0,0,0,0.4), 0 0 20px rgba(240, 165, 0, 0.05)',
+        padding: '6px',
+        animation: 'contextMenuIn 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275) both',
+      }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div className="px-3 py-1.5 mb-1" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+        <span className="text-[9px] font-mono text-jarvis-gold/50 truncate block max-w-[160px]">
+          {landmark.name}
+        </span>
+      </div>
+      {items.map((item, i) => (
+        <button
+          key={i}
+          onClick={() => {
+            item.onClick();
+            onClose();
+          }}
+          className="ctx-menu-item w-full flex items-center gap-3 px-4 py-2.5 text-left transition-all"
+        >
+          <item.icon size={14} className={clsx('flex-shrink-0', item.danger ? 'text-red-400/60' : 'text-jarvis-gold/60')} />
+          <span className={clsx('text-[12px] font-medium', item.danger ? 'text-red-400/80' : 'text-gray-300')}>
+            {item.label}
+          </span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Landmark Form Modal
 // ---------------------------------------------------------------------------
 
@@ -1189,6 +1293,7 @@ export default function MapPage() {
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [landmarkForm, setLandmarkForm] = useState<{ lat: number; lng: number; initialName?: string; initialAddress?: string; initialAppleMapsUrl?: string } | null>(null);
   const [lookAroundCoords, setLookAroundCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [landmarkCtxMenu, setLandmarkCtxMenu] = useState<{ x: number; y: number; landmark: LandmarkData } | null>(null);
 
   // New state for redesign
   const [mapSearchQuery, setMapSearchQuery] = useState('');
@@ -1552,6 +1657,7 @@ export default function MapPage() {
         calloutEnabled: false,
         data: { contactId: c.id },
       });
+      annotation.displayPriority = 1000;
 
       annotation.addEventListener('select', () => {
         annotationJustSelectedRef.current = true;
@@ -1654,80 +1760,23 @@ export default function MapPage() {
         calloutEnabled: false,
         data: { landmarkId: lm.id },
       });
+      annotation.displayPriority = 500;
 
       annotation.addEventListener('select', () => {
         annotationJustSelectedRef.current = true;
         setTimeout(() => { annotationJustSelectedRef.current = false; }, 300);
 
-        if (calloutOverlayRef.current) {
-          calloutOverlayRef.current.remove();
-          calloutOverlayRef.current = null;
-        }
-
-        const el = document.createElement('div');
-        const color = lm.color || '#f0a500';
-        el.style.cssText = `font-family:'JetBrains Mono','Fira Code',monospace;min-width:200px;max-width:300px;padding:14px 16px;background:rgba(10,14,23,0.95);border:1px solid ${color}22;box-shadow:0 0 24px ${color}10,0 12px 40px rgba(0,0,0,0.6);color:#e0e0e0;backdrop-filter:blur(20px);position:absolute;z-index:1000;pointer-events:auto;clip-path:polygon(0 0,calc(100% - 10px) 0,100% 10px,100% 100%,10px 100%,0 calc(100% - 10px));`;
-
-        let html = `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
-          <span style="font-size:13px;font-weight:600;color:${color};letter-spacing:0.3px;">${lm.name}</span>
-        </div>`;
-        if (lm.description) {
-          html += `<div style="font-size:10px;color:#999;line-height:1.5;margin-bottom:6px;white-space:pre-wrap;">${lm.description}</div>`;
-        }
-        if (lm.address) {
-          html += `<div style="display:flex;align-items:flex-start;gap:6px;margin:4px 0;"><span style="color:${color}66;font-size:9px;margin-top:1px;">LOC</span><span style="color:#888;font-size:9px;line-height:1.4;">${lm.address}</span></div>`;
-        }
-
-        html += `<div style="margin-top:8px;padding-top:6px;border-top:1px solid rgba(255,255,255,0.04);display:flex;justify-content:flex-end;">
-          <button id="lm-delete-${lm.id}" style="font-family:monospace;font-size:9px;color:#ff4444;background:none;border:none;cursor:pointer;padding:2px 6px;">DELETE</button>
-        </div>`;
-
-        const closeBtn = document.createElement('button');
-        closeBtn.innerHTML = '&times;';
-        closeBtn.style.cssText = `position:absolute;top:4px;right:8px;background:none;border:none;color:${color}66;font-size:18px;cursor:pointer;padding:4px;line-height:1;`;
-        closeBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          el.remove();
-          calloutOverlayRef.current = null;
-          map.selectedAnnotation = null;
+        // Open right panel with landmark details (no callout popup)
+        setSelectedPlace({
+          name: lm.name,
+          latitude: lm.latitude,
+          longitude: lm.longitude,
+          formattedAddress: lm.address || '',
+          phone: '',
+          url: lm.apple_maps_url || `https://maps.apple.com/?ll=${lm.latitude},${lm.longitude}&q=${encodeURIComponent(lm.name)}`,
+          category: lm.description || 'Landmark',
+          isLandmark: true,
         });
-
-        el.innerHTML = html;
-        el.appendChild(closeBtn);
-
-        setTimeout(() => {
-          const delBtn = el.querySelector(`#lm-delete-${lm.id}`);
-          if (delBtn) {
-            delBtn.addEventListener('click', async () => {
-              try {
-                await api.delete(`/landmarks/${lm.id}`);
-                setLandmarks((prev) => prev.filter((l) => l.id !== lm.id));
-                el.remove();
-                calloutOverlayRef.current = null;
-              } catch (err) {
-                console.error('Failed to delete landmark:', err);
-              }
-            });
-          }
-        }, 0);
-
-        const mapContainer = mapContainerRef.current;
-        if (mapContainer) {
-          const point = map.convertCoordinateToPointOnPage(coord);
-          const rect = mapContainer.getBoundingClientRect();
-          el.style.left = `${point.x - rect.left - 140}px`;
-          el.style.top = `${point.y - rect.top - 180}px`;
-          mapContainer.appendChild(el);
-          calloutOverlayRef.current = el;
-        }
-      });
-
-      annotation.addEventListener('deselect', () => {
-        if (calloutOverlayRef.current) {
-          calloutOverlayRef.current.remove();
-          calloutOverlayRef.current = null;
-        }
       });
 
       newAnnotations.push(annotation);
@@ -2008,6 +2057,23 @@ export default function MapPage() {
       setLandmarkForm(null);
     }
   }, []);
+
+  // ---- Delete landmark ----
+  const deleteLandmark = useCallback(async (id: string) => {
+    try {
+      await api.delete(`/landmarks/${id}`);
+      setLandmarks((prev) => prev.filter((l) => l.id !== id));
+      // Close right panel if showing this landmark
+      setSelectedPlace((prev) => {
+        if (!prev?.isLandmark) return prev;
+        const lm = landmarks.find((l) => l.id === id);
+        if (lm && prev.latitude === lm.latitude && prev.longitude === lm.longitude) return null;
+        return prev;
+      });
+    } catch (err) {
+      console.error('Failed to delete landmark:', err);
+    }
+  }, [landmarks]);
 
   // ---- Search: select a suggestion ----
   const handleSelectSuggestion = useCallback((suggestion: SearchSuggestion) => {
@@ -2636,6 +2702,11 @@ export default function MapPage() {
                   <button
                     key={lm.id}
                     onClick={() => flyToLandmark(lm)}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setLandmarkCtxMenu({ x: e.clientX, y: e.clientY, landmark: lm });
+                    }}
                     className="w-full text-left px-4 py-3 border-b border-white/[0.03] hover:bg-white/[0.03] transition-colors flex items-center gap-3"
                   >
                     <div
@@ -2839,6 +2910,31 @@ export default function MapPage() {
           onLookAround={handleLookAround}
           onClose={() => setContextMenu(null)}
         />
+      )}
+
+      {/* ---- Landmark Context Menu (right-click in list) ---- */}
+      {landmarkCtxMenu && createPortal(
+        <LandmarkContextMenu
+          x={landmarkCtxMenu.x}
+          y={landmarkCtxMenu.y}
+          landmark={landmarkCtxMenu.landmark}
+          onEdit={(lm) => {
+            setLandmarkForm({
+              lat: lm.latitude,
+              lng: lm.longitude,
+              initialName: lm.name,
+              initialAddress: lm.address || undefined,
+              initialAppleMapsUrl: lm.apple_maps_url || undefined,
+            });
+            setLandmarkCtxMenu(null);
+          }}
+          onDelete={async (lm) => {
+            await deleteLandmark(lm.id);
+            setLandmarkCtxMenu(null);
+          }}
+          onClose={() => setLandmarkCtxMenu(null)}
+        />,
+        document.body,
       )}
 
       {/* ---- Landmark Form ---- */}
