@@ -45,6 +45,10 @@ enum JARVISConfig {
         static var wsVoice: String { "\(wsBaseURL)/api/\(apiVersion)/voice/ws/voice" }
     }
 
+    enum Contacts {
+        static var list: String { "\(apiBaseURL)/contacts" }
+    }
+
     enum Health {
         static var check: String { "\(baseURL)/health" }
     }

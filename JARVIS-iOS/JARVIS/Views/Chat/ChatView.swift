@@ -59,6 +59,7 @@ struct EmptyStateView: View {
             // 3D SceneKit particle cloud
             ParticleCloudView(allowsCameraControl: true)
                 .opacity(opacity * 0.85)
+                .offset(y: -UIScreen.main.bounds.height * 0.08)
 
             // Overlay text
             VStack(spacing: 24) {

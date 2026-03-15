@@ -12,7 +12,9 @@ struct MessageBubbleView: View {
             // Only hide empty USER messages — assistant messages may be loading
             EmptyView()
         } else {
-            HStack(alignment: .top, spacing: 8) {
+            HStack(alignment: .top, spacing: 0) {
+                if isUser { Spacer(minLength: 60) }
+
                 VStack(alignment: isUser ? .trailing : .leading, spacing: 4) {
                     // Role label
                     HStack(spacing: 4) {
@@ -38,28 +40,22 @@ struct MessageBubbleView: View {
                         }
                     }
 
-                    // Content
-                    HStack {
-                        if isUser { Spacer(minLength: 0) }
-
-                        VStack(alignment: .leading, spacing: 0) {
+                    // Content bubble — no explicit maxWidth, sizes naturally to content
+                    VStack(alignment: .leading, spacing: 0) {
+                        HStack(spacing: 0) {
                             Text(parsedContent)
                                 .font(.system(size: 14, weight: .regular))
                                 .foregroundColor(.jarvisText)
                                 .textSelection(.enabled)
                                 .lineSpacing(3)
-                        }
 
-                        if !isUser {
-                            Spacer(minLength: 0)
-
-                            // Streaming cursor
-                            if message.isStreaming {
+                            if !isUser && message.isStreaming {
                                 Rectangle()
                                     .fill(Color.jarvisBlue)
                                     .frame(width: 2, height: 16)
                                     .opacity(cursorOpacity)
                                     .onAppear { startCursorBlink() }
+                                    .padding(.leading, 4)
                             }
                         }
                     }
@@ -96,9 +92,9 @@ struct MessageBubbleView: View {
                         .font(.system(size: 8, design: .monospaced))
                         .foregroundColor(.jarvisTextDim.opacity(0.5))
                 }
-                .frame(maxWidth: UIScreen.main.bounds.width * 0.82, alignment: isUser ? .trailing : .leading)
+
+                if !isUser { Spacer(minLength: 60) }
             }
-            .frame(maxWidth: .infinity, alignment: isUser ? .trailing : .leading)
         }
     }
 

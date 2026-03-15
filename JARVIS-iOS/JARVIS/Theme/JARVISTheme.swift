@@ -148,31 +148,36 @@ extension View {
 // MARK: - Scanline Overlay
 
 struct ScanlineOverlay: View {
-    @State private var offset: CGFloat = -1
+    @State private var phase: CGFloat = 0
 
     var body: some View {
-        GeometryReader { geo in
-            Rectangle()
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            .clear,
-                            Color.jarvisBlue.opacity(0.03),
-                            Color.jarvisBlue.opacity(0.06),
-                            Color.jarvisBlue.opacity(0.03),
-                            .clear
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
+        Canvas { context, size in
+            let spacing: CGFloat = 20
+            let dotRadius: CGFloat = 1.2
+            let cols = Int(size.width / spacing) + 1
+            let rows = Int(size.height / spacing) + 1
+
+            for row in 0..<rows {
+                for col in 0..<cols {
+                    let x = CGFloat(col) * spacing
+                    let y = CGFloat(row) * spacing
+
+                    // Wave from top-left to bottom-right
+                    let diagonal = (x + y) / (size.width + size.height)
+                    let wave = sin((diagonal * 4 - phase) * .pi * 2)
+                    let opacity = 0.03 + 0.06 * max(0, wave)
+
+                    context.fill(
+                        Path(ellipseIn: CGRect(x: x - dotRadius, y: y - dotRadius, width: dotRadius * 2, height: dotRadius * 2)),
+                        with: .color(.white.opacity(opacity))
                     )
-                )
-                .frame(height: 100)
-                .offset(y: offset * geo.size.height)
-                .onAppear {
-                    withAnimation(.linear(duration: 8).repeatForever(autoreverses: false)) {
-                        offset = 1
-                    }
                 }
+            }
+        }
+        .onAppear {
+            withAnimation(.linear(duration: 6).repeatForever(autoreverses: false)) {
+                phase = 1
+            }
         }
         .allowsHitTesting(false)
     }

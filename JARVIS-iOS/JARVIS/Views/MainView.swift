@@ -6,6 +6,7 @@ struct MainView: View {
     @State private var showConversations = false
     @State private var showSettings = false
     @State private var showVoiceMode = false
+    @State private var showAtlas = false
 
     var body: some View {
         ZStack {
@@ -39,6 +40,7 @@ struct MainView: View {
                     showConversations: $showConversations,
                     showSettings: $showSettings,
                     showVoiceMode: $showVoiceMode,
+                    showAtlas: $showAtlas,
                     provider: chatVM.selectedProvider,
                     isStreaming: chatVM.isStreaming
                 )
@@ -72,10 +74,22 @@ struct MainView: View {
                     .environmentObject(chatVM)
                     .transition(.opacity)
             }
+
+            if showAtlas {
+                AtlasMapView(isShowing: $showAtlas)
+                    .transition(.opacity)
+            }
         }
         .animation(.spring(response: 0.4, dampingFraction: 0.85), value: showConversations)
         .animation(.spring(response: 0.4, dampingFraction: 0.85), value: showSettings)
         .animation(.spring(response: 0.4, dampingFraction: 0.85), value: showVoiceMode)
+        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: showAtlas)
+        .onChange(of: showConversations) { newValue in
+            if newValue { UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) }
+        }
+        .onChange(of: showSettings) { newValue in
+            if newValue { UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) }
+        }
         .task {
             await chatVM.loadProviders()
             await chatVM.loadConversations()
@@ -89,6 +103,7 @@ struct HUDStatusBar: View {
     @Binding var showConversations: Bool
     @Binding var showSettings: Bool
     @Binding var showVoiceMode: Bool
+    @Binding var showAtlas: Bool
     let provider: String
     let isStreaming: Bool
 
@@ -196,6 +211,15 @@ struct HUDStatusBar: View {
                     .fill(Color.white.opacity(0.06))
                     .frame(width: 0.5, height: 14)
 
+                // Atlas map button
+                Button {
+                    showAtlas = true
+                } label: {
+                    Image(systemName: "map")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.jarvisBlue.opacity(0.7))
+                }
+
                 // Voice button
                 Button {
                     showVoiceMode = true
@@ -219,16 +243,9 @@ struct HUDStatusBar: View {
                 .fixedSize()
 
                 // Security badge
-                HStack(spacing: 3) {
-                    Image(systemName: "lock.shield.fill")
-                        .font(.system(size: 8))
-                        .foregroundColor(.jarvisOnline.opacity(0.4))
-                    Text("SEC")
-                        .font(.system(size: 7, weight: .bold, design: .monospaced))
-                        .foregroundColor(.jarvisOnline.opacity(0.3))
-                        .lineLimit(1)
-                }
-                .fixedSize()
+                Image(systemName: "lock.shield.fill")
+                    .font(.system(size: 8))
+                    .foregroundColor(.jarvisOnline.opacity(0.4))
 
                 // Settings
                 Button {
@@ -252,7 +269,7 @@ struct HUDStatusBar: View {
     private func updateTime() {
         let now = Date()
         let tf = DateFormatter()
-        tf.dateFormat = "h:mm:ss a"
+        tf.dateFormat = "h:mm a"
         time = tf.string(from: now)
         let df = DateFormatter()
         df.dateFormat = "MMM d"

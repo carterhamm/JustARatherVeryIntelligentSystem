@@ -1161,6 +1161,7 @@ export default function MapPage() {
   // New state for redesign
   const [mapSearchQuery, setMapSearchQuery] = useState('');
   const [searchSuggestions, setSearchSuggestions] = useState<SearchSuggestion[]>([]);
+  const [selectedSuggestionIdx, setSelectedSuggestionIdx] = useState(-1);
   const [selectedPlace, setSelectedPlace] = useState<PlaceDetail | null>(null);
   const [leftPanelView, setLeftPanelView] = useState<'rows' | 'contacts' | 'landmarks'>('rows');
   const [contactFilter, setContactFilter] = useState('');
@@ -1508,8 +1509,10 @@ export default function MapPage() {
         // If multiple contacts at this location, cycle through them (infinite loop)
         const groupContacts = locationGroups.get(locKey) || [c];
         const currentIdx = groupContacts.findIndex((gc) => gc.id === selectedContactIdRef.current);
-        const nextContact = groupContacts[(currentIdx + 1) % groupContacts.length];
+        const nextIdx = (currentIdx + 1) % groupContacts.length;
+        const nextContact = groupContacts[nextIdx];
 
+        selectedContactIdRef.current = nextContact.id;  // Update ref immediately (useEffect is async)
         setSelectedContactId(nextContact.id);
 
         // Build the place details for the right panel
@@ -1702,6 +1705,7 @@ export default function MapPage() {
             completionUrl: r.completionUrl,
           })),
         );
+        setSelectedSuggestionIdx(-1);
       }, { region: mapRef.current?.region });
     }, 300);
 
@@ -1777,9 +1781,13 @@ export default function MapPage() {
         return;
       }
 
-      // D key — fly to current/device location
+      // D key — close any open panels, then fly to current/device location
       if ((e.key === 'd' || e.key === 'D') && !isTyping && !e.metaKey && !e.ctrlKey && !e.altKey) {
         e.preventDefault();
+        setSelectedPlace(null);
+        setExpandedContactId(null);
+        setSelectedContactId(null);
+        selectedContactIdRef.current = null;
         flyToUserLocation();
         return;
       }
@@ -2077,10 +2085,24 @@ export default function MapPage() {
                 value={mapSearchQuery}
                 onChange={(e) => setMapSearchQuery(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleSearchSubmit();
+                  if (e.key === 'Tab' && searchSuggestions.length > 0) {
+                    e.preventDefault();
+                    setSelectedSuggestionIdx((prev) => (prev + 1) % searchSuggestions.length);
+                    return;
+                  }
+                  if (e.key === 'Enter') {
+                    if (selectedSuggestionIdx >= 0 && searchSuggestions[selectedSuggestionIdx]) {
+                      e.preventDefault();
+                      handleSelectSuggestion(searchSuggestions[selectedSuggestionIdx]);
+                    } else {
+                      handleSearchSubmit();
+                    }
+                    return;
+                  }
                   if (e.key === 'Escape') {
                     setMapSearchQuery('');
                     setSearchSuggestions([]);
+                    setSelectedSuggestionIdx(-1);
                   }
                 }}
                 placeholder="Search places, businesses, addresses... (⌘K)"
@@ -2118,7 +2140,10 @@ export default function MapPage() {
                   <button
                     key={i}
                     onClick={() => handleSelectSuggestion(s)}
-                    className="w-full text-left px-4 py-2.5 hover:bg-white/[0.04] transition-colors flex items-start gap-3 border-b border-white/[0.03] last:border-0"
+                    className={clsx(
+                      'w-full text-left px-4 py-2.5 hover:bg-white/[0.04] transition-colors flex items-start gap-3 border-b border-white/[0.03] last:border-0',
+                      i === selectedSuggestionIdx && 'bg-white/[0.06]',
+                    )}
                   >
                     <MapPin size={12} className="text-jarvis-blue/30 mt-0.5 flex-shrink-0" />
                     <div className="min-w-0">
