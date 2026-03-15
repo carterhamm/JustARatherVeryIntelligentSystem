@@ -36,7 +36,7 @@ _DIALOGUE_HISTORY_TTL = 86400 * 30  # 30 days (these are valuable)
 _LOCK_TTL = 1800  # 30 minutes max per session
 
 # Both dialogue participants use Gemini 3.1 Pro for maximum intelligence
-_DIALOGUE_MODEL = "gemini-3.1-pro-preview"
+_DIALOGUE_MODEL = "gemini-3.1-flash-lite-preview"
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Mr. Stark's context — shared by both AIs

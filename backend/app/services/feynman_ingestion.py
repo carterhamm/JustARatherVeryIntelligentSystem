@@ -423,7 +423,7 @@ async def ingest_feynman_lectures(
                                 f"popular science summary."
                             )},
                         ],
-                        model="gemini-3.1-pro-preview",
+                        model="gemini-3.1-flash-lite-preview",
                         temperature=0.3,
                         max_tokens=2000,
                     )
