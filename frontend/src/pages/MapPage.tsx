@@ -964,6 +964,19 @@ function LandmarkForm({
           </p>
         </div>
 
+        <div className="mb-4">
+          <label className="text-[9px] font-mono tracking-wider text-gray-500 uppercase mb-1.5 block">
+            Apple Maps URL
+          </label>
+          <input
+            type="text"
+            value={appleMapsUrl}
+            onChange={(e) => setAppleMapsUrl(e.target.value)}
+            placeholder="https://maps.apple.com/?ll=..."
+            className="w-full py-2 px-3 text-xs font-mono bg-transparent border border-white/[0.06] text-gray-400 placeholder-gray-600 focus:border-jarvis-gold/25 transition-colors"
+          />
+        </div>
+
         <div className="flex justify-end gap-2">
           <button
             onClick={onCancel}
@@ -1906,6 +1919,17 @@ export default function MapPage() {
 
       const ann = landmarkAnnotationsRef.current.find((a) => a.data?.landmarkId === lm.id);
       if (ann) map.selectedAnnotation = ann;
+
+      // Open right panel with landmark details
+      setSelectedPlace({
+        name: lm.name,
+        latitude: lm.latitude,
+        longitude: lm.longitude,
+        formattedAddress: lm.address || '',
+        phone: '',
+        url: lm.apple_maps_url || `https://maps.apple.com/?ll=${lm.latitude},${lm.longitude}&q=${encodeURIComponent(lm.name)}`,
+        category: lm.description || 'Landmark',
+      });
     },
     [],
   );

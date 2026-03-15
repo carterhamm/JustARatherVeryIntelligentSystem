@@ -148,20 +148,25 @@ struct AtlasMapView: View {
 
                 Spacer()
 
-                // Bottom: contact detail or loading
-                if isLoading {
-                    loadingIndicator
-                        .padding(.bottom, 40)
-                } else if let selected = selectedContact {
-                    contactDetailPanel(selected)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                // Bottom: search bar + contact detail or loading
+                VStack(spacing: 8) {
+                    if let error = errorMessage {
+                        errorBanner(error)
+                    }
+
+                    // Search bar at bottom
+                    searchBar
                         .padding(.horizontal, 12)
-                        .padding(.bottom, 16)
-                } else if let error = errorMessage {
-                    errorBanner(error)
-                        .padding(.horizontal, 12)
-                        .padding(.bottom, 40)
+
+                    if isLoading {
+                        loadingIndicator
+                    } else if let selected = selectedContact {
+                        contactDetailPanel(selected)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                            .padding(.horizontal, 12)
+                    }
                 }
+                .padding(.bottom, 16)
             }
         }
         .animation(.spring(response: 0.35, dampingFraction: 0.85), value: selectedContact)
@@ -194,70 +199,60 @@ struct AtlasMapView: View {
             }
 
             // ATLAS label
-            Text("ATLAS")
+            Text("A.T.L.A.S.")
                 .font(.system(size: 10, weight: .bold, design: .monospaced))
                 .tracking(3)
                 .foregroundColor(.jarvisBlue.opacity(0.8))
 
-            // Search field
-            HStack(spacing: 8) {
-                Image(systemName: "magnifyingglass")
-                    .font(.system(size: 12))
-                    .foregroundColor(.jarvisBlue.opacity(0.5))
+            Spacer()
+        }
+    }
 
-                TextField("", text: $searchText, prompt: Text("Search places...")
-                    .font(.system(size: 12, design: .monospaced))
-                    .foregroundColor(.jarvisTextDim.opacity(0.4)))
-                    .font(.system(size: 12, design: .monospaced))
-                    .foregroundColor(.jarvisText)
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.never)
-                    .onSubmit {
-                        Task { await search() }
-                    }
+    private var searchBar: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 12))
+                .foregroundColor(.jarvisBlue.opacity(0.5))
 
-                if !searchText.isEmpty {
-                    Button {
-                        searchText = ""
-                        searchResults = []
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 12))
-                            .foregroundColor(.jarvisTextDim.opacity(0.4))
-                    }
+            TextField("", text: $searchText, prompt: Text("Search places...")
+                .font(.system(size: 12, design: .monospaced))
+                .foregroundColor(.jarvisTextDim.opacity(0.4)))
+                .font(.system(size: 12, design: .monospaced))
+                .foregroundColor(.jarvisText)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+                .onSubmit {
+                    Task { await search() }
+                }
+
+            if !searchText.isEmpty {
+                Button {
+                    searchText = ""
+                    searchResults = []
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 12))
+                        .foregroundColor(.jarvisTextDim.opacity(0.4))
                 }
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            .background {
-                HexCornerShape(cutSize: 6)
-                    .fill(.ultraThinMaterial)
-                    .overlay {
-                        HexCornerShape(cutSize: 6)
-                            .fill(Color.jarvisPanelBg.opacity(0.6))
-                    }
-                    .overlay {
-                        HexCornerShape(cutSize: 6)
-                            .strokeBorder(Color.jarvisBlue.opacity(0.15), lineWidth: 0.5)
-                    }
-            }
-
-            // Contact count badge
-            Text("\(contacts.count)")
-                .font(.system(size: 10, weight: .bold, design: .monospaced))
-                .foregroundColor(.jarvisBlue.opacity(0.7))
-                .padding(.horizontal, 8)
-                .padding(.vertical, 5)
-                .background {
-                    HexCornerShape(cutSize: 4)
-                        .fill(Color.jarvisBlue.opacity(0.08))
-                        .overlay {
-                            HexCornerShape(cutSize: 4)
-                                .strokeBorder(Color.jarvisBlue.opacity(0.15), lineWidth: 0.5)
-                        }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background {
+            HexCornerShape(cutSize: 6)
+                .fill(.ultraThinMaterial)
+                .overlay {
+                    HexCornerShape(cutSize: 6)
+                        .fill(Color.jarvisPanelBg.opacity(0.6))
+                }
+                .overlay {
+                    HexCornerShape(cutSize: 6)
+                        .strokeBorder(Color.jarvisBlue.opacity(0.15), lineWidth: 0.5)
                 }
         }
     }
+
+    // Contact count removed per design request
 
     // MARK: - Contact Pin
 
