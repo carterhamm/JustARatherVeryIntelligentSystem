@@ -9,12 +9,14 @@ struct SettingsView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var chatVM: ChatViewModel
     @StateObject private var eventKit = EventKitService.shared
+    @StateObject private var onDeviceLLM = OnDeviceLLMService.shared
     @State private var serverURL = JARVISConfig.baseURL
     @State private var healthStatus: HealthAuthStatus = .unknown
     @State private var notificationStatus: NotificationAuthStatus = .unknown
     @State private var contactsStatus: ContactsAuthStatus = .unknown
     @State private var musicStatus: MusicAuthStatus = .unknown
     @State private var isLoadingProviders = false
+    @State private var showDeleteModelConfirm = false
 
     enum HealthAuthStatus {
         case unknown, authorized, denied, unavailable, syncing
@@ -508,6 +510,249 @@ struct SettingsView: View {
                             .padding(.vertical, 2)
                         }
 
+                        // On-Device AI
+                        SettingsSection(title: "ON-DEVICE AI") {
+                            // Model info header
+                            HStack {
+                                VStack(alignment: .leading, spacing: 3) {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "brain")
+                                            .font(.system(size: 11))
+                                            .foregroundColor(.jarvisBlue)
+                                        Text(OnDeviceLLMService.modelDisplayName)
+                                            .font(.system(size: 12, weight: .medium, design: .monospaced))
+                                            .foregroundColor(.jarvisText)
+                                    }
+
+                                    Text(onDeviceLLM.state.label)
+                                        .font(.system(size: 9, weight: .medium, design: .monospaced))
+                                        .foregroundColor(stateColor(for: onDeviceLLM.state))
+                                }
+
+                                Spacer()
+
+                                if case .ready = onDeviceLLM.state {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .font(.system(size: 14))
+                                        .foregroundColor(.jarvisOnline)
+                                }
+                            }
+                            .padding(.vertical, 2)
+
+                            // Download progress bar
+                            if case .downloading(let progress) = onDeviceLLM.state {
+                                VStack(spacing: 4) {
+                                    GeometryReader { geo in
+                                        ZStack(alignment: .leading) {
+                                            HexCornerShape(cutSize: 3)
+                                                .fill(Color.jarvisBlue.opacity(0.1))
+                                                .frame(height: 6)
+
+                                            HexCornerShape(cutSize: 3)
+                                                .fill(Color.jarvisBlue.opacity(0.7))
+                                                .frame(width: max(0, geo.size.width * progress), height: 6)
+                                        }
+                                    }
+                                    .frame(height: 6)
+
+                                    HStack {
+                                        Text("\(Int(progress * 100))%")
+                                            .font(.system(size: 9, design: .monospaced))
+                                            .foregroundColor(.jarvisTextDim)
+                                        Spacer()
+                                        Text("~\(OnDeviceLLMService.estimatedSizeMB) MB")
+                                            .font(.system(size: 9, design: .monospaced))
+                                            .foregroundColor(.jarvisTextDim)
+                                    }
+                                }
+                                .padding(.vertical, 2)
+                            }
+
+                            // Storage display
+                            if let size = onDeviceLLM.modelSizeOnDisk {
+                                SettingsRow(label: "Storage", value: size)
+                            }
+
+                            // Action buttons
+                            switch onDeviceLLM.state {
+                            case .notDownloaded:
+                                Button {
+                                    Task { await onDeviceLLM.downloadModel() }
+                                } label: {
+                                    HStack {
+                                        Image(systemName: "arrow.down.circle")
+                                            .font(.system(size: 11))
+                                        Text("DOWNLOAD MODEL")
+                                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                            .tracking(1)
+                                    }
+                                    .foregroundColor(.jarvisBlue)
+                                    .frame(maxWidth: .infinity)
+                                    .frame(height: 36)
+                                    .background {
+                                        HexCornerShape(cutSize: 5)
+                                            .strokeBorder(Color.jarvisBlue.opacity(0.3), lineWidth: 0.5)
+                                    }
+                                }
+                                .padding(.top, 4)
+
+                            case .downloading:
+                                Text("Downloading model files...")
+                                    .font(.system(size: 10, design: .monospaced))
+                                    .foregroundColor(.jarvisTextDim)
+                                    .frame(maxWidth: .infinity, alignment: .center)
+                                    .padding(.top, 2)
+
+                            case .downloaded:
+                                HStack(spacing: 8) {
+                                    Button {
+                                        Task { try? await onDeviceLLM.loadModel() }
+                                    } label: {
+                                        HStack {
+                                            Image(systemName: "bolt.fill")
+                                                .font(.system(size: 10))
+                                            Text("LOAD")
+                                                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                                .tracking(1)
+                                        }
+                                        .foregroundColor(.jarvisBlue)
+                                        .frame(maxWidth: .infinity)
+                                        .frame(height: 36)
+                                        .background {
+                                            HexCornerShape(cutSize: 5)
+                                                .strokeBorder(Color.jarvisBlue.opacity(0.3), lineWidth: 0.5)
+                                        }
+                                    }
+
+                                    Button {
+                                        showDeleteModelConfirm = true
+                                    } label: {
+                                        HStack {
+                                            Image(systemName: "trash")
+                                                .font(.system(size: 10))
+                                            Text("DELETE")
+                                                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                                .tracking(1)
+                                        }
+                                        .foregroundColor(.jarvisError)
+                                        .frame(maxWidth: .infinity)
+                                        .frame(height: 36)
+                                        .background {
+                                            HexCornerShape(cutSize: 5)
+                                                .strokeBorder(Color.jarvisError.opacity(0.3), lineWidth: 0.5)
+                                        }
+                                    }
+                                }
+                                .padding(.top, 4)
+
+                            case .loading:
+                                HStack {
+                                    ProgressView()
+                                        .scaleEffect(0.7)
+                                        .tint(.jarvisBlue)
+                                    Text("Loading model...")
+                                        .font(.system(size: 10, design: .monospaced))
+                                        .foregroundColor(.jarvisTextDim)
+                                    Spacer()
+                                }
+                                .padding(.top, 2)
+
+                            case .ready:
+                                HStack(spacing: 8) {
+                                    Button {
+                                        onDeviceLLM.unloadModel()
+                                    } label: {
+                                        HStack {
+                                            Image(systemName: "eject.fill")
+                                                .font(.system(size: 10))
+                                            Text("UNLOAD")
+                                                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                                .tracking(1)
+                                        }
+                                        .foregroundColor(.jarvisGold)
+                                        .frame(maxWidth: .infinity)
+                                        .frame(height: 36)
+                                        .background {
+                                            HexCornerShape(cutSize: 5)
+                                                .strokeBorder(Color.jarvisGold.opacity(0.3), lineWidth: 0.5)
+                                        }
+                                    }
+
+                                    Button {
+                                        showDeleteModelConfirm = true
+                                    } label: {
+                                        HStack {
+                                            Image(systemName: "trash")
+                                                .font(.system(size: 10))
+                                            Text("DELETE")
+                                                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                                .tracking(1)
+                                        }
+                                        .foregroundColor(.jarvisError)
+                                        .frame(maxWidth: .infinity)
+                                        .frame(height: 36)
+                                        .background {
+                                            HexCornerShape(cutSize: 5)
+                                                .strokeBorder(Color.jarvisError.opacity(0.3), lineWidth: 0.5)
+                                        }
+                                    }
+                                }
+                                .padding(.top, 4)
+
+                            case .error(let msg):
+                                VStack(spacing: 6) {
+                                    Text(msg)
+                                        .font(.system(size: 9, design: .monospaced))
+                                        .foregroundColor(.jarvisError)
+                                        .lineLimit(2)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                                    Button {
+                                        onDeviceLLM.refreshState()
+                                    } label: {
+                                        Text("RETRY")
+                                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                                            .tracking(1)
+                                            .foregroundColor(.jarvisBlue)
+                                    }
+                                }
+                                .padding(.top, 2)
+                            }
+
+                            // Prefer on-device toggle
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Prefer On-Device")
+                                        .font(.system(size: 11, design: .monospaced))
+                                        .foregroundColor(.jarvisText)
+                                    Text("Use local model when available")
+                                        .font(.system(size: 9, design: .monospaced))
+                                        .foregroundColor(.jarvisTextDim)
+                                }
+
+                                Spacer()
+
+                                Toggle("", isOn: $onDeviceLLM.preferOnDevice)
+                                    .labelsHidden()
+                                    .tint(.jarvisBlue)
+                            }
+                            .padding(.top, 4)
+
+                            // Info line
+                            Text("Offline AI via MLX. ~\(OnDeviceLLMService.estimatedSizeMB) MB on-device.")
+                                .font(.system(size: 9, design: .monospaced))
+                                .foregroundColor(.jarvisTextDim.opacity(0.6))
+                                .padding(.top, 2)
+                        }
+                        .alert("Delete Model", isPresented: $showDeleteModelConfirm) {
+                            Button("Delete", role: .destructive) {
+                                onDeviceLLM.deleteModel()
+                            }
+                            Button("Cancel", role: .cancel) {}
+                        } message: {
+                            Text("This will remove the downloaded model files and free up ~\(OnDeviceLLMService.estimatedSizeMB) MB of storage.")
+                        }
+
                         // About
                         SettingsSection(title: "SYSTEM") {
                             SettingsRow(label: "Version", value: "1.0.0")
@@ -565,6 +810,19 @@ struct SettingsView: View {
                 refreshMusicStatus()
                 await refreshNotificationStatus()
             }
+        }
+    }
+
+    // MARK: - On-Device Model Helpers
+
+    private func stateColor(for state: OnDeviceLLMService.ModelState) -> Color {
+        switch state {
+        case .notDownloaded: return .jarvisTextDim
+        case .downloading: return .jarvisGold
+        case .downloaded: return .jarvisBlue
+        case .loading: return .jarvisGold
+        case .ready: return .jarvisOnline
+        case .error: return .jarvisError
         }
     }
 

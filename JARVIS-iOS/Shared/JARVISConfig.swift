@@ -49,6 +49,10 @@ enum JARVISConfig {
         static var list: String { "\(apiBaseURL)/contacts" }
     }
 
+    enum Landmarks {
+        static var list: String { "\(apiBaseURL)/landmarks" }
+    }
+
     enum Health {
         static var check: String { "\(baseURL)/health" }
     }
