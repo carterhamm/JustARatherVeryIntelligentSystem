@@ -117,6 +117,34 @@ async def startup_handler(app: FastAPI) -> None:
     except Exception as exc:
         logger.warning("service_health_check_failed", error=str(exc))
 
+    # -- Background learning scheduler ----------------------------------------
+    try:
+        import asyncio
+
+        async def _learning_scheduler():
+            """Run a learning cycle every 30 minutes, forever."""
+            await asyncio.sleep(120)  # wait 2 min after boot for services to stabilize
+            logger.info("learning_scheduler_started", interval_minutes=30)
+            while True:
+                try:
+                    from app.services.continuous_learning import run_learning_cycle
+                    result = await run_learning_cycle()
+                    status = result.get("status", "?")
+                    ingested = result.get("total_ingested", 0)
+                    logger.info(
+                        "learning_cycle_complete",
+                        status=status,
+                        ingested=ingested,
+                    )
+                except Exception as exc:
+                    logger.warning("learning_cycle_failed", error=str(exc))
+                await asyncio.sleep(1800)  # 30 minutes
+
+        asyncio.create_task(_learning_scheduler())
+        logger.info("learning_scheduler_registered", interval_minutes=30)
+    except Exception as exc:
+        logger.warning("learning_scheduler_failed_to_register", error=str(exc))
+
     logger.info("startup_complete", app=settings.APP_NAME)
 
 
