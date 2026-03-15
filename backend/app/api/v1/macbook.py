@@ -92,6 +92,23 @@ async def macbook_report(
             ttl=_REPORT_TTL,
         )
 
+    elif event == "agent_startup":
+        # MacBook agent just started — store connection info
+        await redis.cache_set(
+            "jarvis:macbook:agent_connected",
+            json.dumps(data),
+            ttl=_REPORT_TTL,
+        )
+        # Also store focus state from startup
+        focus_state = data.get("focus_state", {})
+        if focus_state:
+            await redis.cache_set(
+                "jarvis:macbook:focus_state",
+                json.dumps(focus_state),
+                ttl=_REPORT_TTL,
+            )
+        logger.info("MacBook agent connected: %s", data.get("hostname", "unknown"))
+
     else:
         logger.warning("Unknown MacBook agent event: %s", event)
 

@@ -372,10 +372,17 @@ def main() -> None:
 
     global _last_comms_check
 
-    # Initial focus state read (don't report — just establish baseline)
+    # Initial focus state read + send startup report
     global _last_focus_state
     _last_focus_state = _read_focus_state()
     log.info("Initial focus state: %s", _last_focus_state)
+
+    # Send initial status so JARVIS knows we're connected
+    _post_report("agent_startup", {
+        "focus_state": _last_focus_state,
+        "hostname": os.uname().nodename,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    })
 
     # Run comms check immediately on startup
     check_missed_calls()
