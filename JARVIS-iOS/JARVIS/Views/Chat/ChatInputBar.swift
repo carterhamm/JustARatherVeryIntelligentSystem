@@ -36,8 +36,16 @@ struct ChatInputBar: View {
                         .lineLimit(1...5)
                         .focused($isFocused)
                         .onSubmit {
-                            if !chatVM.inputText.isEmpty {
-                                Task { await chatVM.sendMessage() }
+                            let text = chatVM.inputText.trimmingCharacters(in: .whitespacesAndNewlines)
+                            if text.isEmpty {
+                                // Empty submit → dismiss keyboard
+                                isFocused = false
+                            } else {
+                                Task {
+                                    await chatVM.sendMessage()
+                                    // Ensure text is cleared after send
+                                    chatVM.inputText = ""
+                                }
                             }
                         }
                 }

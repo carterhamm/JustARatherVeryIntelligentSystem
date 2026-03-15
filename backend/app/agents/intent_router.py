@@ -100,8 +100,8 @@ TOOL_CATEGORIES = {
         "tools": ["news"],
     },
     "music": {
-        "description": "Music playback, playlists, songs, artists",
-        "tools": ["spotify"],
+        "description": "Music playback, playlists, songs, artists, Apple Music, play a song",
+        "tools": ["spotify", "smart_home_control"],
     },
     "nutrition": {
         "description": "Recipes, nutrition info, food, cooking",

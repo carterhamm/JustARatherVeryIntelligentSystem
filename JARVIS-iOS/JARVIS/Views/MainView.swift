@@ -91,17 +91,15 @@ struct MainView: View {
         .onChange(of: showSettings) { newValue in
             if newValue { UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) }
         }
-        .gesture(
-            DragGesture(minimumDistance: 30, coordinateSpace: .global)
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 20, coordinateSpace: .global)
                 .onEnded { value in
                     let horizontal = value.translation.width
                     let vertical = abs(value.translation.height)
-                    guard abs(horizontal) > vertical else { return } // Must be horizontal swipe
-                    if horizontal > 60 && value.startLocation.x < 40 {
-                        // Right swipe from left edge → conversations
+                    guard abs(horizontal) > vertical * 1.5 else { return }
+                    if horizontal > 50 && value.startLocation.x < 50 {
                         withAnimation { showConversations = true }
-                    } else if horizontal < -60 && value.startLocation.x > UIScreen.main.bounds.width - 40 {
-                        // Left swipe from right edge → settings
+                    } else if horizontal < -50 && value.startLocation.x > UIScreen.main.bounds.width - 50 {
                         withAnimation { showSettings = true }
                     }
                 }
