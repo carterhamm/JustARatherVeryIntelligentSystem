@@ -173,9 +173,12 @@ struct HUDStatusBar: View {
                         .font(.system(size: 8, weight: .bold, design: .monospaced))
                         .tracking(1)
                         .foregroundColor(providerColor.opacity(0.8))
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
                 }
-                .padding(.horizontal, 8)
+                .padding(.horizontal, 10)
                 .padding(.vertical, 3)
+                .frame(minWidth: 80)
                 .background {
                     HexCornerShape(cutSize: 4)
                         .fill(providerColor.opacity(0.06))
@@ -183,6 +186,9 @@ struct HUDStatusBar: View {
                             HexCornerShape(cutSize: 4)
                                 .strokeBorder(providerColor.opacity(0.15), lineWidth: 0.5)
                         }
+                }
+                .onTapGesture {
+                    showSettings = true
                 }
 
                 // Divider
@@ -241,7 +247,7 @@ struct HUDStatusBar: View {
     private func updateTime() {
         let now = Date()
         let tf = DateFormatter()
-        tf.dateFormat = "HH:mm:ss"
+        tf.dateFormat = "h:mm:ss a"
         time = tf.string(from: now)
         let df = DateFormatter()
         df.dateFormat = "MMM d"

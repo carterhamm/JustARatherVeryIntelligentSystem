@@ -10,6 +10,7 @@ class VoiceService: NSObject, ObservableObject {
     @Published var isProcessing = false
     @Published var audioLevel: Float = 0
     @Published var transcribedText = ""
+    @Published var isSpeaking = false
 
     private var audioEngine = AVAudioEngine()
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
@@ -19,6 +20,19 @@ class VoiceService: NSObject, ObservableObject {
     private var audioRecorder: AVAudioRecorder?
     private var recordingURL: URL?
     private var levelTimer: Timer?
+
+    // VAD (Voice Activity Detection)
+    private var silenceTimer: Timer?
+    private let silenceThreshold: Float = 0.01
+    private let silenceDuration: TimeInterval = 1.5
+    private var hasDetectedSpeech = false
+
+    // Callback when silence triggers auto-stop
+    var onSilenceDetected: ((String) -> Void)?
+
+    // TTS playback
+    private var audioPlayer: AVAudioPlayer?
+    private var speechSynthesizer: AVSpeechSynthesizer?
 
     override init() {
         super.init()
@@ -52,6 +66,12 @@ class VoiceService: NSObject, ObservableObject {
     func startListening() {
         guard !isRecording else { return }
 
+        // Reset state
+        transcribedText = ""
+        hasDetectedSpeech = false
+        silenceTimer?.invalidate()
+        silenceTimer = nil
+
         do {
             let session = AVAudioSession.sharedInstance()
             try session.setCategory(.record, mode: .measurement)
@@ -73,6 +93,9 @@ class VoiceService: NSObject, ObservableObject {
                 Task { @MainActor in
                     if let result = result {
                         self?.transcribedText = result.bestTranscription.formattedString
+                        if !result.bestTranscription.formattedString.isEmpty {
+                            self?.hasDetectedSpeech = true
+                        }
                     }
                     if error != nil || result?.isFinal == true {
                         // Recognition ended
@@ -89,8 +112,13 @@ class VoiceService: NSObject, ObservableObject {
         }
     }
 
+    @discardableResult
     func stopListening() -> String {
         guard isRecording else { return transcribedText }
+
+        // Cancel silence timer
+        silenceTimer?.invalidate()
+        silenceTimer = nil
 
         audioEngine.stop()
         audioEngine.inputNode.removeTap(onBus: 0)
@@ -99,10 +127,20 @@ class VoiceService: NSObject, ObservableObject {
         recognitionRequest = nil
         recognitionTask = nil
         isRecording = false
+        hasDetectedSpeech = false
 
         let text = transcribedText
-        transcribedText = ""
         return text
+    }
+
+    // MARK: - Stop TTS Playback
+
+    func stopSpeaking() {
+        audioPlayer?.stop()
+        audioPlayer = nil
+        speechSynthesizer?.stopSpeaking(at: .immediate)
+        speechSynthesizer = nil
+        isSpeaking = false
     }
 
     // MARK: - Direct Audio Recording (for voice/chat endpoint)
@@ -133,7 +171,6 @@ class VoiceService: NSObject, ObservableObject {
             Task { @MainActor in
                 self?.audioRecorder?.updateMeters()
                 let level = self?.audioRecorder?.averagePower(forChannel: 0) ?? -160
-                // Normalize from -160..0 to 0..1
                 self?.audioLevel = max(0, min(1, (level + 50) / 50))
             }
         }
@@ -171,11 +208,72 @@ class VoiceService: NSObject, ObservableObject {
 
     // MARK: - TTS Playback
 
-    private var audioPlayer: AVAudioPlayer?
-
     func speak(_ text: String) async {
-        // Use system TTS as fallback
+        // Try ElevenLabs via backend first, fall back to system TTS
+        do {
+            let audioData = try await synthesizeViaBackend(text: text)
+            try await playAudioData(audioData)
+            return
+        } catch {
+            print("Backend TTS failed, falling back to system: \(error)")
+        }
+
+        // System TTS fallback
+        await speakWithSystemTTS(text)
+    }
+
+    private func synthesizeViaBackend(text: String) async throws -> Data {
+        guard let url = URL(string: JARVISConfig.Voice.synthesize) else {
+            throw JARVISError.invalidURL
+        }
+
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        if let token = await APIClient.shared.getAccessToken() {
+            req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+
+        struct SynthesizeBody: Codable {
+            let text: String
+        }
+        req.httpBody = try JSONEncoder().encode(SynthesizeBody(text: text))
+
+        let (data, response) = try await URLSession.shared.data(for: req)
+
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200...299).contains(httpResponse.statusCode) else {
+            throw JARVISError.invalidResponse
+        }
+
+        guard !data.isEmpty else {
+            throw JARVISError.noData
+        }
+
+        return data
+    }
+
+    private func playAudioData(_ data: Data) async throws {
+        try AVAudioSession.sharedInstance().setCategory(.playback)
+        try AVAudioSession.sharedInstance().setActive(true)
+
+        let player = try AVAudioPlayer(data: data)
+        self.audioPlayer = player
+        self.isSpeaking = true
+        player.play()
+
+        // Wait for playback to finish
+        while player.isPlaying {
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        self.isSpeaking = false
+        self.audioPlayer = nil
+    }
+
+    private func speakWithSystemTTS(_ text: String) async {
         let synthesizer = AVSpeechSynthesizer()
+        self.speechSynthesizer = synthesizer
         let utterance = AVSpeechUtterance(string: text)
         utterance.voice = AVSpeechSynthesisVoice(language: "en-GB")
         utterance.rate = 0.52
@@ -186,10 +284,18 @@ class VoiceService: NSObject, ObservableObject {
             try AVAudioSession.sharedInstance().setActive(true)
         } catch {}
 
+        isSpeaking = true
         synthesizer.speak(utterance)
+
+        // Wait for system TTS to finish — poll since we don't use delegate
+        while synthesizer.isSpeaking {
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+        isSpeaking = false
+        self.speechSynthesizer = nil
     }
 
-    // MARK: - Audio Level Processing
+    // MARK: - Audio Level Processing + VAD
 
     private func processAudioLevel(buffer: AVAudioPCMBuffer) {
         guard let channelData = buffer.floatChannelData else { return }
@@ -204,6 +310,22 @@ class VoiceService: NSObject, ObservableObject {
 
         Task { @MainActor in
             self.audioLevel = level
+
+            // VAD: only trigger silence detection after speech has been detected
+            if rms < self.silenceThreshold {
+                if self.hasDetectedSpeech && self.silenceTimer == nil {
+                    self.silenceTimer = Timer.scheduledTimer(withTimeInterval: self.silenceDuration, repeats: false) { [weak self] _ in
+                        Task { @MainActor in
+                            guard let self = self, self.isRecording else { return }
+                            let text = self.stopListening()
+                            self.onSilenceDetected?(text)
+                        }
+                    }
+                }
+            } else {
+                self.silenceTimer?.invalidate()
+                self.silenceTimer = nil
+            }
         }
     }
 }

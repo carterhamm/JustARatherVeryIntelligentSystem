@@ -1235,6 +1235,17 @@ export default function MapPage() {
 
         if (!cancelled) setMapReady(true);
 
+        // Request browser geolocation immediately (triggers permission prompt)
+        if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              userLocationRef.current = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+            },
+            () => {}, // silently ignore denial
+            { enableHighAccuracy: false, timeout: 5000, maximumAge: 300000 },
+          );
+        }
+
         // Geocode immediately — both MapKit and contacts are ready
         if (cancelled || fetchedContacts.length === 0) {
           setIsLoading(false);
@@ -1501,7 +1512,19 @@ export default function MapPage() {
 
         setSelectedContactId(nextContact.id);
 
-        // Animate the pin: shrink → swap → expand
+        // Build the place details for the right panel
+        const addr = getDisplayAddress(nextContact);
+        const placeDetails = {
+          name: `${nextContact.first_name} ${nextContact.last_name || ''}`.trim(),
+          latitude: nextContact.lat,
+          longitude: nextContact.lng,
+          formattedAddress: addr || getShortLocation(nextContact),
+          phone: nextContact.phone || '',
+          url: nextContact.url || '',
+          category: nextContact.company ? (nextContact.title ? `${nextContact.title} at ${nextContact.company}` : nextContact.company) : '',
+        };
+
+        // Animate the pin: shrink → swap → expand, then show panel
         if (groupContacts.length > 1) {
           const el = annotation.element;
           if (el?.firstElementChild) {
@@ -1522,21 +1545,16 @@ export default function MapPage() {
               }
               inner.style.transition = 'transform 0.2s ease-out';
               inner.style.transform = 'scale(1)';
+              // Show panel AFTER avatar swap — no flash
+              setSelectedPlace(placeDetails);
             }, 150);
+          } else {
+            setSelectedPlace(placeDetails);
           }
+        } else {
+          // Single contact at location — show immediately
+          setSelectedPlace(placeDetails);
         }
-
-        // Show contact details in right panel
-        const addr = getDisplayAddress(nextContact);
-        setSelectedPlace({
-          name: `${nextContact.first_name} ${nextContact.last_name || ''}`.trim(),
-          latitude: nextContact.lat,
-          longitude: nextContact.lng,
-          formattedAddress: addr || getShortLocation(nextContact),
-          phone: nextContact.phone || '',
-          url: nextContact.url || '',
-          category: nextContact.company ? (nextContact.title ? `${nextContact.title} at ${nextContact.company}` : nextContact.company) : '',
-        });
       });
 
       newAnnotations.push(annotation);

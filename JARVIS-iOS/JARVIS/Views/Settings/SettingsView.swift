@@ -1,4 +1,6 @@
 import SwiftUI
+import UserNotifications
+import HealthKit
 
 struct SettingsView: View {
     @Binding var isShowing: Bool
@@ -6,6 +8,36 @@ struct SettingsView: View {
     @EnvironmentObject var chatVM: ChatViewModel
     @StateObject private var eventKit = EventKitService.shared
     @State private var serverURL = JARVISConfig.baseURL
+    @State private var healthStatus: HealthAuthStatus = .unknown
+    @State private var notificationStatus: NotificationAuthStatus = .unknown
+    @State private var isLoadingProviders = false
+
+    enum HealthAuthStatus {
+        case unknown, authorized, denied, unavailable, syncing
+        var label: String {
+            switch self {
+            case .unknown: return "NOT DETERMINED"
+            case .authorized: return "AUTHORIZED"
+            case .denied: return "DENIED"
+            case .unavailable: return "UNAVAILABLE"
+            case .syncing: return "SYNCING"
+            }
+        }
+        var isGranted: Bool { self == .authorized || self == .syncing }
+    }
+
+    enum NotificationAuthStatus {
+        case unknown, authorized, denied, provisional
+        var label: String {
+            switch self {
+            case .unknown: return "NOT DETERMINED"
+            case .authorized: return "AUTHORIZED"
+            case .denied: return "DENIED"
+            case .provisional: return "PROVISIONAL"
+            }
+        }
+        var isGranted: Bool { self == .authorized || self == .provisional }
+    }
 
     var body: some View {
         ZStack(alignment: .trailing) {
@@ -48,44 +80,80 @@ struct SettingsView: View {
 
                         // Model Provider
                         SettingsSection(title: "AI PROVIDER") {
-                            ForEach(chatVM.availableProviders) { provider in
-                                Button {
-                                    chatVM.selectedProvider = provider.id
-                                } label: {
-                                    HStack {
-                                        Circle()
-                                            .fill(
-                                                provider.available
-                                                    ? Color.jarvisOnline
-                                                    : Color.jarvisError.opacity(0.5)
-                                            )
-                                            .frame(width: 5, height: 5)
-
-                                        Text(provider.id.uppercased())
-                                            .font(.system(size: 12, weight: .medium, design: .monospaced))
-                                            .foregroundColor(
-                                                chatVM.selectedProvider == provider.id
-                                                    ? .jarvisBlue
-                                                    : .jarvisText
-                                            )
-
-                                        Spacer()
-
-                                        if chatVM.selectedProvider == provider.id {
-                                            Image(systemName: "checkmark")
-                                                .font(.system(size: 10, weight: .bold))
-                                                .foregroundColor(.jarvisBlue)
-                                        }
-
-                                        if !provider.available {
-                                            Text("OFFLINE")
-                                                .font(.system(size: 8, design: .monospaced))
-                                                .foregroundColor(.jarvisError.opacity(0.6))
-                                        }
-                                    }
-                                    .padding(.vertical, 4)
+                            if isLoadingProviders {
+                                HStack {
+                                    ProgressView()
+                                        .scaleEffect(0.7)
+                                        .tint(.jarvisBlue)
+                                    Text("Loading providers...")
+                                        .font(.system(size: 11, design: .monospaced))
+                                        .foregroundColor(.jarvisTextDim)
+                                    Spacer()
                                 }
-                                .disabled(!provider.available)
+                                .padding(.vertical, 4)
+                            } else if chatVM.availableProviders.isEmpty {
+                                HStack {
+                                    Image(systemName: "exclamationmark.triangle")
+                                        .font(.system(size: 11))
+                                        .foregroundColor(.jarvisGold)
+                                    Text("No providers available")
+                                        .font(.system(size: 11, design: .monospaced))
+                                        .foregroundColor(.jarvisTextDim)
+                                    Spacer()
+                                    Button {
+                                        Task {
+                                            isLoadingProviders = true
+                                            await chatVM.loadProviders()
+                                            isLoadingProviders = false
+                                        }
+                                    } label: {
+                                        Text("RETRY")
+                                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                                            .tracking(1)
+                                            .foregroundColor(.jarvisBlue)
+                                    }
+                                }
+                                .padding(.vertical, 4)
+                            } else {
+                                ForEach(chatVM.availableProviders) { provider in
+                                    Button {
+                                        chatVM.selectedProvider = provider.id
+                                    } label: {
+                                        HStack {
+                                            Circle()
+                                                .fill(
+                                                    provider.available
+                                                        ? Color.jarvisOnline
+                                                        : Color.jarvisError.opacity(0.5)
+                                                )
+                                                .frame(width: 5, height: 5)
+
+                                            Text(provider.id.uppercased())
+                                                .font(.system(size: 12, weight: .medium, design: .monospaced))
+                                                .foregroundColor(
+                                                    chatVM.selectedProvider == provider.id
+                                                        ? .jarvisBlue
+                                                        : .jarvisText
+                                                )
+
+                                            Spacer()
+
+                                            if chatVM.selectedProvider == provider.id {
+                                                Image(systemName: "checkmark")
+                                                    .font(.system(size: 10, weight: .bold))
+                                                    .foregroundColor(.jarvisBlue)
+                                            }
+
+                                            if !provider.available {
+                                                Text("OFFLINE")
+                                                    .font(.system(size: 8, design: .monospaced))
+                                                    .foregroundColor(.jarvisError.opacity(0.6))
+                                            }
+                                        }
+                                        .padding(.vertical, 4)
+                                    }
+                                    .disabled(!provider.available)
+                                }
                             }
                         }
 
@@ -198,6 +266,116 @@ struct SettingsView: View {
                                 }
                             }
                             .padding(.vertical, 2)
+
+                            // Health
+                            HStack {
+                                VStack(alignment: .leading, spacing: 3) {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "heart.fill")
+                                            .font(.system(size: 11))
+                                            .foregroundColor(.red)
+                                        Text("Apple Health")
+                                            .font(.system(size: 12, weight: .medium, design: .monospaced))
+                                            .foregroundColor(.jarvisText)
+                                    }
+
+                                    Text(healthStatus.label)
+                                        .font(.system(size: 9, weight: .medium, design: .monospaced))
+                                        .foregroundColor(
+                                            healthStatus.isGranted ? .jarvisOnline : .jarvisTextDim
+                                        )
+                                }
+
+                                Spacer()
+
+                                if !healthStatus.isGranted && healthStatus != .unavailable {
+                                    Button {
+                                        Task {
+                                            let service = HealthSyncService.shared
+                                            let authorized = await service.requestAuthorization()
+                                            healthStatus = authorized ? .authorized : .denied
+                                            if authorized {
+                                                healthStatus = .syncing
+                                                await service.startBackgroundSync()
+                                                healthStatus = .authorized
+                                            }
+                                        }
+                                    } label: {
+                                        Text("CONNECT")
+                                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                                            .tracking(1)
+                                            .foregroundColor(.jarvisBlue)
+                                            .padding(.horizontal, 10)
+                                            .padding(.vertical, 5)
+                                            .background {
+                                                HexCornerShape(cutSize: 4)
+                                                    .strokeBorder(Color.jarvisBlue.opacity(0.3), lineWidth: 0.5)
+                                            }
+                                    }
+                                } else if healthStatus.isGranted {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .font(.system(size: 14))
+                                        .foregroundColor(.jarvisOnline)
+                                }
+                            }
+                            .padding(.vertical, 2)
+
+                            // Notifications
+                            HStack {
+                                VStack(alignment: .leading, spacing: 3) {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "bell.fill")
+                                            .font(.system(size: 11))
+                                            .foregroundColor(.jarvisGold)
+                                        Text("Notifications")
+                                            .font(.system(size: 12, weight: .medium, design: .monospaced))
+                                            .foregroundColor(.jarvisText)
+                                    }
+
+                                    Text(notificationStatus.label)
+                                        .font(.system(size: 9, weight: .medium, design: .monospaced))
+                                        .foregroundColor(
+                                            notificationStatus.isGranted ? .jarvisOnline : .jarvisTextDim
+                                        )
+                                }
+
+                                Spacer()
+
+                                if !notificationStatus.isGranted {
+                                    Button {
+                                        Task {
+                                            let center = UNUserNotificationCenter.current()
+                                            do {
+                                                let granted = try await center.requestAuthorization(
+                                                    options: [.alert, .badge, .sound]
+                                                )
+                                                await refreshNotificationStatus()
+                                                if !granted {
+                                                    notificationStatus = .denied
+                                                }
+                                            } catch {
+                                                notificationStatus = .denied
+                                            }
+                                        }
+                                    } label: {
+                                        Text("CONNECT")
+                                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                                            .tracking(1)
+                                            .foregroundColor(.jarvisBlue)
+                                            .padding(.horizontal, 10)
+                                            .padding(.vertical, 5)
+                                            .background {
+                                                HexCornerShape(cutSize: 4)
+                                                    .strokeBorder(Color.jarvisBlue.opacity(0.3), lineWidth: 0.5)
+                                            }
+                                    }
+                                } else {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .font(.system(size: 14))
+                                        .foregroundColor(.jarvisOnline)
+                                }
+                            }
+                            .padding(.vertical, 2)
                         }
 
                         // About
@@ -248,6 +426,53 @@ struct SettingsView: View {
                     }
                     .ignoresSafeArea()
             }
+            .task {
+                isLoadingProviders = true
+                await chatVM.loadProviders()
+                isLoadingProviders = false
+                refreshHealthStatus()
+                await refreshNotificationStatus()
+            }
+        }
+    }
+
+    // MARK: - Status Helpers
+
+    private func refreshHealthStatus() {
+        guard HKHealthStore.isHealthDataAvailable() else {
+            healthStatus = .unavailable
+            return
+        }
+        let store = HKHealthStore()
+        let stepType = HKQuantityType.quantityType(forIdentifier: .stepCount)!
+        let status = store.authorizationStatus(for: stepType)
+        switch status {
+        case .sharingAuthorized:
+            healthStatus = .authorized
+        case .sharingDenied:
+            healthStatus = .denied
+        case .notDetermined:
+            healthStatus = .unknown
+        @unknown default:
+            healthStatus = .unknown
+        }
+    }
+
+    private func refreshNotificationStatus() async {
+        let settings = await UNUserNotificationCenter.current().notificationSettings()
+        switch settings.authorizationStatus {
+        case .authorized:
+            notificationStatus = .authorized
+        case .denied:
+            notificationStatus = .denied
+        case .provisional:
+            notificationStatus = .provisional
+        case .notDetermined:
+            notificationStatus = .unknown
+        case .ephemeral:
+            notificationStatus = .authorized
+        @unknown default:
+            notificationStatus = .unknown
         }
     }
 }

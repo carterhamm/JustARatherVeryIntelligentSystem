@@ -5,6 +5,8 @@
 	<key>com.apple.developer.associated-domains</key>
 	<array>
 		<string>webcredentials:app.malibupoint.dev</string>
+		<string>applinks:app.malibupoint.dev</string>
+		<string>applinks:malibupoint.dev</string>
 	</array>
 </dict>
 </plist>

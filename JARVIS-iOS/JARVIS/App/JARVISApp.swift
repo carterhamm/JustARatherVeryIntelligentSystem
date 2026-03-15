@@ -41,6 +41,9 @@ struct JARVISApp: App {
             .task {
                 await authVM.restoreSession()
             }
+            .onOpenURL { url in
+                handleUniversalLink(url)
+            }
             .onChange(of: authVM.isAuthenticated) { _, isAuth in
                 if isAuth {
                     locationService.startTracking()
@@ -74,6 +77,34 @@ struct JARVISApp: App {
                 }
             }
         }
+    }
+
+    private func handleUniversalLink(_ url: URL) {
+        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return }
+        let path = components.path
+
+        // Route based on URL path
+        if path.hasPrefix("/chat/") || path.hasPrefix("/api/v1/chat/conversations/") {
+            // Extract conversation ID and select it
+            let segments = path.split(separator: "/")
+            if let convId = segments.last {
+                Task {
+                    let conv = ConversationResponse(
+                        id: String(convId),
+                        title: nil,
+                        model: nil,
+                        systemPrompt: nil,
+                        isArchived: false,
+                        messageCount: 0,
+                        lastMessageAt: nil,
+                        createdAt: "",
+                        updatedAt: ""
+                    )
+                    await chatVM.selectConversation(conv)
+                }
+            }
+        }
+        // Additional routes can be added here
     }
 }
 

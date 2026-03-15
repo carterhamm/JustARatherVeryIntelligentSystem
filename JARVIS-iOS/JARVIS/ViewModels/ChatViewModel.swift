@@ -34,7 +34,7 @@ class ChatViewModel: ObservableObject {
 
     func loadConversations() async {
         do {
-            let response = try await chatService.listConversations()
+            let response = try await chatService.listConversations(limit: 100)
             conversations = response.conversations
         } catch {
             self.error = error.localizedDescription
@@ -97,7 +97,16 @@ class ChatViewModel: ObservableObject {
             if let first = availableProviders.first(where: { $0.available }) {
                 selectedProvider = first.id
             }
-        } catch {}
+        } catch {
+            self.error = error.localizedDescription
+            // Fallback: show Gemini as default if API fails
+            if availableProviders.isEmpty {
+                availableProviders = [
+                    ProviderResponse(id: "gemini", available: true, reason: "default")
+                ]
+                selectedProvider = "gemini"
+            }
+        }
     }
 
     // MARK: - Send Message (Streaming)
