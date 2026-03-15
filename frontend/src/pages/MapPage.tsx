@@ -238,7 +238,7 @@ function loadMapKit(): Promise<any> {
     }
 
     const script = document.createElement('script');
-    script.src = 'https://cdn.apple-mapkit.com/mk/5.x.x/mapkit.js?libraries=look-around';
+    script.src = 'https://cdn.apple-mapkit.com/mk/5.x.x/mapkit.js';
     script.crossOrigin = 'anonymous';
     script.onload = () => {
       try {
@@ -246,6 +246,7 @@ function loadMapKit(): Promise<any> {
           authorizationCallback: (done: (token: string) => void) => {
             done(MAPKIT_TOKEN);
           },
+          libraries: ['look-around'],
         });
         resolve(window.mapkit);
       } catch (err) {
@@ -1415,62 +1416,85 @@ export default function MapPage() {
       // Don't trigger if a custom annotation was just selected
       if (annotationJustSelectedRef.current) return;
 
-      const coord = map.convertPointOnPageToCoordinate(event.pointOnPage);
+      // Get coordinate from tap
+      let coord: any = null;
+      try {
+        if (event.pointOnPage) {
+          coord = map.convertPointOnPageToCoordinate(event.pointOnPage);
+        } else if (event.coordinate) {
+          coord = event.coordinate;
+        }
+      } catch {}
       if (!coord) return;
 
-      // Reverse geocode to get location info
-      const geocoder = new mk.Geocoder({ language: 'en' });
-      geocoder.reverseLookup(new mk.Coordinate(coord.latitude, coord.longitude), (error: any, data: any) => {
-        if (error || !data?.results?.length) return;
-        const r = data.results[0];
-        const name = r.name || '';
-        // Only show panel if we got a meaningful name (not just coordinates)
-        if (!name || /^\d/.test(name)) return;
+      // Search for nearby POIs at the tap location
+      const search = mapSearchObjRef.current || new mk.Search({ language: 'en' });
+      const searchRegion = new mk.CoordinateRegion(
+        new mk.Coordinate(coord.latitude, coord.longitude),
+        new mk.CoordinateSpan(0.002, 0.002),
+      );
+      search.search(
+        { coordinate: new mk.Coordinate(coord.latitude, coord.longitude), region: searchRegion },
+        (searchErr: any, searchData: any) => {
+          if (searchErr || !searchData?.places?.length) {
+            // Fallback: reverse geocode
+            const geocoder = new mk.Geocoder({ language: 'en' });
+            geocoder.reverseLookup(new mk.Coordinate(coord.latitude, coord.longitude), (geoErr: any, geoData: any) => {
+              if (geoErr || !geoData?.results?.length) return;
+              const r = geoData.results[0];
+              if (!r.name) return;
 
-        // Search for full details using the name
-        const search = mapSearchObjRef.current || new mk.Search({ language: 'en' });
-        search.search(
-          name,
-          (searchErr: any, searchData: any) => {
-            if (searchErr || !searchData?.places?.length) {
-              // Fallback: show reverse geocode result
+              // Add a pin
+              try {
+                if (searchPinRef.current) map.removeAnnotation(searchPinRef.current);
+                const pin = new mk.MarkerAnnotation(new mk.Coordinate(coord.latitude, coord.longitude), { title: r.name, color: '#00d4ff' });
+                map.addAnnotation(pin);
+                searchPinRef.current = pin;
+              } catch {}
+
               setSelectedPlace({
-                name,
+                name: r.name,
                 latitude: coord.latitude,
                 longitude: coord.longitude,
                 formattedAddress: [r.name, r.locality, r.administrativeArea, r.postCode].filter(Boolean).join(', '),
               });
-              return;
-            }
-            // Find the closest place to the tap coordinate
-            let bestPlace = searchData.places[0];
-            let bestDist = Infinity;
-            for (const p of searchData.places) {
-              const dist = Math.hypot(
-                p.coordinate.latitude - coord.latitude,
-                p.coordinate.longitude - coord.longitude,
-              );
-              if (dist < bestDist) {
-                bestDist = dist;
-                bestPlace = p;
-              }
-            }
-            // Only show if reasonably close (<500m)
-            if (bestDist < 0.005) {
-              setSelectedPlace({
-                name: bestPlace.name || name,
-                latitude: bestPlace.coordinate.latitude,
-                longitude: bestPlace.coordinate.longitude,
-                formattedAddress: bestPlace.formattedAddress || '',
-                phone: bestPlace.telephone || '',
-                url: bestPlace.urls?.[0] || '',
-                category: formatPOICategory(bestPlace.pointOfInterestCategory) || '',
-              });
-            }
-          },
-          { region: map.region },
-        );
-      });
+            });
+            return;
+          }
+
+          // Find closest POI to tap
+          let bestPlace = searchData.places[0];
+          let bestDist = Infinity;
+          for (const p of searchData.places) {
+            const dist = Math.hypot(
+              p.coordinate.latitude - coord.latitude,
+              p.coordinate.longitude - coord.longitude,
+            );
+            if (dist < bestDist) { bestDist = dist; bestPlace = p; }
+          }
+
+          // Add a pin at the POI
+          try {
+            if (searchPinRef.current) map.removeAnnotation(searchPinRef.current);
+            const pin = new mk.MarkerAnnotation(
+              new mk.Coordinate(bestPlace.coordinate.latitude, bestPlace.coordinate.longitude),
+              { title: bestPlace.name, color: '#00d4ff' },
+            );
+            map.addAnnotation(pin);
+            searchPinRef.current = pin;
+          } catch {}
+
+          setSelectedPlace({
+            name: bestPlace.name || 'Unknown Place',
+            latitude: bestPlace.coordinate.latitude,
+            longitude: bestPlace.coordinate.longitude,
+            formattedAddress: bestPlace.formattedAddress || '',
+            phone: bestPlace.telephone || '',
+            url: bestPlace.urls?.[0] || '',
+            category: formatPOICategory(bestPlace.pointOfInterestCategory) || '',
+          });
+        },
+      );
     };
 
     map.addEventListener('single-tap', handler);

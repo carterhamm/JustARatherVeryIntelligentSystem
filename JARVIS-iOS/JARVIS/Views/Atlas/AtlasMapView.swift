@@ -148,15 +148,11 @@ struct AtlasMapView: View {
 
                 Spacer()
 
-                // Bottom: search bar + contact detail or loading
+                // Bottom: panels above search bar
                 VStack(spacing: 8) {
                     if let error = errorMessage {
                         errorBanner(error)
                     }
-
-                    // Search bar at bottom
-                    searchBar
-                        .padding(.horizontal, 12)
 
                     if isLoading {
                         loadingIndicator
@@ -165,6 +161,47 @@ struct AtlasMapView: View {
                             .transition(.move(edge: .bottom).combined(with: .opacity))
                             .padding(.horizontal, 12)
                     }
+
+                    // Search results (top 3) above search bar
+                    if !searchResults.isEmpty {
+                        VStack(spacing: 4) {
+                            ForEach(Array(searchResults.prefix(3).enumerated()), id: \.offset) { _, result in
+                                Button {
+                                    selectedContact = nil
+                                    withAnimation {
+                                        position = .region(MKCoordinateRegion(
+                                            center: result.placemark.coordinate,
+                                            span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+                                        ))
+                                    }
+                                    searchResults = []
+                                    searchText = ""
+                                } label: {
+                                    HStack {
+                                        Image(systemName: "mappin")
+                                            .font(.system(size: 10))
+                                            .foregroundColor(.jarvisGold)
+                                        Text(result.name ?? "Unknown")
+                                            .font(.system(size: 11, design: .monospaced))
+                                            .foregroundColor(.jarvisText)
+                                            .lineLimit(1)
+                                        Spacer()
+                                    }
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 8)
+                                    .background {
+                                        HexCornerShape(cutSize: 4)
+                                            .fill(Color.jarvisPanelBg.opacity(0.8))
+                                    }
+                                }
+                            }
+                        }
+                        .padding(.horizontal, 12)
+                    }
+
+                    // Search bar at very bottom
+                    searchBar
+                        .padding(.horizontal, 12)
                 }
                 .padding(.bottom, 16)
             }
@@ -197,6 +234,7 @@ struct AtlasMapView: View {
                             }
                     }
             }
+            .padding(.top, 4)
 
             // ATLAS label
             Text("A.T.L.A.S.")
@@ -237,7 +275,7 @@ struct AtlasMapView: View {
             }
         }
         .padding(.horizontal, 10)
-        .padding(.vertical, 8)
+        .padding(.vertical, 10)
         .background {
             HexCornerShape(cutSize: 6)
                 .fill(.ultraThinMaterial)
@@ -259,6 +297,7 @@ struct AtlasMapView: View {
     private func contactPin(for contact: AtlasContact) -> some View {
         Button {
             selectedContact = contact
+            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
             withAnimation(.easeInOut(duration: 0.5)) {
                 position = .region(MKCoordinateRegion(
                     center: contact.coordinate,
