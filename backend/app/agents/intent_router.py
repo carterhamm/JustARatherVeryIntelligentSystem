@@ -47,6 +47,10 @@ TOOL_CATEGORIES = {
         "description": "Directions, maps, travel time, distance, places, location, how far, navigate",
         "tools": ["navigate", "google_maps"],
     },
+    "directions": {
+        "description": "Multi-stop errands, route planning, multiple places to go, need to get haircut gas groceries, plan my route, optimize stops",
+        "tools": ["smart_directions", "navigate", "google_maps"],
+    },
     "web_search": {
         "description": "Searching the internet, looking up current information, research",
         "tools": ["web_search", "perplexity_research"],

@@ -801,6 +801,32 @@ _TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "required": ["destination"],
         },
     },
+    # -- Smart Directions (multi-stop route planner) --------------------
+    {
+        "name": "smart_directions",
+        "description": (
+            "Plan an intelligent multi-stop route using Mr. Stark's preferences. "
+            "Handles requests like 'I need a haircut, gas, and groceries' by "
+            "finding preferred/optimal places along an efficient route. Uses "
+            "knowledge of favorite stores, cheapest gas, and preferred service "
+            "providers. Automatically gets current location and optimizes stop "
+            "order for minimal travel time."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "request": {
+                    "type": "string",
+                    "description": (
+                        "Natural language description of errands/stops needed. "
+                        "E.g. 'I need a haircut, gas, and groceries' or "
+                        "'Take me to the barber then Costco for gas then Smith\\'s'."
+                    ),
+                },
+            },
+            "required": ["request"],
+        },
+    },
     # -- Mac Mini Remote Exec -------------------------------------------
     {
         "name": "mac_mini_exec",

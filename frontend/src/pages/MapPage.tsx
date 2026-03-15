@@ -542,18 +542,42 @@ function LookAroundPanel({
         });
       };
 
-      // Strategy 1: Search for a nearby place and use its Place object
+      // Strategy 1: Reverse geocode to get a place name, then search for Place object
       try {
+        // First get a name at this coordinate
+        const geocoder = new mk.Geocoder({ language: 'en' });
+        const geoName = await new Promise<string>((resolve) => {
+          geocoder.reverseLookup(new mk.Coordinate(lat, lng), (err: any, data: any) => {
+            if (!err && data?.results?.length && data.results[0].name) {
+              resolve(data.results[0].name);
+            } else {
+              resolve(`${lat.toFixed(4)},${lng.toFixed(4)}`);
+            }
+          });
+        });
+        if (cancelled) return;
+
+        // Now search by name to get a proper Place object (needed for Look Around)
         const search = new mk.Search({ language: 'en' });
+        const searchRegion = new mk.CoordinateRegion(
+          new mk.Coordinate(lat, lng),
+          new mk.CoordinateSpan(0.01, 0.01),
+        );
         const placeResult = await new Promise<any>((resolve) => {
-          search.search(
-            { coordinate: new mk.Coordinate(lat, lng) },
-            (err: any, data: any) => {
-              if (!err && data?.places?.length) resolve(data.places[0]);
-              else resolve(null);
-            },
-            { region: new mk.CoordinateRegion(new mk.Coordinate(lat, lng), new mk.CoordinateSpan(0.01, 0.01)) },
-          );
+          search.search(geoName, (err: any, data: any) => {
+            if (!err && data?.places?.length) {
+              // Find closest place to our coordinates
+              let best = data.places[0];
+              let bestDist = Infinity;
+              for (const p of data.places) {
+                const d = Math.hypot(p.coordinate.latitude - lat, p.coordinate.longitude - lng);
+                if (d < bestDist) { bestDist = d; best = p; }
+              }
+              resolve(best);
+            } else {
+              resolve(null);
+            }
+          }, { region: searchRegion });
         });
         if (cancelled) return;
         if (placeResult) {

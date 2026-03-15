@@ -2988,6 +2988,48 @@ class NavigateTool(BaseTool):
 
 
 # ═════════════════════════════════════════════════════════════════════════
+# Smart Directions (multi-stop route planner)
+# ═════════════════════════════════════════════════════════════════════════
+
+class SmartDirectionsTool(BaseTool):
+    """Plan an intelligent multi-stop route using Mr. Stark's preferences."""
+
+    name = "smart_directions"
+    description = (
+        "Plan an intelligent multi-stop route using Mr. Stark's preferences. "
+        "Handles requests like 'I need a haircut, gas, and groceries' by finding "
+        "preferred/optimal places along an efficient route. Uses knowledge of "
+        "favorite stores, cheapest gas, and preferred service providers. "
+        "Params: request (str — the natural language route request)."
+    )
+
+    async def execute(
+        self,
+        params: dict[str, Any],
+        *,
+        state: Optional[AgentState] = None,
+    ) -> str:
+        from app.services.smart_directions import plan_smart_route
+
+        request = params.get("request", "").strip()
+        if not request:
+            return "Missing 'request' parameter — describe where you need to go."
+
+        user_id = (state or {}).get("user_id", "")
+        if not user_id:
+            return "No user context available for location lookup."
+
+        try:
+            result = await plan_smart_route(request, user_id)
+            if result.get("success"):
+                return result["itinerary"]
+            return result.get("error", "Failed to plan route.")
+        except Exception as exc:
+            logger.exception("SmartDirectionsTool error")
+            return f"Route planning failed: {exc}"
+
+
+# ═════════════════════════════════════════════════════════════════════════
 # Mac Mini Remote Exec tool
 # ═════════════════════════════════════════════════════════════════════════
 
@@ -4446,6 +4488,8 @@ def get_tool_registry() -> dict[str, BaseTool]:
             ScriptureLookupTool,
             # Navigation (Find My + Google Maps)
             NavigateTool,
+            # Smart multi-stop route planner
+            SmartDirectionsTool,
             # Mac Mini remote control
             MacMiniExecTool,
             MacMiniClaudeCodeTool,
