@@ -561,11 +561,18 @@ async def _update_metrics(
 
 
 async def _notify_learning_results(results: dict[str, Any]) -> None:
-    """Send an iMessage to Mr. Stark with a summary of the learning cycle.
+    """DO NOT text Mr. Stark for routine learning cycles.
 
-    Only sends if there's something interesting to report (insights,
-    new trending topics, or notable findings). Skips boring cycles.
+    Mr. Stark only wants to be texted for genuine eureka-level breakthroughs.
+    The dialogue system handles eureka notifications itself.
+    Routine cycle results are logged but NOT sent via iMessage.
     """
+    # Only notify if there were errors that need attention
+    errors = results.get("errors", [])
+    if not errors:
+        logger.info("Learning cycle complete — no notification (routine cycle)")
+        return
+
     try:
         from app.config import settings
         from app.integrations.mac_mini import send_imessage, is_configured
@@ -573,48 +580,17 @@ async def _notify_learning_results(results: dict[str, Any]) -> None:
         if not is_configured() or not settings.OWNER_PHONE:
             return
 
-        # Only notify if something interesting happened
-        total_ingested = results.get("total_ingested", 0)
-        dialogue = results.get("phases", {}).get("dialogue", {})
-        insights_count = dialogue.get("insights_found", 0)
-        trending = results.get("phases", {}).get("trending", {})
-        trending_count = trending.get("topics_found", 0)
-
-        # Skip notification if nothing notable
-        if total_ingested == 0 and insights_count == 0 and trending_count == 0:
-            return
-
         from zoneinfo import ZoneInfo
         now = datetime.now(tz=ZoneInfo("America/Denver")).strftime("%I:%M %p")
 
-        lines = [f"Learning Cycle Complete ({now})"]
-        lines.append(f"Ingested {total_ingested} documents, discovered {results.get('total_entities', 0)} entities")
-
-        # Research topic
-        research = results.get("phases", {}).get("research", {})
-        if research.get("status") == "ok" and research.get("topic"):
-            lines.append(f"\nResearched: {research['topic']}")
-
-        # Trending topics
-        if trending_count > 0:
-            trend_details = trending.get("details", [])
-            trend_names = [t.get("label", t.get("topic", "")) for t in trend_details[:3]]
-            if trend_names:
-                lines.append(f"Trending: {', '.join(trend_names)}")
-
-        # Dialogue insights (the most interesting part)
-        if insights_count > 0:
-            lines.append(f"\n{insights_count} insight(s) from internal debate on '{dialogue.get('topic', '')}'")
-
-        # Errors
-        errors = results.get("errors", [])
-        if errors:
-            lines.append(f"\n({len(errors)} phase(s) had errors)")
+        lines = [f"Learning System Issue ({now})"]
+        for err in errors[:3]:
+            lines.append(f"- {str(err)[:100]}")
 
         message = "\n".join(lines)
 
         await send_imessage(to=settings.OWNER_PHONE, text=message)
-        logger.info("Learning notification sent to owner")
+        logger.info("Learning error notification sent to owner")
 
     except Exception as exc:
         logger.debug("Learning notification failed (non-critical): %s", exc)

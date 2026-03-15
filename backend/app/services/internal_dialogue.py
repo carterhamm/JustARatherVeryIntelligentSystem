@@ -692,14 +692,29 @@ async def _extract_insights(
         for turn in speaker_turns[-16:]  # last 16 turns to fit context
     )
 
-    prompt = f"""Analyse this deep research dialogue about "{topic}" between JARVIS and the Stark Protocol.
+    prompt = f"""Analyse this deep research dialogue about "{topic}" between JARVIS and THEORIST.
 
 Extract the most valuable findings for Mr. Stark (Carter Hammond, building real nanotechnology).
 
+IMPORTANT: Be EXTREMELY conservative with the "eureka" category. A "eureka" is a \
+genuine paradigm-shifting insight that fundamentally changes our understanding of \
+physics or opens a completely new path to nanotechnology that didn't exist before. \
+Figuring out what DOESN'T work is NOT a eureka. An incremental improvement is NOT \
+a eureka. A good idea is NOT a eureka. A eureka is like discovering E=mc² or \
+realising that quantum tunneling enables enzyme catalysis. It should make a \
+physicist say "holy shit." If in doubt, it's NOT a eureka.
+
 For each insight, provide:
 - "insight": detailed description (2-3 sentences, be specific)
-- "category": one of "breakthrough_idea", "experiment_to_try", "physics_question", \
-"engineering_solution", "biology_parallel", "material_discovery", "next_step"
+- "category": one of:
+    "eureka" — ONLY for genuine paradigm-shifting discoveries (almost never used)
+    "experiment_to_try" — a specific experiment Carter could run
+    "physics_question" — an important open question identified
+    "engineering_solution" — a practical engineering approach
+    "biology_parallel" — something nature does that we should study
+    "material_discovery" — a promising material or property found
+    "next_step" — logical next action
+    "dead_end" — something that won't work (and why)
 - "confidence": 0.0-1.0 how confident in this insight
 - "actionable": true/false — can Carter act on this now?
 - "priority": "immediate", "this_year", "long_term"
@@ -897,7 +912,19 @@ async def _notify_error(error_msg: str) -> None:
 
 
 async def _notify_findings(result: dict[str, Any]) -> None:
-    """Text Mr. Stark the key findings from the dialogue session."""
+    """Text Mr. Stark ONLY if there's a genuine eureka-level breakthrough.
+
+    Mr. Stark's definition of "breakthrough": a groundbreaking discovery that
+    changes our understanding of physics or science. NOT just figuring out what
+    doesn't work, NOT incremental progress, NOT a good idea.
+
+    Only texts for insights that are:
+    - Category "eureka" (set by the extraction prompt)
+    - Verified as genuine by the triple-check
+    - Confidence >= 95%
+
+    All other insights are logged and stored but NOT texted.
+    """
     try:
         from app.config import settings
         from app.integrations.mac_mini import send_imessage, is_configured
@@ -909,45 +936,40 @@ async def _notify_findings(result: dict[str, Any]) -> None:
         if not insights:
             return
 
-        # ONLY send verified insights — never send unverified breakthroughs
-        verified_insights = [
+        # Only notify for EUREKA-level breakthroughs
+        eureka_insights = [
             i for i in insights
-            if i.get("verified", True) is not False
-            and not i.get("category", "").startswith("unverified_")
+            if i.get("category") == "eureka"
+            and i.get("verified") is True
+            and i.get("confidence", 0) >= 0.95
         ]
-        if not verified_insights:
+
+        if not eureka_insights:
+            # Log that we're NOT texting (so we can verify the filter works)
+            logger.info(
+                "Dialogue produced %d insights but none eureka-level — not texting Mr. Stark",
+                len(insights),
+            )
             return
 
         from zoneinfo import ZoneInfo
         now = datetime.now(tz=ZoneInfo("America/Denver")).strftime("%I:%M %p")
 
         lines = [
-            f"Research Session Complete ({now})",
+            f"BREAKTHROUGH ({now})",
             f"Topic: {result.get('topic', 'Unknown')}",
-            f"{result.get('rounds', 0)} rounds | {len(verified_insights)} verified insights",
-            f"Model: {result.get('model', 'Gemini 3.1 Pro')}",
+            "",
         ]
 
-        lines.append("")
-
-        # Include top 3 most interesting VERIFIED insights
-        actionable = [i for i in verified_insights if i.get("actionable")]
-        top_insights = (actionable or verified_insights)[:3]
-
-        for i, ins in enumerate(top_insights, 1):
-            cat = ins.get("category", "").replace("_", " ").title()
-            conf = ins.get("confidence", 0)
-            lines.append(f"{i}. [{cat}] (conf: {conf:.0%}) {ins['insight']}")
-
-        # Add any immediate action items
-        immediate = [i for i in verified_insights if i.get("priority") == "immediate"]
-        if immediate:
-            lines.append(f"\n{len(immediate)} immediate action item(s)")
+        for ins in eureka_insights:
+            lines.append(ins["insight"])
+            if ins.get("verification_reason"):
+                lines.append(f"Verification: {ins['verification_reason']}")
 
         message = "\n".join(lines)
 
         await send_imessage(to=settings.OWNER_PHONE, text=message)
-        logger.info("Research findings sent to Mr. Stark")
+        logger.info("EUREKA notification sent to Mr. Stark: %s", eureka_insights[0]["insight"][:100])
 
     except Exception as exc:
         logger.debug("Findings notification failed: %s", exc)
