@@ -123,25 +123,89 @@ async def startup_handler(app: FastAPI) -> None:
 
         async def _learning_scheduler():
             """Run a learning cycle every 30 minutes, forever."""
-            await asyncio.sleep(120)  # wait 2 min after boot for services to stabilize
+            await asyncio.sleep(120)  # wait 2 min after boot
             logger.info("learning_scheduler_started", interval_minutes=30)
             while True:
                 try:
                     from app.services.continuous_learning import run_learning_cycle
                     result = await run_learning_cycle()
-                    status = result.get("status", "?")
-                    ingested = result.get("total_ingested", 0)
                     logger.info(
                         "learning_cycle_complete",
-                        status=status,
-                        ingested=ingested,
+                        status=result.get("status", "?"),
+                        ingested=result.get("total_ingested", 0),
                     )
                 except Exception as exc:
                     logger.warning("learning_cycle_failed", error=str(exc))
                 await asyncio.sleep(1800)  # 30 minutes
 
+        async def _awareness_scheduler():
+            """Run self-awareness cycle every 60 minutes."""
+            await asyncio.sleep(300)  # wait 5 min after boot
+            logger.info("awareness_scheduler_started", interval_minutes=60)
+            while True:
+                try:
+                    from app.services.autonomy.awareness import run_awareness_cycle
+                    result = await run_awareness_cycle()
+                    logger.info("awareness_cycle_complete", status=result.get("status", "?"))
+                except Exception as exc:
+                    logger.warning("awareness_cycle_failed", error=str(exc))
+                await asyncio.sleep(3600)  # 60 minutes
+
+        async def _proactive_scheduler():
+            """Run proactive cycle every 15 minutes."""
+            await asyncio.sleep(180)  # wait 3 min after boot
+            logger.info("proactive_scheduler_started", interval_minutes=15)
+            while True:
+                try:
+                    from app.services.autonomy.proactive import run_proactive_cycle
+                    result = await run_proactive_cycle()
+                    logger.info("proactive_cycle_complete", status=result.get("status", "?"))
+                except Exception as exc:
+                    logger.warning("proactive_cycle_failed", error=str(exc))
+                await asyncio.sleep(900)  # 15 minutes
+
+        async def _code_review_scheduler():
+            """Run code review every 4 hours."""
+            await asyncio.sleep(600)  # wait 10 min after boot
+            logger.info("code_review_scheduler_started", interval_hours=4)
+            while True:
+                try:
+                    from app.services.autonomy.code_manager import run_code_review_cycle
+                    result = await run_code_review_cycle()
+                    logger.info("code_review_complete", status=result.get("status", "?"))
+                except Exception as exc:
+                    logger.warning("code_review_failed", error=str(exc))
+                await asyncio.sleep(14400)  # 4 hours
+
+        async def _improvement_scheduler():
+            """Run self-improvement daily + weekly report on Sundays."""
+            await asyncio.sleep(900)  # wait 15 min after boot
+            logger.info("improvement_scheduler_started")
+            while True:
+                try:
+                    from app.services.autonomy.self_improvement import (
+                        run_improvement_cycle, generate_weekly_report,
+                    )
+                    result = await run_improvement_cycle()
+                    logger.info("improvement_cycle_complete", status=result.get("status", "?"))
+
+                    # Weekly report on Sundays
+                    from datetime import datetime as _dt
+                    if _dt.now().weekday() == 6:  # Sunday
+                        await generate_weekly_report()
+                        logger.info("weekly_report_generated")
+                except Exception as exc:
+                    logger.warning("improvement_cycle_failed", error=str(exc))
+                await asyncio.sleep(86400)  # 24 hours
+
         asyncio.create_task(_learning_scheduler())
-        logger.info("learning_scheduler_registered", interval_minutes=30)
+        asyncio.create_task(_awareness_scheduler())
+        asyncio.create_task(_proactive_scheduler())
+        asyncio.create_task(_code_review_scheduler())
+        asyncio.create_task(_improvement_scheduler())
+        logger.info("all_background_schedulers_registered",
+                     schedulers=["learning/30m", "awareness/1h", "proactive/15m",
+                                 "code_review/4h", "improvement/24h"])
     except Exception as exc:
         logger.warning("learning_scheduler_failed_to_register", error=str(exc))
 

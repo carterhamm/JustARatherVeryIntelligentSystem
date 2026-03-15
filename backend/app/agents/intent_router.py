@@ -151,6 +151,10 @@ TOOL_CATEGORIES = {
         "description": "JARVIS learning progress, knowledge growth, what has JARVIS learned, how smart is JARVIS, continuous learning status",
         "tools": ["learning_status", "research_briefing"],
     },
+    "autonomy": {
+        "description": "JARVIS autonomy status, self-improvement, self-awareness, how JARVIS manages itself, code health, autonomous systems",
+        "tools": ["autonomy_status", "learning_status", "system_health"],
+    },
 }
 
 _CATEGORY_LIST = "\n".join(

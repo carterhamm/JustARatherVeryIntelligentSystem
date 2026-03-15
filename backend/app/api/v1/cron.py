@@ -1033,3 +1033,154 @@ async def foundational_status(
     """Check foundational research ingestion status."""
     from app.services.foundational_research import get_foundational_status
     return await get_foundational_status()
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Phase 3: Full Autonomy — code review, awareness, proactive, improvement
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+@router.post("/autonomy/code-review")
+async def autonomy_code_review(
+    request: Request,
+    current_user: User = Depends(require_service_key),
+) -> dict[str, Any]:
+    """Run a code review cycle: scan logs, identify issues, create PRs."""
+    from app.services.autonomy.code_manager import run_code_review_cycle
+
+    import asyncio
+    logger.info("Code review triggered by user=%s", current_user.username)
+
+    async def _run():
+        try:
+            await run_code_review_cycle()
+        except Exception as exc:
+            logger.exception("Code review background task failed: %s", exc)
+
+    asyncio.create_task(_run())
+    return {"status": "started", "message": "Code review cycle started in background"}
+
+
+@router.post("/autonomy/awareness")
+async def autonomy_awareness(
+    request: Request,
+    current_user: User = Depends(require_service_key),
+) -> dict[str, Any]:
+    """Run an awareness cycle: evaluate recent interactions, update self-model."""
+    from app.services.autonomy.awareness import run_awareness_cycle
+
+    logger.info("Awareness cycle triggered by user=%s", current_user.username)
+    try:
+        result = await run_awareness_cycle()
+    except Exception as exc:
+        logger.exception("Awareness cycle failed: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+    return result
+
+
+@router.post("/autonomy/proactive")
+async def autonomy_proactive(
+    request: Request,
+    current_user: User = Depends(require_service_key),
+) -> dict[str, Any]:
+    """Run a proactive cycle: idle detection, calendar analysis, alerts."""
+    from app.services.autonomy.proactive import run_proactive_cycle
+
+    logger.info("Proactive cycle triggered by user=%s", current_user.username)
+    try:
+        result = await run_proactive_cycle()
+    except Exception as exc:
+        logger.exception("Proactive cycle failed: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+    return result
+
+
+@router.post("/autonomy/improvement")
+async def autonomy_improvement(
+    request: Request,
+    current_user: User = Depends(require_service_key),
+) -> dict[str, Any]:
+    """Run a self-improvement cycle: tool stats, quality signals, gaps."""
+    from app.services.autonomy.self_improvement import run_improvement_cycle
+
+    logger.info("Improvement cycle triggered by user=%s", current_user.username)
+    try:
+        result = await run_improvement_cycle()
+    except Exception as exc:
+        logger.exception("Improvement cycle failed: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+    return result
+
+
+@router.post("/autonomy/weekly-report")
+async def autonomy_weekly_report(
+    request: Request,
+    current_user: User = Depends(require_service_key),
+) -> dict[str, Any]:
+    """Generate the weekly self-improvement report."""
+    from app.services.autonomy.self_improvement import generate_weekly_report
+
+    logger.info("Weekly report triggered by user=%s", current_user.username)
+    try:
+        result = await generate_weekly_report()
+    except Exception as exc:
+        logger.exception("Weekly report failed: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+    return result
+
+
+@router.get("/autonomy/status")
+async def autonomy_status(
+    current_user: User = Depends(get_current_active_user_or_service),
+) -> dict[str, Any]:
+    """Overview of all 4 autonomy pillars."""
+    status: dict[str, Any] = {}
+
+    try:
+        from app.services.autonomy.code_manager import get_code_health_report
+        status["code_health"] = await get_code_health_report()
+    except Exception as exc:
+        status["code_health"] = {"error": str(exc)}
+
+    try:
+        from app.services.autonomy.awareness import get_self_model
+        model = await get_self_model()
+        status["self_model"] = {
+            "last_updated": model.get("last_updated", ""),
+            "strengths_count": len(model.get("strengths", [])),
+            "weaknesses_count": len(model.get("weaknesses", [])),
+            "performance": model.get("performance", {}),
+        }
+    except Exception as exc:
+        status["self_model"] = {"error": str(exc)}
+
+    try:
+        from app.services.autonomy.self_improvement import get_improvement_report
+        report = await get_improvement_report()
+        status["improvement"] = {
+            "has_report": report is not None,
+            "generated_at": report.get("generated_at", "") if report else "",
+        }
+    except Exception as exc:
+        status["improvement"] = {"error": str(exc)}
+
+    return status
+
+
+@router.get("/autonomy/self-model")
+async def autonomy_self_model(
+    current_user: User = Depends(get_current_active_user_or_service),
+) -> dict[str, Any]:
+    """Return the current JARVIS self-model."""
+    from app.services.autonomy.awareness import get_self_model
+    return await get_self_model()
+
+
+@router.get("/autonomy/weekly-report")
+async def autonomy_weekly_report_get(
+    current_user: User = Depends(get_current_active_user_or_service),
+) -> dict[str, Any]:
+    """Return the latest weekly self-improvement report."""
+    from app.services.autonomy.self_improvement import get_improvement_report
+    report = await get_improvement_report()
+    return report or {"status": "no_report", "message": "No weekly report generated yet."}

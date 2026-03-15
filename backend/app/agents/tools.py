@@ -4204,6 +4204,61 @@ class LearningStatusTool(BaseTool):
             return f"Learning status unavailable: {exc}"
 
 
+class AutonomyStatusTool(BaseTool):
+    """Report on JARVIS's autonomous systems: code health, self-model, improvement metrics."""
+
+    name = "autonomy_status"
+    description = (
+        "Check the status of JARVIS's autonomous systems: self-awareness model, "
+        "code health, proactive features, and self-improvement metrics. Use when "
+        "asked about JARVIS's autonomy, self-management, or how JARVIS is improving itself."
+    )
+
+    async def execute(
+        self,
+        params: dict[str, Any],
+        *,
+        state: Optional[AgentState] = None,
+    ) -> str:
+        try:
+            parts: list[str] = ["## JARVIS Autonomy Status\n"]
+
+            try:
+                from app.services.autonomy.awareness import get_self_model
+                model = await get_self_model()
+                parts.append(f"**Self-Model** (updated: {model.get('last_updated', 'never')[:16]})")
+                if model.get("strengths"):
+                    parts.append(f"Strengths: {', '.join(model['strengths'][:5])}")
+                if model.get("weaknesses"):
+                    parts.append(f"Areas to improve: {', '.join(model['weaknesses'][:5])}")
+                perf = model.get("performance", {})
+                parts.append(f"Tool success rate: {perf.get('tool_success_rate', 0):.0%}")
+                parts.append(f"Conversations (24h): {perf.get('conversations_24h', 0)}")
+            except Exception:
+                parts.append("Self-model: not yet initialized")
+
+            try:
+                from app.services.autonomy.code_manager import get_code_health_report
+                health = await get_code_health_report()
+                parts.append(f"\n**Code Health**: {health.get('status', 'unknown')}")
+            except Exception:
+                parts.append("\nCode health: no data yet")
+
+            try:
+                from app.services.autonomy.self_improvement import get_improvement_report
+                report = await get_improvement_report()
+                if report:
+                    parts.append(f"\n**Weekly Report**: {report.get('generated_at', '')[:10]}")
+                else:
+                    parts.append("\nWeekly report: not yet generated")
+            except Exception:
+                pass
+
+            return "\n".join(parts)
+        except Exception as exc:
+            return f"Autonomy status unavailable: {exc}"
+
+
 class SelfHealTool(BaseTool):
     """Diagnose and attempt to fix JARVIS integration issues automatically."""
 
@@ -4373,6 +4428,8 @@ def get_tool_registry() -> dict[str, BaseTool]:
             SelfHealTool,
             # Continuous learning status
             LearningStatusTool,
+            # Autonomy status
+            AutonomyStatusTool,
         ]
         tools = _safe_instantiate(tool_classes)
         logger.info("Tool registry loaded: %d/%d tools available", len(tools), len(tool_classes))

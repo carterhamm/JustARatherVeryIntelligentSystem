@@ -1179,6 +1179,19 @@ _TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "required": ["reminder_id"],
         },
     },
+    # -- Autonomy Status ---------------------------------------------------
+    {
+        "name": "autonomy_status",
+        "description": (
+            "Check JARVIS's autonomous systems status: self-awareness model, "
+            "code health, proactive features, and self-improvement metrics."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+        },
+    },
     # -- Learning Status ---------------------------------------------------
     {
         "name": "learning_status",
