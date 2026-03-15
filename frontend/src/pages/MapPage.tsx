@@ -22,6 +22,7 @@ import {
   Copy,
   ExternalLink,
   Eye,
+  Navigation,
 } from 'lucide-react';
 import clsx from 'clsx';
 
@@ -103,6 +104,7 @@ interface PlaceDetail {
   phone?: string;
   url?: string;
   category?: string;
+  isLandmark?: boolean;
 }
 
 interface SearchSuggestion {
@@ -477,41 +479,50 @@ function LookAroundPanel({
       return;
     }
 
-    // Determine which Look Around constructor is available
-    const LAConstructor = mk.LookAround || mk.LookAroundPreview;
-    if (typeof LAConstructor !== 'function') {
-      setStatus('unavailable');
-      return;
-    }
-
     let cancelled = false;
+
+    // Wait for LookAround library to be available (may load async)
+    const waitForLA = async (): Promise<any> => {
+      for (let i = 0; i < 10; i++) {
+        const ctor = mk.LookAround || mk.LookAroundPreview;
+        if (typeof ctor === 'function') return ctor;
+        await new Promise(r => setTimeout(r, 500));
+      }
+      return null;
+    };
     const container = containerRef.current;
 
-    const tryLA = (location: any): Promise<boolean> => {
-      return new Promise((resolve) => {
-        if (cancelled || !container) { resolve(false); return; }
-        try {
-          const la = new LAConstructor(container, location, {
-            showsDialogControl: true,
-            showsCloseControl: false,
-          });
-          let settled = false;
-          la.addEventListener('error', () => {
-            if (!settled) { settled = true; try { la.destroy(); } catch {} resolve(false); }
-          });
-          la.addEventListener('load', () => {
-            if (!settled) { settled = true; lookAroundRef.current = la; resolve(true); }
-          });
-          setTimeout(() => {
-            if (!settled) { settled = true; try { la.destroy(); } catch {} resolve(false); }
-          }, 5000);
-        } catch {
-          resolve(false);
-        }
-      });
-    };
-
     (async () => {
+      const LAConstructor = await waitForLA();
+      if (!LAConstructor || cancelled) {
+        if (!cancelled) setStatus('unavailable');
+        return;
+      }
+
+      const tryLA = (location: any): Promise<boolean> => {
+        return new Promise((resolve) => {
+          if (cancelled || !container) { resolve(false); return; }
+          try {
+            const la = new LAConstructor(container, location, {
+              showsDialogControl: true,
+              showsCloseControl: false,
+            });
+            let settled = false;
+            la.addEventListener('error', () => {
+              if (!settled) { settled = true; try { la.destroy(); } catch {} resolve(false); }
+            });
+            la.addEventListener('load', () => {
+              if (!settled) { settled = true; lookAroundRef.current = la; resolve(true); }
+            });
+            setTimeout(() => {
+              if (!settled) { settled = true; try { la.destroy(); } catch {} resolve(false); }
+            }, 5000);
+          } catch {
+            resolve(false);
+          }
+        });
+      };
+
       // Strategy 1: Search for a nearby place and use its Place object
       try {
         const search = new mk.Search({ language: 'en' });
@@ -1157,6 +1168,7 @@ export default function MapPage() {
   const mapSearchObjRef = useRef<any>(null);
   const selectedContactIdRef = useRef<string | null>(null);
   const userLocationRef = useRef<{ lat: number; lng: number } | null>(null);
+  const searchPinRef = useRef<any>(null);
 
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [geocodedContacts, setGeocodedContacts] = useState<GeocodedContact[]>([]);
@@ -1929,6 +1941,7 @@ export default function MapPage() {
         phone: '',
         url: lm.apple_maps_url || `https://maps.apple.com/?ll=${lm.latitude},${lm.longitude}&q=${encodeURIComponent(lm.name)}`,
         category: lm.description || 'Landmark',
+        isLandmark: true,
       });
     },
     [],
@@ -1994,6 +2007,17 @@ export default function MapPage() {
           new mk.CoordinateSpan(0.01, 0.01),
         );
         map.setRegionAnimated(region, true);
+
+        // Add a temporary pin for the search result
+        if (searchPinRef.current) {
+          try { map.removeAnnotation(searchPinRef.current); } catch {}
+        }
+        const tempAnnotation = new mk.MarkerAnnotation(
+          new mk.Coordinate(place.coordinate.latitude, place.coordinate.longitude),
+          { title: place.name || suggestion.displayLines[0] || '', color: '#f0a500' },
+        );
+        map.addAnnotation(tempAnnotation);
+        searchPinRef.current = tempAnnotation;
       }
     }, { region: mapRef.current?.region });
   }, []);
@@ -2030,6 +2054,17 @@ export default function MapPage() {
           new mk.CoordinateSpan(0.01, 0.01),
         );
         map.setRegionAnimated(region, true);
+
+        // Add a temporary pin for the search result
+        if (searchPinRef.current) {
+          try { map.removeAnnotation(searchPinRef.current); } catch {}
+        }
+        const tempAnnotation = new mk.MarkerAnnotation(
+          new mk.Coordinate(place.coordinate.latitude, place.coordinate.longitude),
+          { title: place.name || query, color: '#f0a500' },
+        );
+        map.addAnnotation(tempAnnotation);
+        searchPinRef.current = tempAnnotation;
       }
     }, { region: mapRef.current?.region });
   }, [mapSearchQuery]);
@@ -2705,24 +2740,37 @@ export default function MapPage() {
 
             {/* Actions */}
             <div className="space-y-2">
-              <button
-                onClick={() => {
-                  setLandmarkForm({
-                    lat: selectedPlace.latitude,
-                    lng: selectedPlace.longitude,
-                    initialName: selectedPlace.name,
-                    initialAddress: selectedPlace.formattedAddress,
-                    initialAppleMapsUrl: `https://maps.apple.com/?ll=${selectedPlace.latitude},${selectedPlace.longitude}&q=${encodeURIComponent(selectedPlace.name)}`,
-                  });
-                }}
-                className="w-full py-2.5 flex items-center justify-center gap-2 text-[10px] font-mono font-semibold tracking-wider bg-jarvis-gold/10 border border-jarvis-gold/20 text-jarvis-gold hover:bg-jarvis-gold/20 transition-colors uppercase"
-                style={{ clipPath: 'polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px))' }}
-              >
-                <LandmarkIcon size={12} />
-                Add as Landmark
-              </button>
+              {!selectedPlace.isLandmark && (
+                <button
+                  onClick={() => {
+                    setLandmarkForm({
+                      lat: selectedPlace.latitude,
+                      lng: selectedPlace.longitude,
+                      initialName: selectedPlace.name,
+                      initialAddress: selectedPlace.formattedAddress,
+                      initialAppleMapsUrl: `https://maps.apple.com/?ll=${selectedPlace.latitude},${selectedPlace.longitude}&q=${encodeURIComponent(selectedPlace.name)}`,
+                    });
+                  }}
+                  className="w-full py-2.5 flex items-center justify-center gap-2 text-[10px] font-mono font-semibold tracking-wider bg-jarvis-gold/10 border border-jarvis-gold/20 text-jarvis-gold hover:bg-jarvis-gold/20 transition-colors uppercase"
+                  style={{ clipPath: 'polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px))' }}
+                >
+                  <LandmarkIcon size={12} />
+                  Add as Landmark
+                </button>
+              )}
 
               <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    const url = `https://maps.apple.com/?daddr=${selectedPlace.latitude},${selectedPlace.longitude}&dirflg=d`;
+                    window.open(url, '_blank');
+                  }}
+                  className="flex-1 py-2 flex items-center justify-center gap-1.5 text-[9px] font-mono tracking-wider text-jarvis-blue/60 border border-jarvis-blue/15 hover:bg-jarvis-blue/5 transition-colors uppercase"
+                  style={{ clipPath: 'polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px))' }}
+                >
+                  <Navigation size={11} />
+                  Directions
+                </button>
                 <button
                   onClick={() => setLookAroundCoords({ lat: selectedPlace.latitude, lng: selectedPlace.longitude })}
                   className="flex-1 py-2 flex items-center justify-center gap-1.5 text-[9px] font-mono tracking-wider text-jarvis-blue/60 border border-jarvis-blue/15 hover:bg-jarvis-blue/5 transition-colors uppercase"
@@ -2731,15 +2779,15 @@ export default function MapPage() {
                   <Eye size={11} />
                   Look Around
                 </button>
-                <button
-                  onClick={() => window.open(`https://maps.apple.com/?ll=${selectedPlace.latitude},${selectedPlace.longitude}&z=15`, '_blank')}
-                  className="flex-1 py-2 flex items-center justify-center gap-1.5 text-[9px] font-mono tracking-wider text-jarvis-blue/60 border border-jarvis-blue/15 hover:bg-jarvis-blue/5 transition-colors uppercase"
-                  style={{ clipPath: 'polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px))' }}
-                >
-                  <ExternalLink size={11} />
-                  Apple Maps
-                </button>
               </div>
+              <button
+                onClick={() => window.open(`https://maps.apple.com/?ll=${selectedPlace.latitude},${selectedPlace.longitude}&z=15`, '_blank')}
+                className="w-full py-2 flex items-center justify-center gap-1.5 text-[9px] font-mono tracking-wider text-jarvis-blue/60 border border-jarvis-blue/15 hover:bg-jarvis-blue/5 transition-colors uppercase"
+                style={{ clipPath: 'polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px))' }}
+              >
+                <ExternalLink size={11} />
+                Open in Apple Maps
+              </button>
             </div>
           </div>
         </div>
