@@ -54,4 +54,47 @@ actor MusicService {
         logger.info("Music search '\(query)': \(response.songs.count) results")
         return Array(response.songs)
     }
+
+    /// Search for a song and play it immediately via Apple Music
+    func playSong(query: String) async throws -> String {
+        guard isAuthorized else {
+            return "Apple Music not authorized. Please connect in Settings."
+        }
+
+        let songs = try await search(query: query)
+        guard let song = songs.first else {
+            return "No results found for '\(query)' on Apple Music."
+        }
+
+        let player = ApplicationMusicPlayer.shared
+        player.queue = [song]
+        try await player.play()
+
+        logger.info("Now playing: \(song.title) by \(song.artistName)")
+        return "Now playing: \(song.title) by \(song.artistName)"
+    }
+
+    /// Play/pause/skip via simple command
+    func handleCommand(_ command: String) async -> String {
+        switch command.lowercased() {
+        case "pause", "stop":
+            pause()
+            return "Music paused."
+        case "play", "resume":
+            play()
+            return "Resuming playback."
+        case "next", "skip":
+            next()
+            return "Skipped to next track."
+        case "previous", "back":
+            previous()
+            return "Back to previous track."
+        default:
+            if command.lowercased().starts(with: "play ") {
+                let query = String(command.dropFirst(5))
+                return (try? await playSong(query: query)) ?? "Couldn't play that song."
+            }
+            return "Unknown music command."
+        }
+    }
 }

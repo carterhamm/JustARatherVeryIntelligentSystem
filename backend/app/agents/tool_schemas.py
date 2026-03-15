@@ -285,6 +285,30 @@ _TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "required": ["action"],
         },
     },
+    # -- Apple Music ------------------------------------------------------
+    {
+        "name": "apple_music",
+        "description": (
+            "Play music via Apple Music on Mr. Stark's devices. "
+            "Can play songs, artists, albums, or playlists. "
+            "Mr. Stark uses Apple Music, not Spotify."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["play", "pause", "next", "previous", "now_playing"],
+                    "description": "Apple Music action to perform.",
+                },
+                "query": {
+                    "type": "string",
+                    "description": "Song, artist, album, or playlist to play (for 'play' action).",
+                },
+            },
+            "required": ["action"],
+        },
+    },
     # -- Calculator -------------------------------------------------------
     {
         "name": "calculator",

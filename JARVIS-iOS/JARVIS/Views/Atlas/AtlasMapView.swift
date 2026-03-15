@@ -36,6 +36,35 @@ struct AtlasContact: Identifiable, Equatable {
     }
 }
 
+// MARK: - Atlas Landmark Model
+
+struct AtlasLandmark: Identifiable {
+    let id: String
+    let name: String
+    let description: String?
+    let latitude: Double
+    let longitude: Double
+    let address: String?
+    let color: String?
+    let appleMapsUrl: String?
+
+    var coordinate: CLLocationCoordinate2D {
+        CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+    }
+}
+
+private struct LandmarkAPIResponse: Codable {
+    let id: String
+    let name: String
+    let description: String?
+    let latitude: Double
+    let longitude: Double
+    let address: String?
+    let apple_maps_url: String?
+    let icon: String?
+    let color: String?
+}
+
 // MARK: - Search Result Annotation
 
 private struct SearchResultAnnotation: Identifiable, Equatable {
@@ -88,7 +117,9 @@ struct AtlasMapView: View {
         )
     )
     @State private var contacts: [AtlasContact] = []
+    @State private var landmarks: [AtlasLandmark] = []
     @State private var selectedContact: AtlasContact?
+    @State private var selectedLandmark: AtlasLandmark?
     @State private var searchText = ""
     @State private var searchResults: [MKMapItem] = []
     @State private var selectedSearchResult: SearchResultAnnotation?
@@ -136,6 +167,30 @@ struct AtlasMapView: View {
                         contactGroupPin(contacts: group.contacts, displayContact: displayContact)
                     }
                     .tag(displayContact.id)
+                }
+
+                // Landmark markers (colored dots)
+                ForEach(landmarks) { landmark in
+                    Annotation(landmark.name, coordinate: landmark.coordinate) {
+                        Button {
+                            selectedContact = nil
+                            selectedSearchResult = nil
+                            selectedLandmark = landmark
+                            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                            withAnimation(.easeInOut(duration: 0.5)) {
+                                position = .region(MKCoordinateRegion(
+                                    center: landmark.coordinate,
+                                    span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
+                                ))
+                            }
+                        } label: {
+                            Circle()
+                                .fill(Color(hex: landmark.color ?? "f0a500"))
+                                .frame(width: 12, height: 12)
+                                .overlay(Circle().strokeBorder(Color.white.opacity(0.3), lineWidth: 0.5))
+                                .shadow(color: Color(hex: landmark.color ?? "f0a500").opacity(0.5), radius: 4)
+                        }
+                    }
                 }
 
                 // Search result markers
@@ -187,6 +242,10 @@ struct AtlasMapView: View {
                         contactDetailPanel(selected)
                             .transition(.move(edge: .bottom).combined(with: .opacity))
                             .padding(.horizontal, 12)
+                    } else if let landmark = selectedLandmark {
+                        landmarkDetailPanel(landmark)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                            .padding(.horizontal, 12)
                     } else if let result = selectedSearchResult {
                         searchResultDetailPanel(result)
                             .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -199,6 +258,7 @@ struct AtlasMapView: View {
                             ForEach(Array(searchResults.prefix(3).enumerated()), id: \.offset) { _, result in
                                 Button {
                                     selectedContact = nil
+                                    selectedLandmark = nil
                                     isSearchFocused = false
                                     let coord = result.placemark.coordinate
                                     let annotation = SearchResultAnnotation(
@@ -246,9 +306,11 @@ struct AtlasMapView: View {
         }
         .animation(.spring(response: 0.35, dampingFraction: 0.85), value: selectedContact)
         .animation(.spring(response: 0.35, dampingFraction: 0.85), value: selectedSearchResult)
+        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: selectedLandmark?.id)
         .animation(.easeInOut(duration: 0.3), value: isLoading)
         .task {
             await loadContacts()
+            await loadLandmarks()
         }
     }
 
@@ -307,6 +369,7 @@ struct AtlasMapView: View {
                     if focused {
                         selectedContact = nil
                         selectedSearchResult = nil
+                        selectedLandmark = nil
                     }
                 }
 
@@ -352,6 +415,7 @@ struct AtlasMapView: View {
                 selectedContact = displayContact
             }
             selectedSearchResult = nil
+            selectedLandmark = nil
             UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
             withAnimation(.easeInOut(duration: 0.5)) {
                 position = .region(MKCoordinateRegion(
@@ -583,6 +647,97 @@ struct AtlasMapView: View {
         .hudAccentCorners(cutSize: 10, opacity: 0.25, lineLength: 16)
     }
 
+    // MARK: - Landmark Detail Panel
+
+    private func landmarkDetailPanel(_ landmark: AtlasLandmark) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 12) {
+                ZStack {
+                    HexCornerShape(cutSize: 8)
+                        .fill(Color(hex: landmark.color ?? "f0a500").opacity(0.08))
+                        .overlay {
+                            HexCornerShape(cutSize: 8)
+                                .strokeBorder(Color(hex: landmark.color ?? "f0a500").opacity(0.2), lineWidth: 0.5)
+                        }
+                        .frame(width: 50, height: 50)
+
+                    Circle()
+                        .fill(Color(hex: landmark.color ?? "f0a500"))
+                        .frame(width: 20, height: 20)
+                        .overlay(Circle().strokeBorder(Color.white.opacity(0.3), lineWidth: 0.5))
+                }
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(landmark.name.uppercased())
+                        .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                        .tracking(1)
+                        .foregroundColor(.jarvisText)
+                        .lineLimit(2)
+
+                    if let description = landmark.description, !description.isEmpty {
+                        Text(description)
+                            .font(.system(size: 10, weight: .medium, design: .monospaced))
+                            .foregroundColor(.jarvisTextDim)
+                            .lineLimit(2)
+                    }
+                }
+
+                Spacer()
+
+                Button {
+                    selectedLandmark = nil
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.jarvisTextDim)
+                        .frame(width: 28, height: 28)
+                        .background {
+                            HexCornerShape(cutSize: 5)
+                                .fill(Color.white.opacity(0.05))
+                        }
+                }
+            }
+
+            Rectangle()
+                .fill(Color(hex: landmark.color ?? "f0a500").opacity(0.1))
+                .frame(height: 0.5)
+
+            VStack(alignment: .leading, spacing: 8) {
+                if let address = landmark.address, !address.isEmpty {
+                    infoRow(icon: "mappin.circle.fill", label: "ADDRESS", value: address)
+                }
+
+                infoRow(icon: "location.fill", label: "COORD",
+                        value: String(format: "%.4f, %.4f", landmark.latitude, landmark.longitude))
+            }
+
+            HStack(spacing: 10) {
+                actionButton(icon: "arrow.triangle.turn.up.right.diamond.fill", label: "NAVIGATE") {
+                    if let address = landmark.address, !address.isEmpty {
+                        let encoded = address.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+                        if let url = URL(string: "maps://?daddr=\(encoded)") {
+                            UIApplication.shared.open(url)
+                        }
+                    } else {
+                        if let url = URL(string: "maps://?daddr=\(landmark.latitude),\(landmark.longitude)") {
+                            UIApplication.shared.open(url)
+                        }
+                    }
+                }
+
+                if let appleMapsUrl = landmark.appleMapsUrl, !appleMapsUrl.isEmpty,
+                   let url = URL(string: appleMapsUrl) {
+                    actionButton(icon: "map.fill", label: "APPLE MAPS") {
+                        UIApplication.shared.open(url)
+                    }
+                }
+            }
+        }
+        .padding(16)
+        .glassBackground(opacity: 0.7, cutSize: 10)
+        .hudAccentCorners(cutSize: 10, opacity: 0.25, lineLength: 16)
+    }
+
     // MARK: - Info Row
 
     private func infoRow(icon: String, label: String, value: String) -> some View {
@@ -770,6 +925,32 @@ struct AtlasMapView: View {
         } catch {
             isLoading = false
             errorMessage = "Failed to load contacts"
+        }
+    }
+
+    // MARK: - Load Landmarks
+
+    private func loadLandmarks() async {
+        do {
+            let apiLandmarks: [LandmarkAPIResponse] = try await APIClient.shared.request(
+                JARVISConfig.Landmarks.list
+            )
+
+            landmarks = apiLandmarks.map { lm in
+                AtlasLandmark(
+                    id: lm.id,
+                    name: lm.name,
+                    description: lm.description,
+                    latitude: lm.latitude,
+                    longitude: lm.longitude,
+                    address: lm.address,
+                    color: lm.color,
+                    appleMapsUrl: lm.apple_maps_url
+                )
+            }
+        } catch {
+            // Landmarks are supplemental — don't show error if they fail
+            // Landmarks are optional — silently ignore errors
         }
     }
 

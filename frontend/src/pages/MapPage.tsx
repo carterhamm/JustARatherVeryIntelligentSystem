@@ -1901,6 +1901,11 @@ export default function MapPage() {
       }
 
       if (e.key !== 'Escape') return;
+      // Look Around takes first priority
+      if (lookAroundCoords) {
+        setLookAroundCoords(null);
+        return;
+      }
       // If in full panel contact/landmark view, go back to rows first
       if (leftPanelView !== 'rows') {
         setLeftPanelView('rows');

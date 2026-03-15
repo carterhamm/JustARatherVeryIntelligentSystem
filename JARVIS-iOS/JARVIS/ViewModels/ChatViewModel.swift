@@ -134,6 +134,20 @@ class ChatViewModel: ObservableObject {
         )
         messages.append(userMsg)
 
+        // Check for local music commands (handle on-device via Apple Music)
+        if let musicResponse = await handleLocalMusicCommand(text) {
+            let msg = ChatMessage(
+                id: UUID().uuidString,
+                role: .assistant,
+                content: musicResponse,
+                timestamp: Date(),
+                isStreaming: false
+            )
+            messages.append(msg)
+            isStreaming = false
+            return
+        }
+
         // Add placeholder for assistant
         let assistantId = UUID().uuidString
         let assistantMsg = ChatMessage(
@@ -212,5 +226,62 @@ class ChatViewModel: ObservableObject {
 
         // Refresh conversation list
         await loadConversations()
+    }
+
+    // MARK: - Local Music Command Detection
+
+    private func handleLocalMusicCommand(_ text: String) async -> String? {
+        let lower = text.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // Music playback patterns
+        let playPatterns = ["play ", "put on ", "queue up "]
+        let pausePatterns = ["pause music", "pause the music", "stop music", "stop the music"]
+        let skipPatterns = ["skip", "next song", "next track", "skip song"]
+        let prevPatterns = ["previous song", "previous track", "go back a song", "last song"]
+        let nowPlayingPatterns = ["what's playing", "what song is this", "now playing", "current song"]
+
+        let music = MusicService.shared
+
+        guard await music.isAuthorized else { return nil }
+
+        for pattern in playPatterns {
+            if lower.hasPrefix(pattern) {
+                let query = String(lower.dropFirst(pattern.count))
+                if query.isEmpty { continue }
+                return try? await music.playSong(query: query)
+            }
+        }
+
+        for pattern in pausePatterns {
+            if lower.contains(pattern) {
+                await music.pause()
+                return "Music paused, sir."
+            }
+        }
+
+        for pattern in skipPatterns {
+            if lower.contains(pattern) {
+                await music.next()
+                return "Skipped to the next track."
+            }
+        }
+
+        for pattern in prevPatterns {
+            if lower.contains(pattern) {
+                await music.previous()
+                return "Back to the previous track."
+            }
+        }
+
+        for pattern in nowPlayingPatterns {
+            if lower.contains(pattern) {
+                if let np = await music.nowPlaying() {
+                    return "Currently playing: \(np.title) by \(np.artist)"
+                }
+                return "Nothing is currently playing."
+            }
+        }
+
+        return nil // Not a music command — proceed to backend
     }
 }

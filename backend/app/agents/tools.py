@@ -1272,6 +1272,108 @@ class SpotifyTool(BaseTool):
 
 
 # ═════════════════════════════════════════════════════════════════════════
+# Apple Music — control Music.app on the Mac Mini via AppleScript
+# ═════════════════════════════════════════════════════════════════════════
+
+
+class AppleMusicTool(BaseTool):
+    """Play music via Apple Music on Mr. Stark's devices."""
+
+    name = "apple_music"
+    description = (
+        "Play music via Apple Music on Mr. Stark's devices. "
+        "Can play songs, artists, albums, or playlists. "
+        "Use when the user asks to play music and Spotify isn't connected. "
+        "Mr. Stark uses Apple Music, not Spotify. "
+        "Params: action (str: 'play' | 'pause' | 'next' | 'previous' | "
+        "'now_playing'), query? (str, for play/search)."
+    )
+
+    async def execute(
+        self,
+        params: dict[str, Any],
+        *,
+        state: Optional[AgentState] = None,
+    ) -> str:
+        from app.integrations.mac_mini import remote_exec, is_configured
+
+        action = params.get("action", "play")
+        query = params.get("query", "")
+
+        if not is_configured():
+            return (
+                "Apple Music playback requires the Mac Mini agent. "
+                "Please play from your device directly."
+            )
+
+        if action == "play" and query:
+            # Sanitize query for AppleScript — escape backslashes and quotes
+            safe_query = query.replace("\\", "\\\\").replace('"', '\\"')
+            # Search and play via Music.app
+            script = (
+                f'tell application "Music" to play '
+                f'(first track of (search playlist 1 for "{safe_query}"))'
+            )
+            result = await remote_exec(
+                command=f"osascript -e '{script}'", timeout=10,
+            )
+            if result.get("success"):
+                return f"Now playing: {query}"
+
+            # Fallback: try Shortcuts
+            result = await remote_exec(
+                command=f'shortcuts run "Play Music" --input "{safe_query}"',
+                timeout=10,
+            )
+            if result.get("success"):
+                return f"Playing {query} on Apple Music"
+
+            return (
+                f"Could not play \"{query}\" — Music.app may not have a match. "
+                f"Try playing from your device."
+            )
+
+        elif action == "pause":
+            await remote_exec(
+                command='osascript -e \'tell application "Music" to pause\'',
+                timeout=5,
+            )
+            return "Music paused."
+
+        elif action == "next":
+            await remote_exec(
+                command='osascript -e \'tell application "Music" to next track\'',
+                timeout=5,
+            )
+            return "Skipped to next track."
+
+        elif action == "previous":
+            await remote_exec(
+                command='osascript -e \'tell application "Music" to previous track\'',
+                timeout=5,
+            )
+            return "Went back to previous track."
+
+        elif action == "now_playing":
+            result = await remote_exec(
+                command=(
+                    "osascript -e "
+                    "'tell application \"Music\" to get {name, artist} of current track'"
+                ),
+                timeout=5,
+            )
+            if result.get("success") and result.get("stdout", "").strip():
+                return f"Currently playing: {result['stdout'].strip()}"
+            return "No track currently playing."
+
+        else:
+            return (
+                f"Unknown Apple Music action: '{action}'. "
+                f"Use 'play', 'pause', 'next', 'previous', or 'now_playing'."
+            )
+
+
+# ═════════════════════════════════════════════════════════════════════════
 # iMCP tools — native macOS access (Calendar, Contacts, Messages,
 #               Reminders, Location, Maps, Weather) via MCP protocol
 # ═════════════════════════════════════════════════════════════════════════
@@ -4516,6 +4618,7 @@ def get_tool_registry() -> dict[str, BaseTool]:
             WeatherTool,
             NewsTool,
             SpotifyTool,
+            AppleMusicTool,
             CalculatorTool,
             DateTimeTool,
             # iMCP — native macOS tools (no API keys, all local)
