@@ -38,10 +38,14 @@ struct AtlasContact: Identifiable, Equatable {
 
 // MARK: - Search Result Annotation
 
-private struct SearchResultAnnotation: Identifiable {
+private struct SearchResultAnnotation: Identifiable, Equatable {
     let id = UUID()
     let name: String
     let coordinate: CLLocationCoordinate2D
+
+    static func == (lhs: SearchResultAnnotation, rhs: SearchResultAnnotation) -> Bool {
+        lhs.id == rhs.id
+    }
 }
 
 // MARK: - API Response Model
@@ -87,7 +91,9 @@ struct AtlasMapView: View {
     @State private var selectedContact: AtlasContact?
     @State private var searchText = ""
     @State private var searchResults: [MKMapItem] = []
+    @State private var selectedSearchResult: SearchResultAnnotation?
     @State private var isLoading = true
+    @FocusState private var isSearchFocused: Bool
     @State private var errorMessage: String?
     @State private var geocodedCount = 0
     @State private var totalToGeocode = 0
@@ -130,6 +136,16 @@ struct AtlasMapView: View {
                     )
                     .tint(Color.jarvisGold)
                 }
+
+                // Selected search result pin
+                if let pinned = selectedSearchResult {
+                    Marker(
+                        pinned.name,
+                        systemImage: "mappin.circle.fill",
+                        coordinate: pinned.coordinate
+                    )
+                    .tint(Color.jarvisGold)
+                }
             }
             .mapStyle(.standard(elevation: .realistic, pointsOfInterest: .excludingAll))
             .mapControls {
@@ -160,6 +176,10 @@ struct AtlasMapView: View {
                         contactDetailPanel(selected)
                             .transition(.move(edge: .bottom).combined(with: .opacity))
                             .padding(.horizontal, 12)
+                    } else if let result = selectedSearchResult {
+                        searchResultDetailPanel(result)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                            .padding(.horizontal, 12)
                     }
 
                     // Search results (top 3) above search bar
@@ -168,9 +188,16 @@ struct AtlasMapView: View {
                             ForEach(Array(searchResults.prefix(3).enumerated()), id: \.offset) { _, result in
                                 Button {
                                     selectedContact = nil
-                                    withAnimation {
+                                    isSearchFocused = false
+                                    let coord = result.placemark.coordinate
+                                    let annotation = SearchResultAnnotation(
+                                        name: result.name ?? "Location",
+                                        coordinate: coord
+                                    )
+                                    selectedSearchResult = annotation
+                                    withAnimation(.easeInOut(duration: 0.5)) {
                                         position = .region(MKCoordinateRegion(
-                                            center: result.placemark.coordinate,
+                                            center: coord,
                                             span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
                                         ))
                                     }
@@ -207,6 +234,7 @@ struct AtlasMapView: View {
             }
         }
         .animation(.spring(response: 0.35, dampingFraction: 0.85), value: selectedContact)
+        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: selectedSearchResult)
         .animation(.easeInOut(duration: 0.3), value: isLoading)
         .task {
             await loadContacts()
@@ -234,7 +262,8 @@ struct AtlasMapView: View {
                             }
                     }
             }
-            .padding(.top, 4)
+            .padding(.top, 8)
+            .padding(.leading, 4)
 
             // ATLAS label
             Text("A.T.L.A.S.")
@@ -259,8 +288,15 @@ struct AtlasMapView: View {
                 .foregroundColor(.jarvisText)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
+                .focused($isSearchFocused)
                 .onSubmit {
                     Task { await search() }
+                }
+                .onChange(of: isSearchFocused) { focused in
+                    if focused {
+                        selectedContact = nil
+                        selectedSearchResult = nil
+                    }
                 }
 
             if !searchText.isEmpty {
@@ -297,6 +333,7 @@ struct AtlasMapView: View {
     private func contactPin(for contact: AtlasContact) -> some View {
         Button {
             selectedContact = contact
+            selectedSearchResult = nil
             UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
             withAnimation(.easeInOut(duration: 0.5)) {
                 position = .region(MKCoordinateRegion(
@@ -442,6 +479,71 @@ struct AtlasMapView: View {
                         if let url = URL(string: "mailto:\(email)") {
                             UIApplication.shared.open(url)
                         }
+                    }
+                }
+            }
+        }
+        .padding(16)
+        .glassBackground(opacity: 0.7, cutSize: 10)
+        .hudAccentCorners(cutSize: 10, opacity: 0.25, lineLength: 16)
+    }
+
+    // MARK: - Search Result Detail Panel
+
+    private func searchResultDetailPanel(_ result: SearchResultAnnotation) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 12) {
+                ZStack {
+                    HexCornerShape(cutSize: 8)
+                        .fill(Color.jarvisGold.opacity(0.08))
+                        .overlay {
+                            HexCornerShape(cutSize: 8)
+                                .strokeBorder(Color.jarvisGold.opacity(0.2), lineWidth: 0.5)
+                        }
+                        .frame(width: 50, height: 50)
+
+                    Image(systemName: "mappin.circle.fill")
+                        .font(.system(size: 22))
+                        .foregroundColor(.jarvisGold)
+                }
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(result.name.uppercased())
+                        .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                        .tracking(1)
+                        .foregroundColor(.jarvisText)
+                        .lineLimit(2)
+
+                    Text(String(format: "%.4f, %.4f", result.coordinate.latitude, result.coordinate.longitude))
+                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                        .foregroundColor(.jarvisTextDim)
+                }
+
+                Spacer()
+
+                Button {
+                    selectedSearchResult = nil
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.jarvisTextDim)
+                        .frame(width: 28, height: 28)
+                        .background {
+                            HexCornerShape(cutSize: 5)
+                                .fill(Color.white.opacity(0.05))
+                        }
+                }
+            }
+
+            Rectangle()
+                .fill(Color.jarvisGold.opacity(0.1))
+                .frame(height: 0.5)
+
+            HStack(spacing: 10) {
+                actionButton(icon: "arrow.triangle.turn.up.right.diamond.fill", label: "NAVIGATE") {
+                    let coord = result.coordinate
+                    if let url = URL(string: "maps://?daddr=\(coord.latitude),\(coord.longitude)") {
+                        UIApplication.shared.open(url)
                     }
                 }
             }

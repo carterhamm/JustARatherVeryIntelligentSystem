@@ -238,7 +238,7 @@ function loadMapKit(): Promise<any> {
     }
 
     const script = document.createElement('script');
-    script.src = 'https://cdn.apple-mapkit.com/mk/5.x.x/mapkit.js';
+    script.src = 'https://cdn.apple-mapkit.com/mk/5.x.x/mapkit.js?libraries=look-around';
     script.crossOrigin = 'anonymous';
     script.onload = () => {
       try {
@@ -482,6 +482,14 @@ function LookAroundPanel({
 
     let cancelled = false;
 
+    // Global timeout: if nothing resolves within 8 seconds, give up
+    const globalTimeout = setTimeout(() => {
+      if (!cancelled) {
+        cancelled = true;
+        setStatus('unavailable');
+      }
+    }, 8000);
+
     // Wait for LookAround library to be available (may load async)
     const waitForLA = async (): Promise<any> => {
       for (let i = 0; i < 10; i++) {
@@ -504,10 +512,20 @@ function LookAroundPanel({
         return new Promise((resolve) => {
           if (cancelled || !container) { resolve(false); return; }
           try {
-            const la = new LAConstructor(container, location, {
-              showsDialogControl: true,
-              showsCloseControl: false,
-            });
+            // Try object-style constructor first (newer MapKit JS API)
+            let la: any;
+            try {
+              la = new LAConstructor({
+                container: container,
+                coordinate: location?.coordinate ? location.coordinate : location,
+              });
+            } catch {
+              // Fall back to positional args
+              la = new LAConstructor(container, location, {
+                showsDialogControl: true,
+                showsCloseControl: false,
+              });
+            }
             let settled = false;
             la.addEventListener('error', () => {
               if (!settled) { settled = true; try { la.destroy(); } catch {} resolve(false); }
@@ -517,7 +535,7 @@ function LookAroundPanel({
             });
             setTimeout(() => {
               if (!settled) { settled = true; try { la.destroy(); } catch {} resolve(false); }
-            }, 5000);
+            }, 4000);
           } catch {
             resolve(false);
           }
@@ -566,6 +584,7 @@ function LookAroundPanel({
 
     return () => {
       cancelled = true;
+      clearTimeout(globalTimeout);
       if (lookAroundRef.current?.destroy) try { lookAroundRef.current.destroy(); } catch {}
     };
   }, [lat, lng]);
@@ -799,8 +818,6 @@ function LandmarkForm({
   const [address, setAddress] = useState(initialAddress || '');
   const [appleMapsUrl, setAppleMapsUrl] = useState(initialAppleMapsUrl || '');
   const [saving, setSaving] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searching, setSearching] = useState(false);
   const [finalLat, setFinalLat] = useState(lat);
   const [finalLng, setFinalLng] = useState(lng);
 
@@ -819,21 +836,18 @@ function LandmarkForm({
     });
   }, [lat, lng, initialAddress]);
 
-  const handleSearch = async () => {
-    const query = searchQuery.trim();
-    if (!query) return;
-    setSearching(true);
-
-    if (query.includes('maps.apple.com') || query.includes('apple.com/maps')) {
+  // Parse Apple Maps URL when pasted into the URL field
+  const handleAppleMapsUrlChange = (value: string) => {
+    setAppleMapsUrl(value);
+    if (value.includes('maps.apple.com') || value.includes('apple.com/maps')) {
       try {
-        const url = new URL(query);
+        const url = new URL(value);
         const ll = url.searchParams.get('ll');
         if (ll) {
           const [parsedLat, parsedLng] = ll.split(',').map(Number);
           if (!isNaN(parsedLat) && !isNaN(parsedLng)) {
             setFinalLat(parsedLat);
             setFinalLng(parsedLng);
-            setAppleMapsUrl(query);
             const mk = window.mapkit;
             if (mk) {
               const geocoder = new mk.Geocoder({ language: 'en' });
@@ -848,25 +862,9 @@ function LandmarkForm({
           }
         }
       } catch {
-        // not a valid URL
+        // not a valid URL yet
       }
-      setSearching(false);
-      return;
     }
-
-    const mk = window.mapkit;
-    if (!mk) { setSearching(false); return; }
-    const geocoder = new mk.Geocoder({ language: 'en' });
-    geocoder.lookup(query, (error: any, data: any) => {
-      if (!error && data?.results?.length) {
-        const r = data.results[0];
-        setFinalLat(r.coordinate.latitude);
-        setFinalLng(r.coordinate.longitude);
-        const parts = [r.name, r.locality, r.administrativeArea, r.postCode].filter(Boolean);
-        setAddress(parts.join(', '));
-      }
-      setSearching(false);
-    });
   };
 
   const handleSubmit = async () => {
@@ -907,30 +905,6 @@ function LandmarkForm({
           <span className="text-[11px] font-mono font-semibold tracking-[0.15em] text-jarvis-gold uppercase">
             New Landmark
           </span>
-        </div>
-
-        <div className="mb-4">
-          <label className="text-[9px] font-mono tracking-wider text-gray-500 uppercase mb-1.5 block">
-            Search Location or Paste Apple Maps URL
-          </label>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-              placeholder="e.g. Central Park or https://maps.apple.com/?ll=..."
-              className="flex-1 py-2 px-3 text-xs font-mono bg-transparent border border-white/[0.06] text-gray-300 placeholder-gray-600 focus:border-jarvis-blue/25 transition-colors"
-              style={{ clipPath: 'polygon(0 0, calc(100% - 4px) 0, 100% 4px, 100% 100%, 4px 100%, 0 calc(100% - 4px))' }}
-            />
-            <button
-              onClick={handleSearch}
-              disabled={searching}
-              className="px-3 py-2 text-[10px] font-mono bg-jarvis-blue/10 border border-jarvis-blue/20 text-jarvis-blue hover:bg-jarvis-blue/20 transition-colors disabled:opacity-50"
-            >
-              {searching ? <Loader size={12} className="animate-spin" /> : <Search size={12} />}
-            </button>
-          </div>
         </div>
 
         <div className="mb-3">
@@ -983,7 +957,7 @@ function LandmarkForm({
           <input
             type="text"
             value={appleMapsUrl}
-            onChange={(e) => setAppleMapsUrl(e.target.value)}
+            onChange={(e) => handleAppleMapsUrlChange(e.target.value)}
             placeholder="https://maps.apple.com/?ll=..."
             className="w-full py-2 px-3 text-xs font-mono bg-transparent border border-white/[0.06] text-gray-400 placeholder-gray-600 focus:border-jarvis-gold/25 transition-colors"
           />
@@ -1170,6 +1144,14 @@ export default function MapPage() {
   const selectedContactIdRef = useRef<string | null>(null);
   const userLocationRef = useRef<{ lat: number; lng: number } | null>(null);
   const searchPinRef = useRef<any>(null);
+
+  // Helper: remove the search/POI pin from the map
+  const clearSearchPin = useCallback(() => {
+    if (searchPinRef.current) {
+      try { mapRef.current?.removeAnnotation(searchPinRef.current); } catch {}
+      searchPinRef.current = null;
+    }
+  }, []);
 
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [geocodedContacts, setGeocodedContacts] = useState<GeocodedContact[]>([]);
@@ -1416,10 +1398,14 @@ export default function MapPage() {
       // Don't trigger if a custom annotation was just selected
       if (annotationJustSelectedRef.current) return;
 
-      // Get coordinate from tap
+      // Get coordinate from tap — MapKit JS 5.x provides domEvents array
       let coord: any = null;
       try {
-        if (event.pointOnPage) {
+        const domEvent = event.domEvents?.[0];
+        if (domEvent) {
+          const point = new DOMPoint(domEvent.pageX, domEvent.pageY);
+          coord = map.convertPointOnPageToCoordinate(point);
+        } else if (event.pointOnPage) {
           coord = map.convertPointOnPageToCoordinate(event.pointOnPage);
         } else if (event.coordinate) {
           coord = event.coordinate;
@@ -1841,6 +1827,7 @@ export default function MapPage() {
       if ((e.key === 'd' || e.key === 'D') && !isTyping && !e.metaKey && !e.ctrlKey && !e.altKey) {
         e.preventDefault();
         setSelectedPlace(null);
+        clearSearchPin();
         setExpandedContactId(null);
         setSelectedContactId(null);
         selectedContactIdRef.current = null;
@@ -1851,6 +1838,7 @@ export default function MapPage() {
       if (e.key !== 'Escape') return;
       if (selectedPlace) {
         setSelectedPlace(null);
+        clearSearchPin();
         return;
       }
       if (mapSearchQuery || searchSuggestions.length > 0) {
@@ -1865,7 +1853,7 @@ export default function MapPage() {
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, [selectedPlace, mapSearchQuery, searchSuggestions, flyToUserLocation]);
+  }, [selectedPlace, mapSearchQuery, searchSuggestions, flyToUserLocation, clearSearchPin]);
 
   // ---- Helper: region from contacts ----
   function regionFromContacts(contacts: GeocodedContact[]) {
@@ -1979,11 +1967,12 @@ export default function MapPage() {
     map.setRegionAnimated(region, true);
     setSelectedContactId(null);
     setSelectedPlace(null);
+    clearSearchPin();
     if (calloutOverlayRef.current) {
       calloutOverlayRef.current.remove();
       calloutOverlayRef.current = null;
     }
-  }, [geocodedContacts, landmarks]);
+  }, [geocodedContacts, landmarks, clearSearchPin]);
 
   // ---- Save landmark ----
   const saveLandmark = useCallback(async (data: { name: string; description: string; latitude: number; longitude: number; address: string; apple_maps_url: string }) => {
@@ -1992,6 +1981,7 @@ export default function MapPage() {
       setLandmarks((prev) => [...prev, result]);
       setLandmarkForm(null);
       setSelectedPlace(null);
+      clearSearchPin();
     } catch (err) {
       console.error('Failed to save landmark:', err);
       setLandmarkForm(null);
@@ -2668,7 +2658,7 @@ export default function MapPage() {
               Place Detail
             </span>
             <button
-              onClick={() => setSelectedPlace(null)}
+              onClick={() => { setSelectedPlace(null); clearSearchPin(); }}
               className="p-1 hover:bg-white/[0.05] transition-colors"
             >
               <X size={14} className="text-jarvis-blue/40" />
