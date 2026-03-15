@@ -155,6 +155,14 @@ TOOL_CATEGORIES = {
         "description": "JARVIS autonomy status, self-improvement, self-awareness, how JARVIS manages itself, code health, autonomous systems",
         "tools": ["autonomy_status", "learning_status", "system_health"],
     },
+    "security": {
+        "description": "OSINT, security audit, WHOIS lookup, DNS recon, network scan, password strength, Kali Linux, penetration testing, cybersecurity tools, white hat",
+        "tools": ["whois_lookup", "dns_recon", "web_recon", "password_strength", "network_scan", "kali_tool", "security_audit"],
+    },
+    "workshop": {
+        "description": "Workshop mode, wake up daddy's home, project session, nanotech work, lab mode, start working, build session",
+        "tools": ["workshop_mode", "search_knowledge", "learning_status"],
+    },
 }
 
 _CATEGORY_LIST = "\n".join(

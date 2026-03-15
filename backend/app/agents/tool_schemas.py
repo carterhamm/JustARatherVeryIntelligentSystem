@@ -1179,6 +1179,99 @@ _TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "required": ["reminder_id"],
         },
     },
+    # -- OSINT & Security Tools --------------------------------------------
+    {
+        "name": "whois_lookup",
+        "description": "Look up public WHOIS registration data for a domain. Returns registrar, dates, name servers. Educational/public data only.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"domain": {"type": "string", "description": "Domain to look up (e.g. 'example.com')."}},
+            "required": ["domain"],
+        },
+    },
+    {
+        "name": "dns_recon",
+        "description": "Query DNS records for a domain. Returns A, AAAA, MX, NS, TXT, CNAME, SOA records with educational context.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "domain": {"type": "string", "description": "Domain to query."},
+                "record_types": {"type": "array", "items": {"type": "string"}, "description": "Record types to query. Default: all common types."},
+            },
+            "required": ["domain"],
+        },
+    },
+    {
+        "name": "web_recon",
+        "description": "Passive web reconnaissance: analyze HTTP headers, security headers, SSL cert, technologies. No intrusive testing — public responses only.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"url": {"type": "string", "description": "URL to analyze (e.g. 'https://example.com')."}},
+            "required": ["url"],
+        },
+    },
+    {
+        "name": "password_strength",
+        "description": "Evaluate password strength with crack time estimates and improvement suggestions. The password is NEVER logged or stored.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"password": {"type": "string", "description": "Password to evaluate."}},
+            "required": ["password"],
+        },
+    },
+    {
+        "name": "network_scan",
+        "description": "Scan a local network for devices (nmap). ONLY works on private IP ranges you own (192.168.x, 10.x, 172.16-31.x). Requires Mac Mini.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "target": {"type": "string", "description": "IP or CIDR range to scan (e.g. '192.168.1.0/24'). Private IPs only."},
+                "scan_type": {"type": "string", "enum": ["quick", "detailed"], "description": "Quick (host discovery) or detailed (services + versions)."},
+            },
+            "required": ["target"],
+        },
+    },
+    {
+        "name": "kali_tool",
+        "description": "Execute a whitelisted security tool in the isolated Kali Linux container on Mac Mini. Educational purposes only. Allowed tools: nmap, whois, dig, nslookup, traceroute, ping, curl, nikto, dirb, sqlmap.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "command": {"type": "string", "description": "Full command to execute (e.g. 'nmap -sn 192.168.1.0/24')."},
+                "tool_name": {"type": "string", "description": "Name of the tool being used (for logging)."},
+            },
+            "required": ["command"],
+        },
+    },
+    {
+        "name": "security_audit",
+        "description": "Run a comprehensive security audit on a website, network, or password policy. Combines multiple tools for a full report. Educational and consented only.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "target_type": {"type": "string", "enum": ["website", "network", "password_policy"], "description": "Type of audit."},
+                "target": {"type": "string", "description": "Target to audit (URL, IP range, or 'evaluate' for password policy)."},
+            },
+            "required": ["target_type", "target"],
+        },
+    },
+    # -- Workshop Mode -----------------------------------------------------
+    {
+        "name": "workshop_mode",
+        "description": (
+            "Activate or deactivate Workshop Mode. When Mr. Stark says 'Wake up, daddy's home' "
+            "or asks to start workshop mode, activate it. JARVIS loads relevant research, "
+            "recent nanotech dialogue insights, and prepares a briefing. Use 'deactivate' to end."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "action": {"type": "string", "enum": ["activate", "deactivate", "status", "briefing"], "description": "Action to perform."},
+                "project": {"type": "string", "description": "Project focus (default: 'nanotech').", "default": "nanotech"},
+            },
+            "required": ["action"],
+        },
+    },
     # -- Autonomy Status ---------------------------------------------------
     {
         "name": "autonomy_status",

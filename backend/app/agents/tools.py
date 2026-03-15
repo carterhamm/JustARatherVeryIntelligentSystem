@@ -4204,6 +4204,51 @@ class LearningStatusTool(BaseTool):
             return f"Learning status unavailable: {exc}"
 
 
+class WorkshopModeTool(BaseTool):
+    """Activate/deactivate Workshop Mode for Mr. Stark's project sessions."""
+
+    name = "workshop_mode"
+    description = (
+        "Activate or deactivate Workshop Mode. When Mr. Stark says "
+        "'Wake up, daddy's home' or wants to start a work session, activate it. "
+        "JARVIS loads relevant research, recent nanotech insights, and prepares "
+        "a briefing. Actions: activate, deactivate, status, briefing."
+    )
+
+    async def execute(
+        self,
+        params: dict[str, Any],
+        *,
+        state: Optional[AgentState] = None,
+    ) -> str:
+        action = params.get("action", "activate").lower()
+        project = params.get("project", "nanotech")
+
+        try:
+            from app.services.workshop_mode import (
+                activate_workshop, deactivate_workshop,
+                is_workshop_active, get_workshop_briefing,
+            )
+
+            if action == "activate":
+                result = await activate_workshop(project=project)
+                briefing = result.get("briefing", "")
+                return f"Workshop mode activated for project: {project}\n\n{briefing}"
+            elif action == "deactivate":
+                result = await deactivate_workshop()
+                return "Workshop mode deactivated. Good work today, sir."
+            elif action == "status":
+                active = await is_workshop_active()
+                return f"Workshop mode: {'active' if active else 'inactive'}"
+            elif action == "briefing":
+                briefing = await get_workshop_briefing(project=project)
+                return briefing
+            else:
+                return f"Unknown action: {action}. Use: activate, deactivate, status, briefing."
+        except Exception as exc:
+            return f"Workshop mode error: {exc}"
+
+
 class AutonomyStatusTool(BaseTool):
     """Report on JARVIS's autonomous systems: code health, self-model, improvement metrics."""
 
@@ -4428,9 +4473,25 @@ def get_tool_registry() -> dict[str, BaseTool]:
             SelfHealTool,
             # Continuous learning status
             LearningStatusTool,
+            # Workshop Mode
+            WorkshopModeTool,
             # Autonomy status
             AutonomyStatusTool,
         ]
+        # Add security/OSINT tools from separate module
+        try:
+            from app.agents.security_tools import (
+                WhoisLookupTool, DnsReconTool, WebReconTool,
+                PasswordStrengthTool, NetworkScanTool, KaliToolTool,
+                SecurityAuditTool,
+            )
+            tool_classes.extend([
+                WhoisLookupTool, DnsReconTool, WebReconTool,
+                PasswordStrengthTool, NetworkScanTool, KaliToolTool,
+                SecurityAuditTool,
+            ])
+        except Exception as exc:
+            logger.warning("Security tools failed to load: %s", exc)
         tools = _safe_instantiate(tool_classes)
         logger.info("Tool registry loaded: %d/%d tools available", len(tools), len(tool_classes))
         _registry = {t.name: t for t in tools}

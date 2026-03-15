@@ -152,7 +152,7 @@ async def startup_handler(app: FastAPI) -> None:
                 await asyncio.sleep(3600)  # 60 minutes
 
         async def _proactive_scheduler():
-            """Run proactive cycle every 15 minutes."""
+            """Run proactive + anticipatory cycles every 15 minutes."""
             await asyncio.sleep(180)  # wait 3 min after boot
             logger.info("proactive_scheduler_started", interval_minutes=15)
             while True:
@@ -162,6 +162,15 @@ async def startup_handler(app: FastAPI) -> None:
                     logger.info("proactive_cycle_complete", status=result.get("status", "?"))
                 except Exception as exc:
                     logger.warning("proactive_cycle_failed", error=str(exc))
+                # Also run anticipatory checks
+                try:
+                    from app.services.anticipatory import run_anticipatory_check
+                    from app.services.autonomy.delivery import deliver_alert
+                    antic = await run_anticipatory_check()
+                    for alert in antic.get("alerts", []):
+                        await deliver_alert(alert["message"], alert.get("priority", 5))
+                except Exception as exc:
+                    logger.debug("anticipatory_check_failed", error=str(exc))
                 await asyncio.sleep(900)  # 15 minutes
 
         async def _code_review_scheduler():
