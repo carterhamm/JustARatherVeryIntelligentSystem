@@ -57,7 +57,8 @@ struct EmptyStateView: View {
     var body: some View {
         ZStack {
             // 3D SceneKit particle cloud
-            ParticleCloudView(allowsCameraControl: true)
+            ParticleCloudView(allowsCameraControl: false)
+                .allowsHitTesting(false)
                 .opacity(opacity * 0.85)
                 .offset(y: -UIScreen.main.bounds.height * 0.08)
 

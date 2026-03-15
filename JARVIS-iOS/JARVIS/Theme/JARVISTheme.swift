@@ -151,32 +151,41 @@ struct ScanlineOverlay: View {
     @State private var phase: CGFloat = 0
 
     var body: some View {
-        Canvas { context, size in
-            let spacing: CGFloat = 20
-            let dotRadius: CGFloat = 1.2
-            let cols = Int(size.width / spacing) + 1
-            let rows = Int(size.height / spacing) + 1
+        TimelineView(.animation) { timeline in
+            Canvas { context, size in
+                // Dense grid of small JARVIS blue dots
+                let spacing: CGFloat = 12
+                let dotRadius: CGFloat = 0.6
+                let cols = Int(size.width / spacing) + 1
+                let rows = Int(size.height / spacing) + 1
 
-            for row in 0..<rows {
-                for col in 0..<cols {
-                    let x = CGFloat(col) * spacing
-                    let y = CGFloat(row) * spacing
+                // Animate a single wave band moving top-left to bottom-right
+                let elapsed = timeline.date.timeIntervalSinceReferenceDate
+                let wavePos = CGFloat(elapsed.truncatingRemainder(dividingBy: 5.0)) / 5.0
 
-                    // Wave from top-left to bottom-right
-                    let diagonal = (x + y) / (size.width + size.height)
-                    let wave = sin((diagonal * 4 - phase) * .pi * 2)
-                    let opacity = 0.03 + 0.06 * max(0, wave)
+                for row in 0..<rows {
+                    for col in 0..<cols {
+                        let x = CGFloat(col) * spacing
+                        let y = CGFloat(row) * spacing
 
-                    context.fill(
-                        Path(ellipseIn: CGRect(x: x - dotRadius, y: y - dotRadius, width: dotRadius * 2, height: dotRadius * 2)),
-                        with: .color(.white.opacity(opacity))
-                    )
+                        // Diagonal position normalized 0-1
+                        let diagonal = (x + y) / (size.width + size.height)
+
+                        // Single wave band: bright near wavePos, dim elsewhere
+                        let dist = abs(diagonal - wavePos)
+                        let wrapped = min(dist, 1.0 - dist)  // wrap around
+                        let brightness = max(0, 1.0 - wrapped * 8.0)  // narrow band
+                        let opacity = 0.02 + 0.12 * brightness
+
+                        context.fill(
+                            Path(ellipseIn: CGRect(
+                                x: x - dotRadius, y: y - dotRadius,
+                                width: dotRadius * 2, height: dotRadius * 2
+                            )),
+                            with: .color(Color(red: 0, green: 0.83, blue: 1.0, opacity: opacity))
+                        )
+                    }
                 }
-            }
-        }
-        .onAppear {
-            withAnimation(.linear(duration: 6).repeatForever(autoreverses: false)) {
-                phase = 1
             }
         }
         .allowsHitTesting(false)

@@ -1509,8 +1509,15 @@ export default function MapPage() {
         // If multiple contacts at this location, cycle through them (infinite loop)
         const groupContacts = locationGroups.get(locKey) || [c];
         const currentIdx = groupContacts.findIndex((gc) => gc.id === selectedContactIdRef.current);
-        const nextIdx = (currentIdx + 1) % groupContacts.length;
-        const nextContact = groupContacts[nextIdx];
+
+        let nextContact;
+        if (currentIdx === -1) {
+          // First click or ref doesn't match anyone in group — show this annotation's contact
+          nextContact = c;
+        } else {
+          // Already viewing someone in this group — advance to next
+          nextContact = groupContacts[(currentIdx + 1) % groupContacts.length];
+        }
 
         selectedContactIdRef.current = nextContact.id;  // Update ref immediately (useEffect is async)
         setSelectedContactId(nextContact.id);

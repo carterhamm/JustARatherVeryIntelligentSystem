@@ -52,6 +52,7 @@ struct MainView: View {
 
             // Vignette + Scanline overlays
             VignetteOverlay()
+                .allowsHitTesting(false)
             ScanlineOverlay()
                 .allowsHitTesting(false)
 
