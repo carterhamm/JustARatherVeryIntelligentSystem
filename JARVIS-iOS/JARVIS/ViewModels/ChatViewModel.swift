@@ -94,7 +94,9 @@ class ChatViewModel: ObservableObject {
     func loadProviders() async {
         do {
             availableProviders = try await chatService.getProviders()
-            if let first = availableProviders.first(where: { $0.available }) {
+            // Only set default if no provider is currently selected
+            let currentValid = availableProviders.contains(where: { $0.id == selectedProvider && $0.available })
+            if !currentValid, let first = availableProviders.first(where: { $0.available }) {
                 selectedProvider = first.id
             }
         } catch {

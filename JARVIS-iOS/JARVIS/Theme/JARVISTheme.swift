@@ -175,7 +175,7 @@ struct ScanlineOverlay: View {
                         let dist = abs(diagonal - wavePos)
                         let wrapped = min(dist, 1.0 - dist)  // wrap around
                         let brightness = max(0, 1.0 - wrapped * 8.0)  // narrow band
-                        let opacity = 0.02 + 0.12 * brightness
+                        let opacity = 0.05 + 0.2 * brightness
 
                         context.fill(
                             Path(ellipseIn: CGRect(

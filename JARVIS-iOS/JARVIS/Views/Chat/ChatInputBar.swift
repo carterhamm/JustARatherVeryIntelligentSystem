@@ -45,20 +45,12 @@ struct ChatInputBar: View {
                 .padding(.vertical, 10)
                 .background {
                     HexCornerShape(cutSize: 10)
-                        .fill(.ultraThinMaterial)
-                        .overlay {
-                            HexCornerShape(cutSize: 10)
-                                .fill(Color.jarvisPanelBg.opacity(0.5))
-                        }
-                        .overlay {
-                            HexCornerShape(cutSize: 10)
-                                .strokeBorder(
-                                    isFocused
-                                        ? Color.jarvisBlue.opacity(0.3)
-                                        : Color.jarvisGlassBorder,
-                                    lineWidth: 0.5
-                                )
-                        }
+                        .strokeBorder(
+                            isFocused
+                                ? Color.jarvisBlue.opacity(0.3)
+                                : Color.white.opacity(0.06),
+                            lineWidth: 0.5
+                        )
                 }
 
                 // Send button
@@ -100,12 +92,7 @@ struct ChatInputBar: View {
             .padding(.vertical, 8)
         }
         .background {
-            Rectangle()
-                .fill(.ultraThinMaterial)
-                .overlay {
-                    Rectangle()
-                        .fill(Color.jarvisDeepDark.opacity(0.7))
-                }
+            Color.clear
                 .ignoresSafeArea(edges: .bottom)
         }
     }

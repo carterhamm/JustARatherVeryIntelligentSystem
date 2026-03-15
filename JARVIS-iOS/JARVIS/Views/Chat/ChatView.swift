@@ -74,7 +74,7 @@ struct EmptyStateView: View {
                         .tracking(3)
                         .foregroundColor(.jarvisBlue.opacity(0.5))
 
-                    Text("How may I assist you, Sir?")
+                    Text("How may I assist you, sir?")
                         .font(.system(size: 15, weight: .light, design: .monospaced))
                         .foregroundColor(.jarvisBlue.opacity(0.7))
                 }

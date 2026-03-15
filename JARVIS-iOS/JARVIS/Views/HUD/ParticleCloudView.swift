@@ -794,7 +794,7 @@ struct ParticleCloudBuilder {
 
         let node = SCNNode()
         node.camera = camera
-        node.position = SCNVector3(0, 0.5, 6.0)
+        node.position = SCNVector3(0, 0.5, 10.0)
         node.look(at: SCNVector3(0, 0, 0))
         root.addChildNode(node)
     }

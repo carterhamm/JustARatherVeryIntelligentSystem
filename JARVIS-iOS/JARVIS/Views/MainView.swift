@@ -91,6 +91,21 @@ struct MainView: View {
         .onChange(of: showSettings) { newValue in
             if newValue { UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) }
         }
+        .gesture(
+            DragGesture(minimumDistance: 30, coordinateSpace: .global)
+                .onEnded { value in
+                    let horizontal = value.translation.width
+                    let vertical = abs(value.translation.height)
+                    guard abs(horizontal) > vertical else { return } // Must be horizontal swipe
+                    if horizontal > 60 && value.startLocation.x < 40 {
+                        // Right swipe from left edge → conversations
+                        withAnimation { showConversations = true }
+                    } else if horizontal < -60 && value.startLocation.x > UIScreen.main.bounds.width - 40 {
+                        // Left swipe from right edge → settings
+                        withAnimation { showSettings = true }
+                    }
+                }
+        )
         .task {
             await chatVM.loadProviders()
             await chatVM.loadConversations()
@@ -127,16 +142,8 @@ struct HUDStatusBar: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            // Left: Menu + Logo + Status
+            // Left: Logo + Status
             HStack(spacing: 10) {
-                Button {
-                    showConversations.toggle()
-                } label: {
-                    Image(systemName: "line.3.horizontal")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.jarvisBlue)
-                }
-
                 HStack(spacing: 6) {
                     Circle()
                         .fill(isStreaming ? Color.jarvisBlue : Color.jarvisOnline)
@@ -243,19 +250,7 @@ struct HUDStatusBar: View {
                 }
                 .fixedSize()
 
-                // Security badge
-                Image(systemName: "lock.shield.fill")
-                    .font(.system(size: 8))
-                    .foregroundColor(.jarvisOnline.opacity(0.4))
-
-                // Settings
-                Button {
-                    showSettings.toggle()
-                } label: {
-                    Image(systemName: "gearshape")
-                        .font(.system(size: 13))
-                        .foregroundColor(.jarvisBlue.opacity(0.6))
-                }
+                // Security badge and settings removed — use edge swipes instead
             }
         }
         .padding(.horizontal, 14)
