@@ -210,71 +210,53 @@ async def _check_upcoming_travel(owner_id: str) -> list[dict[str, Any]]:
 async def _check_missed_communications() -> list[dict[str, Any]]:
     """Check for missed FaceTime calls and unread iMessages from important contacts.
 
-    Uses the Mac Mini agent to run AppleScript queries against
-    Messages and FaceTime on the Mac Mini.
+    Reads data from Redis keys populated by the MacBook agent
+    (jarvis_macbook_agent.py running on Mr. Stark's MacBook).
+    The Mac Mini doesn't have Mr. Stark's Apple Account signed in,
+    so we rely on the MacBook agent to report this data instead.
     """
-    from app.config import settings
-    from app.integrations.mac_mini import remote_exec, is_configured
+    from app.db.redis import get_redis_client
 
     alerts: list[dict[str, Any]] = []
+    redis = await get_redis_client()
 
-    if not is_configured():
-        logger.debug("Mac Mini not configured — skipping communications check")
-        return alerts
-
-    # Check for recent missed FaceTime calls via CallServices database
+    # Check for missed calls reported by the MacBook agent
     try:
-        result = await remote_exec(
-            command=(
-                'sqlite3 ~/Library/Application\\ Support/CallHistoryDB/CallHistory.storedata '
-                '"SELECT ZADDRESS, ZDURATION, datetime(ZDATE + 978307200, \'unixepoch\', \'localtime\') '
-                'FROM ZCALLRECORD WHERE ZANSWERED = 0 AND ZORIGINATED = 0 '
-                'AND ZDATE > (strftime(\'%%s\', \'now\') - 978307200 - 86400) '
-                'ORDER BY ZDATE DESC LIMIT 10"'
-            ),
-            timeout=15,
-        )
-
-        if result.get("success") and result.get("stdout", "").strip():
-            lines = result["stdout"].strip().split("\n")
-            for line in lines:
-                parts = line.split("|")
-                if len(parts) >= 3:
-                    caller = parts[0].strip()
-                    call_time = parts[2].strip()
-                    display_name = _resolve_contact_name(caller)
-                    alerts.append({
-                        "message": f"Missed call from {display_name} at {call_time}.",
-                        "priority": _PRIORITY_MEDIUM,
-                        "category": "missed_call",
-                        "contact": caller,
-                        "time": call_time,
-                    })
+        raw_calls = await redis.cache_get("jarvis:macbook:missed_calls")
+        if raw_calls:
+            calls_data = json.loads(raw_calls)
+            for call in calls_data if isinstance(calls_data, list) else [calls_data]:
+                caller = call.get("caller", "Unknown")
+                call_time = call.get("time", "")
+                display_name = _resolve_contact_name(caller)
+                alerts.append({
+                    "message": f"Missed call from {display_name} at {call_time}.",
+                    "priority": _PRIORITY_MEDIUM,
+                    "category": "missed_call",
+                    "contact": caller,
+                    "time": call_time,
+                })
     except Exception as exc:
         logger.debug("Missed calls check failed: %s", exc)
 
-    # Check for unread iMessages via AppleScript
+    # Check for unread messages reported by the MacBook agent
     try:
-        result = await remote_exec(
-            command=(
-                'sqlite3 ~/Library/Messages/chat.db '
-                '"SELECT h.id, m.text, datetime(m.date/1000000000 + 978307200, \'unixepoch\', \'localtime\') '
-                'FROM message m JOIN handle h ON m.handle_id = h.ROWID '
-                'WHERE m.is_read = 0 AND m.is_from_me = 0 '
-                'AND m.date > ((strftime(\'%%s\', \'now\') - 978307200) * 1000000000 - 86400000000000) '
-                'ORDER BY m.date DESC LIMIT 10"'
-            ),
-            timeout=15,
-        )
-
-        if result.get("success") and result.get("stdout", "").strip():
-            lines = result["stdout"].strip().split("\n")
+        raw_messages = await redis.cache_get("jarvis:macbook:unread_messages")
+        if raw_messages:
+            msg_data = json.loads(raw_messages)
             unread_by_contact: dict[str, int] = {}
-            for line in lines:
-                parts = line.split("|")
-                if parts:
-                    contact = parts[0].strip()
-                    unread_by_contact[contact] = unread_by_contact.get(contact, 0) + 1
+            if isinstance(msg_data, list):
+                for entry in msg_data:
+                    contact = entry.get("contact", "Unknown")
+                    unread_by_contact[contact] = (
+                        unread_by_contact.get(contact, 0) + entry.get("count", 1)
+                    )
+            elif isinstance(msg_data, dict):
+                # Simple format: {"total": N} or {"contact": ..., "count": N}
+                if "contact" in msg_data:
+                    unread_by_contact[msg_data["contact"]] = msg_data.get("count", 1)
+                elif "total" in msg_data:
+                    unread_by_contact["Unknown"] = msg_data["total"]
 
             for contact, count in unread_by_contact.items():
                 display_name = _resolve_contact_name(contact)
