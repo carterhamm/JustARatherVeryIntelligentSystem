@@ -424,28 +424,11 @@ async def _generate_proactive_alerts() -> list[dict[str, Any]]:
         logger.debug("Calendar alert check failed", exc_info=True)
 
     # ── Eureka insight from learning system ───────────────────────
-    try:
-        redis = await get_redis_client()
-        last_cycle_raw = await redis.cache_get("jarvis:learning:last_cycle")
-        if last_cycle_raw:
-            last_cycle = json.loads(last_cycle_raw)
-            dialogue_phase = last_cycle.get("phases", {}).get("dialogue", {})
-            insights_count = dialogue_phase.get("insights_found", 0)
-            if insights_count > 0:
-                topic = dialogue_phase.get("topic", "recent research")
-                msg = (
-                    f"Learning insight: {insights_count} new "
-                    f"{'insight' if insights_count == 1 else 'insights'} "
-                    f"discovered about {topic} during internal dialogue."
-                )
-                if msg not in already_sent:
-                    alerts.append({
-                        "message": msg,
-                        "priority": 9,
-                        "category": "eureka",
-                    })
-    except Exception:
-        logger.debug("Eureka alert check failed", exc_info=True)
+    # ONLY alert for genuine eureka-category insights, NOT routine findings.
+    # Mr. Stark's definition: eureka = paradigm-shifting physics discovery.
+    # Routine insights (even good ones) should NOT generate notifications.
+    # The dialogue system's _notify_findings already handles eureka alerts,
+    # so this section is intentionally empty to avoid duplicate notifications.
 
     # ── System health ────────────────────────────────────────────
     try:
