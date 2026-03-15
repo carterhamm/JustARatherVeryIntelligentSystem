@@ -1413,74 +1413,66 @@ export default function MapPage() {
       } catch {}
       if (!coord) return;
 
-      // Search for nearby POIs at the tap location
-      const search = mapSearchObjRef.current || new mk.Search({ language: 'en' });
-      const searchRegion = new mk.CoordinateRegion(
-        new mk.Coordinate(coord.latitude, coord.longitude),
-        new mk.CoordinateSpan(0.002, 0.002),
-      );
-      search.search(
-        { coordinate: new mk.Coordinate(coord.latitude, coord.longitude), region: searchRegion },
-        (searchErr: any, searchData: any) => {
-          if (searchErr || !searchData?.places?.length) {
-            // Fallback: reverse geocode
-            const geocoder = new mk.Geocoder({ language: 'en' });
-            geocoder.reverseLookup(new mk.Coordinate(coord.latitude, coord.longitude), (geoErr: any, geoData: any) => {
-              if (geoErr || !geoData?.results?.length) return;
-              const r = geoData.results[0];
-              if (!r.name) return;
+      // Reverse geocode first to get a name, then search for POI details
+      const geocoder = new mk.Geocoder({ language: 'en' });
+      geocoder.reverseLookup(new mk.Coordinate(coord.latitude, coord.longitude), (geoErr: any, geoData: any) => {
+        if (geoErr || !geoData?.results?.length) return;
+        const geoResult = geoData.results[0];
+        const placeName = geoResult.name || '';
+        if (!placeName) return;
 
-              // Add a pin
-              try {
-                if (searchPinRef.current) map.removeAnnotation(searchPinRef.current);
-                const pin = new mk.MarkerAnnotation(new mk.Coordinate(coord.latitude, coord.longitude), { title: r.name, color: '#00d4ff' });
-                map.addAnnotation(pin);
-                searchPinRef.current = pin;
-              } catch {}
+        // Now search for the place by name to get full POI details
+        const search = mapSearchObjRef.current || new mk.Search({ language: 'en' });
+        const searchRegion = new mk.CoordinateRegion(
+          new mk.Coordinate(coord.latitude, coord.longitude),
+          new mk.CoordinateSpan(0.01, 0.01),
+        );
+        search.search(placeName, (searchErr: any, searchData: any) => {
+          // Determine best result
+          let name = placeName;
+          let lat = coord.latitude;
+          let lng = coord.longitude;
+          let address = [geoResult.name, geoResult.locality, geoResult.administrativeArea, geoResult.postCode].filter(Boolean).join(', ');
+          let phone = '';
+          let url = '';
+          let category = '';
 
-              setSelectedPlace({
-                name: r.name,
-                latitude: coord.latitude,
-                longitude: coord.longitude,
-                formattedAddress: [r.name, r.locality, r.administrativeArea, r.postCode].filter(Boolean).join(', '),
-              });
-            });
-            return;
+          if (!searchErr && searchData?.places?.length) {
+            // Find closest POI to tap
+            let bestPlace = searchData.places[0];
+            let bestDist = Infinity;
+            for (const p of searchData.places) {
+              const dist = Math.hypot(
+                p.coordinate.latitude - coord.latitude,
+                p.coordinate.longitude - coord.longitude,
+              );
+              if (dist < bestDist) { bestDist = dist; bestPlace = p; }
+            }
+            if (bestDist < 0.01) {
+              name = bestPlace.name || placeName;
+              lat = bestPlace.coordinate.latitude;
+              lng = bestPlace.coordinate.longitude;
+              address = bestPlace.formattedAddress || address;
+              phone = bestPlace.telephone || '';
+              url = bestPlace.urls?.[0] || '';
+              category = formatPOICategory(bestPlace.pointOfInterestCategory) || '';
+            }
           }
 
-          // Find closest POI to tap
-          let bestPlace = searchData.places[0];
-          let bestDist = Infinity;
-          for (const p of searchData.places) {
-            const dist = Math.hypot(
-              p.coordinate.latitude - coord.latitude,
-              p.coordinate.longitude - coord.longitude,
-            );
-            if (dist < bestDist) { bestDist = dist; bestPlace = p; }
-          }
-
-          // Add a pin at the POI
+          // Add a pin
           try {
             if (searchPinRef.current) map.removeAnnotation(searchPinRef.current);
             const pin = new mk.MarkerAnnotation(
-              new mk.Coordinate(bestPlace.coordinate.latitude, bestPlace.coordinate.longitude),
-              { title: bestPlace.name, color: '#00d4ff' },
+              new mk.Coordinate(lat, lng),
+              { title: name, color: '#00d4ff' },
             );
             map.addAnnotation(pin);
             searchPinRef.current = pin;
           } catch {}
 
-          setSelectedPlace({
-            name: bestPlace.name || 'Unknown Place',
-            latitude: bestPlace.coordinate.latitude,
-            longitude: bestPlace.coordinate.longitude,
-            formattedAddress: bestPlace.formattedAddress || '',
-            phone: bestPlace.telephone || '',
-            url: bestPlace.urls?.[0] || '',
-            category: formatPOICategory(bestPlace.pointOfInterestCategory) || '',
-          });
-        },
-      );
+          setSelectedPlace({ name, latitude: lat, longitude: lng, formattedAddress: address, phone, url, category });
+        }, { region: searchRegion });
+      });
     };
 
     map.addEventListener('single-tap', handler);
@@ -1836,6 +1828,11 @@ export default function MapPage() {
       }
 
       if (e.key !== 'Escape') return;
+      // If in full panel contact/landmark view, go back to rows first
+      if (leftPanelView !== 'rows') {
+        setLeftPanelView('rows');
+        return;
+      }
       if (selectedPlace) {
         setSelectedPlace(null);
         clearSearchPin();
