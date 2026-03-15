@@ -443,17 +443,15 @@ struct SettingsView: View {
             healthStatus = .unavailable
             return
         }
-        let store = HKHealthStore()
-        let stepType = HKQuantityType.quantityType(forIdentifier: .stepCount)!
-        let status = store.authorizationStatus(for: stepType)
-        switch status {
-        case .sharingAuthorized:
+        // HealthKit intentionally hides READ authorization status for privacy.
+        // authorizationStatus(for:) only checks WRITE/share status.
+        // Since we only request read access, we can't know for sure.
+        // Check if HealthSyncService is running as a proxy for "connected".
+        let service = HealthSyncService.shared
+        if service.isRunning {
             healthStatus = .authorized
-        case .sharingDenied:
-            healthStatus = .denied
-        case .notDetermined:
-            healthStatus = .unknown
-        @unknown default:
+        } else {
+            // Try a test query — if it returns data, we're authorized
             healthStatus = .unknown
         }
     }

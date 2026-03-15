@@ -104,6 +104,7 @@ struct HUDStatusBar: View {
         switch provider {
         case "claude": return Color(hex: "ff8c00")
         case "gemini": return Color(hex: "4285F4")
+        case "stark_protocol": return Color(hex: "39ff14")
         default: return .jarvisBlue
         }
     }

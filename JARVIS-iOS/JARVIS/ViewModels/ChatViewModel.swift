@@ -99,10 +99,12 @@ class ChatViewModel: ObservableObject {
             }
         } catch {
             self.error = error.localizedDescription
-            // Fallback: show Gemini as default if API fails
+            // Fallback: show all providers if API fails
             if availableProviders.isEmpty {
                 availableProviders = [
-                    ProviderResponse(id: "gemini", available: true, reason: "default")
+                    ProviderResponse(id: "gemini", available: true, reason: "default"),
+                    ProviderResponse(id: "claude", available: true, reason: "fallback"),
+                    ProviderResponse(id: "stark_protocol", available: true, reason: "fallback"),
                 ]
                 selectedProvider = "gemini"
             }
@@ -190,7 +192,13 @@ class ChatViewModel: ObservableObject {
                 }
             }
         } catch {
+            print("[JARVIS] Stream error: \(error)")
             self.error = error.localizedDescription
+            // If stream failed, show error in the assistant message
+            if let idx = messages.lastIndex(where: { $0.id == assistantId }),
+               messages[idx].content.isEmpty {
+                messages[idx].content = "Connection error. Please try again."
+            }
         }
 
         if let idx = messages.lastIndex(where: { $0.id == assistantId }) {

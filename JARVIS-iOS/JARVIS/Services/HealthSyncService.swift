@@ -42,7 +42,7 @@ actor HealthSyncService {
     // MARK: - State
 
     private var debounceTimers: [String: Task<Void, Never>] = [:]
-    private var isRunning = false
+    private(set) var isRunning = false
     private var deviceID: String = "unknown"
 
     // MARK: - Authorization

@@ -6,7 +6,10 @@ struct MessageBubbleView: View {
     var isUser: Bool { message.role == .user }
 
     var body: some View {
-        if message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !message.isStreaming {
+        if message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && !message.isStreaming
+            && message.role == .user {
+            // Only hide empty USER messages — assistant messages may be loading
             EmptyView()
         } else {
             HStack(alignment: .top, spacing: 8) {
