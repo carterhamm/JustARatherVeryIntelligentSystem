@@ -34,6 +34,7 @@
 		B8C7F9F7F3CCF4EA527A4972 /* JARVISApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EEE19D2BF51B9712E900275 /* JARVISApp.swift */; };
 		BB2C89BFB04E54F07380940D /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F55A50A51BD792770F36AE43 /* LoginView.swift */; };
 		E0F0C766AEC4B188CA81B16D /* VoiceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36BA9152D43204B6A619BD45 /* VoiceService.swift */; };
+		E954F1AA2764A5BDC372570C /* AtlasMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6A3F7F4E918FCF9DD16D41D /* AtlasMapView.swift */; };
 		ED36D820CBB05421D318B538 /* JARVISTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 411B0AC00AAFC929E902A767 /* JARVISTheme.swift */; };
 		F44C02F690A029629227E9B5 /* ConversationListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9377103CACA02555884EA1E6 /* ConversationListView.swift */; };
 		FA1779FE2E05C62AC3595F60 /* WatchVoiceManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C5D5161A0ACBEA13FDE591C /* WatchVoiceManager.swift */; };
@@ -68,6 +69,7 @@
 		C7BC74A5E793248AC8DF3A7A /* JARVISEnergyOrb.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JARVISEnergyOrb.swift; sourceTree = "<group>"; };
 		CD039DCF61C8F20AB5CD41AC /* MessageBubbleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageBubbleView.swift; sourceTree = "<group>"; };
 		CDF88FBCBCF62B1D565F4590 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		D6A3F7F4E918FCF9DD16D41D /* AtlasMapView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AtlasMapView.swift; sourceTree = "<group>"; };
 		D7AE01E6649045BD1D4A9F5A /* KeychainService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainService.swift; sourceTree = "<group>"; };
 		DA4EA3083D6EB08FB251D809 /* MainView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainView.swift; sourceTree = "<group>"; };
 		DBE6CDFF2E6B3AEAFD720F34 /* JARVIS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = JARVIS.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -123,6 +125,7 @@
 				B6DB41DF25215B05062CE032 /* HUD */,
 				8BCA1664F72AB40EDAE03DB5 /* Settings */,
 				E1F2EAB2F56A62168B429EF9 /* Voice */,
+				7FB1E61183E063C1326F6686 /* Atlas */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -134,6 +137,15 @@
 				E95CF9676072BE2DAE5495EC /* JARVISWatch Watch App.app */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		7FB1E61183E063C1326F6686 /* Atlas */ = {
+			isa = PBXGroup;
+			children = (
+				D6A3F7F4E918FCF9DD16D41D /* AtlasMapView.swift */,
+			);
+			name = Atlas;
+			path = Atlas;
 			sourceTree = "<group>";
 		};
 		8498079229199EDB1A15E003 /* JARVISWatch */ = {
@@ -288,8 +300,6 @@
 			dependencies = (
 			);
 			name = JARVIS;
-			packageProductDependencies = (
-			);
 			productName = JARVIS;
 			productReference = DBE6CDFF2E6B3AEAFD720F34 /* JARVIS.app */;
 			productType = "com.apple.product-type.application";
@@ -306,8 +316,6 @@
 			dependencies = (
 			);
 			name = "JARVISWatch Watch App";
-			packageProductDependencies = (
-			);
 			productName = "JARVISWatch Watch App";
 			productReference = E95CF9676072BE2DAE5495EC /* JARVISWatch Watch App.app */;
 			productType = "com.apple.product-type.application";
@@ -397,6 +405,7 @@
 				B6B6C0994BDB3571B1994C39 /* TOTPVerifyView.swift in Sources */,
 				FD80A2D76DD27A8DE7E83C61 /* VoiceModeView.swift in Sources */,
 				E0F0C766AEC4B188CA81B16D /* VoiceService.swift in Sources */,
+				E954F1AA2764A5BDC372570C /* AtlasMapView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
