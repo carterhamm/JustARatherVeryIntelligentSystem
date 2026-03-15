@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { usePanelOverlay } from '@/stores/uiStore';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Lock } from 'lucide-react';
 import { useSettingsStore, type ModelProvider } from '@/stores/settingsStore';
@@ -22,12 +23,14 @@ const providers: ProviderDef[] = [
 ];
 
 export default function ModelPickerFloat() {
-  const [isOpen, setIsOpen] = useState(false);
+  const { isOpen: isOpenOverlay, toggle: toggleOverlay, close: closeOverlay } = usePanelOverlay('model_picker', 'panel');
+  const isOpen = isOpenOverlay;
+  const setIsOpen = (open: boolean) => { if (open) toggleOverlay(); else closeOverlay(); };
   const { modelPreference, setModelPreference } = useSettingsStore();
   const [available, setAvailable] = useState<Set<string>>(new Set(providers.map((p) => p.id)));
 
   useEffect(() => {
-    const handler = () => setIsOpen((prev) => !prev);
+    const handler = () => toggleOverlay();
     window.addEventListener('jarvis-model-toggle', handler);
     return () => window.removeEventListener('jarvis-model-toggle', handler);
   }, []);

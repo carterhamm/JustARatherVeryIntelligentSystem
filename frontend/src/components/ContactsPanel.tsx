@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { usePanelOverlay } from '@/stores/uiStore';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   X,
@@ -474,7 +475,9 @@ function FieldGroup({ label, icon, children }: { label: string; icon: React.Reac
 // ── Main Panel ──────────────────────────────────────────────────────────
 
 export default function ContactsPanel() {
-  const [isOpen, setIsOpen] = useState(false);
+  const { isOpen: isOpenOverlay, toggle: toggleOverlay, close: closeOverlay } = usePanelOverlay('contacts', 'side_menu');
+  const isOpen = isOpenOverlay;
+  const setIsOpen = (open: boolean) => { if (open) toggleOverlay(); else closeOverlay(); };
   const [view, setView] = useState<PanelView>('list');
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
@@ -491,7 +494,7 @@ export default function ContactsPanel() {
 
   // Toggle listener
   useEffect(() => {
-    const handler = () => setIsOpen((prev) => !prev);
+    const handler = () => toggleOverlay();
     window.addEventListener('jarvis-contacts-toggle', handler);
     return () => window.removeEventListener('jarvis-contacts-toggle', handler);
   }, []);

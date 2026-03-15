@@ -4,7 +4,7 @@ import { X, LogOut, Volume2, VolumeX, Clock, Shield, Loader2, Cpu, Settings, Inf
 import { QRCodeSVG } from 'qrcode.react';
 import { useAuth } from '@/hooks/useAuth';
 import { useSettingsStore, type ModelProvider } from '@/stores/settingsStore';
-import { useUIStore } from '@/stores/uiStore';
+import { useUIStore, usePanelOverlay } from '@/stores/uiStore';
 import { api } from '@/services/api';
 import clsx from 'clsx';
 
@@ -78,7 +78,9 @@ function InfoCard({ label, value }: { label: string; value: string }) {
 type TOTPStep = 'idle' | 'loading' | 'setup' | 'confirm' | 'disabling';
 
 export default function SettingsPanel() {
-  const [isOpen, setIsOpen] = useState(false);
+  const { isOpen: isOpenOverlay, toggle: toggleOverlay, close: closeOverlay } = usePanelOverlay('settings', 'panel');
+  const isOpen = isOpenOverlay;
+  const setIsOpen = (open: boolean) => { if (open) toggleOverlay(); else closeOverlay(); };
   const [activeTab, setActiveTab] = useState<TabId>('general');
   const { user, logout, getTOTPStatus, setupTOTP, enableTOTP, disableTOTP } = useAuth();
   const { voiceEnabled, setVoiceEnabled, use24HourTime, setUse24HourTime, modelPreference, setModelPreference } = useSettingsStore();
@@ -103,7 +105,7 @@ export default function SettingsPanel() {
       if (customEvent.detail?.open !== undefined) {
         setIsOpen(customEvent.detail.open);
       } else {
-        setIsOpen((prev) => !prev);
+        toggleOverlay();
       }
     };
     window.addEventListener('jarvis-settings-toggle', handler);

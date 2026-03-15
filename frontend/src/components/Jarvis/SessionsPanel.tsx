@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { usePanelOverlay } from '@/stores/uiStore';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Plus, MessageSquare, Trash2, X, Smartphone, Globe, Terminal, Phone } from 'lucide-react';
 import { useChatStore, type Conversation, type Message } from '@/stores/chatStore';
@@ -20,7 +21,8 @@ function formatTimestamp(dateStr: string): string {
 }
 
 export default function SessionsPanel() {
-  const [open, setOpen] = useState(false);
+  const { isOpen: open, toggle: togglePanel, close: closePanel } = usePanelOverlay('sessions', 'side_menu');
+  const setOpen = (v: boolean) => { if (v) togglePanel(); else closePanel(); };
   const [isCreating, setIsCreating] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
@@ -36,7 +38,7 @@ export default function SessionsPanel() {
 
   // Listen for toggle event
   useEffect(() => {
-    const handler = () => setOpen((prev) => !prev);
+    const handler = () => togglePanel();
     window.addEventListener('jarvis-sessions-toggle', handler);
     return () => window.removeEventListener('jarvis-sessions-toggle', handler);
   }, []);
