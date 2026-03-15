@@ -98,6 +98,16 @@ struct AtlasMapView: View {
     @State private var geocodedCount = 0
     @State private var totalToGeocode = 0
 
+    // Group contacts by coordinate (same address → single pin with count)
+    private var contactGroups: [(key: String, contacts: [AtlasContact])] {
+        var groups: [String: [AtlasContact]] = [:]
+        for contact in contacts {
+            let key = "\(String(format: "%.4f", contact.coordinate.latitude)),\(String(format: "%.4f", contact.coordinate.longitude))"
+            groups[key, default: []].append(contact)
+        }
+        return groups.map { (key: $0.key, contacts: $0.value) }
+    }
+
     private var searchResultAnnotations: [SearchResultAnnotation] {
         searchResults.compactMap { item in
             guard let location = item.placemark.location else { return nil }
@@ -119,12 +129,13 @@ struct AtlasMapView: View {
                     selectedContact = contacts.first { $0.id == newId }
                 }
             )) {
-                // Contact markers
-                ForEach(contacts) { contact in
-                    Annotation(contact.name, coordinate: contact.coordinate) {
-                        contactPin(for: contact)
+                // Contact markers (grouped by location)
+                ForEach(contactGroups, id: \.key) { group in
+                    let displayContact = group.contacts.first(where: { $0.id == selectedContact?.id }) ?? group.contacts[0]
+                    Annotation(displayContact.name, coordinate: displayContact.coordinate) {
+                        contactGroupPin(contacts: group.contacts, displayContact: displayContact)
                     }
-                    .tag(contact.id)
+                    .tag(displayContact.id)
                 }
 
                 // Search result markers
@@ -328,20 +339,28 @@ struct AtlasMapView: View {
 
     // Contact count removed per design request
 
-    // MARK: - Contact Pin
+    // MARK: - Contact Group Pin (handles multiple contacts at same address)
 
-    private func contactPin(for contact: AtlasContact) -> some View {
+    private func contactGroupPin(contacts: [AtlasContact], displayContact: AtlasContact) -> some View {
         Button {
-            selectedContact = contact
+            // Cycle through contacts at this location
+            if let current = selectedContact,
+               let currentIdx = contacts.firstIndex(where: { $0.id == current.id }) {
+                let nextIdx = (currentIdx + 1) % contacts.count
+                selectedContact = contacts[nextIdx]
+            } else {
+                selectedContact = displayContact
+            }
             selectedSearchResult = nil
             UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
             withAnimation(.easeInOut(duration: 0.5)) {
                 position = .region(MKCoordinateRegion(
-                    center: contact.coordinate,
+                    center: displayContact.coordinate,
                     span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
                 ))
             }
         } label: {
+            let contact = contacts.first(where: { $0.id == selectedContact?.id }) ?? displayContact
             ZStack {
                 HexCornerShape(cutSize: 5)
                     .fill(Color.jarvisDeepDark.opacity(0.85))
@@ -369,6 +388,17 @@ struct AtlasMapView: View {
                 }
             }
             .shadow(color: .jarvisBlue.opacity(selectedContact?.id == contact.id ? 0.4 : 0.15), radius: 6)
+            .overlay(alignment: .topTrailing) {
+                if contacts.count > 1 {
+                    Text("\(contacts.count)")
+                        .font(.system(size: 8, weight: .bold, design: .monospaced))
+                        .foregroundColor(.white)
+                        .frame(width: 16, height: 16)
+                        .background(Color.jarvisBlue)
+                        .clipShape(Circle())
+                        .offset(x: 6, y: -6)
+                }
+            }
         }
     }
 
