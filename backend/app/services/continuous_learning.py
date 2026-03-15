@@ -491,8 +491,7 @@ async def _run_dialogue_on_latest() -> dict[str, Any]:
     return await run_dialogue_session(
         topic=best_finding.get("label", "Unknown"),
         summary=best_finding.get("summary", ""),
-        rounds=3,
-        use_local_llm=True,
+        rounds=10,
     )
 
 
