@@ -66,7 +66,9 @@ actor AuthService {
             return response
         }
 
-        await api.setTokens(access: response.accessToken, refresh: response.refreshToken)
+        if let access = response.accessToken, let refresh = response.refreshToken {
+            await api.setTokens(access: access, refresh: refresh)
+        }
 
         if let user = response.user {
             try? await KeychainService.shared.save(user.id, for: .userId)
@@ -94,7 +96,9 @@ actor AuthService {
             authenticated: false
         )
 
-        await api.setTokens(access: response.accessToken, refresh: response.refreshToken)
+        if let access = response.accessToken, let refresh = response.refreshToken {
+            await api.setTokens(access: access, refresh: refresh)
+        }
 
         if let user = response.user {
             try? await KeychainService.shared.save(user.id, for: .userId)

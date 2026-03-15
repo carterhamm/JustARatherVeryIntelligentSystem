@@ -3,11 +3,11 @@ import Foundation
 // MARK: - Auth Models
 
 struct AuthResponse: Codable {
-    let accessToken: String
-    let refreshToken: String
-    let tokenType: String
+    let accessToken: String?
+    let refreshToken: String?
+    let tokenType: String?
     let user: UserResponse?
-    // TOTP flow
+    // TOTP flow — when needs_totp is true, access/refresh tokens are absent
     let needsTotp: Bool?
     let totpToken: String?
 

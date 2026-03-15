@@ -1142,6 +1142,8 @@ export default function MapPage() {
   const annotationJustSelectedRef = useRef(false);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const mapSearchObjRef = useRef<any>(null);
+  const selectedContactIdRef = useRef<string | null>(null);
+  const userLocationRef = useRef<{ lat: number; lng: number } | null>(null);
 
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [geocodedContacts, setGeocodedContacts] = useState<GeocodedContact[]>([]);
@@ -1162,6 +1164,11 @@ export default function MapPage() {
   const [selectedPlace, setSelectedPlace] = useState<PlaceDetail | null>(null);
   const [leftPanelView, setLeftPanelView] = useState<'rows' | 'contacts' | 'landmarks'>('rows');
   const [contactFilter, setContactFilter] = useState('');
+
+  // Keep ref in sync with state for use in annotation closures
+  useEffect(() => {
+    selectedContactIdRef.current = selectedContactId;
+  }, [selectedContactId]);
 
   // ---- Parallel init: MapKit + API + geocoding all at once ----
   useEffect(() => {
@@ -1487,9 +1494,9 @@ export default function MapPage() {
         annotationJustSelectedRef.current = true;
         setTimeout(() => { annotationJustSelectedRef.current = false; }, 300);
 
-        // If multiple contacts at this location, cycle through them
+        // If multiple contacts at this location, cycle through them (infinite loop)
         const groupContacts = locationGroups.get(locKey) || [c];
-        const currentIdx = groupContacts.findIndex((gc) => gc.id === selectedContactId);
+        const currentIdx = groupContacts.findIndex((gc) => gc.id === selectedContactIdRef.current);
         const nextContact = groupContacts[(currentIdx + 1) % groupContacts.length];
 
         setSelectedContactId(nextContact.id);
@@ -1685,9 +1692,65 @@ export default function MapPage() {
     };
   }, [mapSearchQuery]);
 
-  // ---- Keyboard shortcuts: ESC + CMD+K ----
+  // ---- Fly to user's current location (browser geolocation) ----
+  const flyToUserLocation = useCallback(() => {
+    const map = mapRef.current;
+    const mk = window.mapkit;
+    if (!map || !mk) return;
+
+    // If we already have a cached position, fly there immediately
+    if (userLocationRef.current) {
+      const { lat, lng } = userLocationRef.current;
+      const region = new mk.CoordinateRegion(
+        new mk.Coordinate(lat, lng),
+        new mk.CoordinateSpan(0.01, 0.01),
+      );
+      map.setRegionAnimated(region, true);
+    }
+
+    // Always request fresh position
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const lat = position.coords.latitude;
+          const lng = position.coords.longitude;
+          userLocationRef.current = { lat, lng };
+          const region = new mk.CoordinateRegion(
+            new mk.Coordinate(lat, lng),
+            new mk.CoordinateSpan(0.01, 0.01),
+          );
+          map.setRegionAnimated(region, true);
+        },
+        (err) => {
+          console.warn('[ATLAS] Geolocation error:', err.message);
+          // Fallback: if no cached location, fly to default (Orem, UT)
+          if (!userLocationRef.current) {
+            const region = new mk.CoordinateRegion(
+              new mk.Coordinate(40.29, -111.69),
+              new mk.CoordinateSpan(0.5, 0.5),
+            );
+            map.setRegionAnimated(region, true);
+          }
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 },
+      );
+    } else {
+      // No geolocation support — fly to default
+      const region = new mk.CoordinateRegion(
+        new mk.Coordinate(40.29, -111.69),
+        new mk.CoordinateSpan(0.5, 0.5),
+      );
+      map.setRegionAnimated(region, true);
+    }
+  }, []);
+
+  // ---- Keyboard shortcuts: ESC + CMD+K + D ----
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      // Don't intercept if user is typing in an input/textarea
+      const tag = (e.target as HTMLElement)?.tagName;
+      const isTyping = tag === 'INPUT' || tag === 'TEXTAREA';
+
       // CMD+K focuses search bar
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault();
@@ -1695,6 +1758,14 @@ export default function MapPage() {
         input?.focus();
         return;
       }
+
+      // D key — fly to current/device location
+      if ((e.key === 'd' || e.key === 'D') && !isTyping && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        e.preventDefault();
+        flyToUserLocation();
+        return;
+      }
+
       if (e.key !== 'Escape') return;
       if (selectedPlace) {
         setSelectedPlace(null);
@@ -1712,7 +1783,7 @@ export default function MapPage() {
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, [selectedPlace, mapSearchQuery, searchSuggestions]);
+  }, [selectedPlace, mapSearchQuery, searchSuggestions, flyToUserLocation]);
 
   // ---- Helper: region from contacts ----
   function regionFromContacts(contacts: GeocodedContact[]) {
@@ -1966,18 +2037,18 @@ export default function MapPage() {
           background: 'linear-gradient(to bottom, rgba(5, 5, 16, 0.95) 0%, rgba(5, 5, 16, 0.6) 40%, transparent 100%)',
         }}
       >
-        <div className="flex items-center gap-3 px-4 h-14 pointer-events-auto">
-          {/* Back button */}
+        <div className="flex items-center px-4 h-14 pointer-events-auto relative">
+          {/* Back button — pinned left */}
           <button
             onClick={() => navigate('/')}
-            className="h-8 px-2.5 flex items-center gap-1.5 transition-colors hover:bg-white/[0.05]"
+            className="h-8 px-2.5 flex items-center gap-1.5 transition-colors hover:bg-white/[0.05] flex-shrink-0"
             style={{ clipPath: 'polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px))' }}
           >
             <ArrowLeft size={15} className="text-jarvis-blue/50" />
           </button>
 
-          {/* Search bar */}
-          <div className="flex-1 max-w-xl relative">
+          {/* Search bar — centered absolutely */}
+          <div className="absolute left-1/2 -translate-x-1/2 w-full max-w-xl px-16" style={{ zIndex: 1 }}>
             <div className="relative">
               <Search
                 size={13}
@@ -2048,12 +2119,15 @@ export default function MapPage() {
             )}
           </div>
 
-          {/* Controls */}
-          <div className="flex items-center gap-1.5">
+          {/* Spacer to push controls to the right */}
+          <div className="flex-1" />
+
+          {/* Controls — pinned right */}
+          <div className="flex items-center gap-1.5 flex-shrink-0" style={{ zIndex: 2 }}>
             <button
-              onClick={resetView}
+              onClick={flyToUserLocation}
               className="w-8 h-8 flex items-center justify-center hover:bg-white/[0.05] transition-colors"
-              title="Reset view"
+              title="My location (D)"
               style={{ clipPath: 'polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px))' }}
             >
               <Crosshair size={14} className="text-jarvis-blue/50" />
@@ -2180,7 +2254,7 @@ export default function MapPage() {
         style={{
           top: 68,
           left: 16,
-          width: leftPanelView === 'rows' ? 380 : 360,
+          width: 380,
           maxWidth: 'calc(100vw - 32px)',
           ...GLASS_PANEL,
         }}

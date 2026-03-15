@@ -71,8 +71,15 @@ class AuthViewModel: ObservableObject {
 
     // Step 2: Submit TOTP and advance to passkey
     func submitTOTP() {
-        guard totpCode.count == 6 else { return }
-        pendingTotpCode = totpCode
+        let trimmed = totpCode.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Must be exactly 6 digits
+        guard trimmed.count == 6,
+              trimmed.allSatisfy({ $0.isNumber }) else {
+            error = "Enter a valid 6-digit code"
+            return
+        }
+        error = nil
+        pendingTotpCode = trimmed
         withAnimation(.easeInOut(duration: 0.3)) {
             authStep = .authenticate
         }
