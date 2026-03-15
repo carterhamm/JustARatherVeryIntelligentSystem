@@ -8,5 +8,9 @@
 		<string>applinks:app.malibupoint.dev</string>
 		<string>applinks:malibupoint.dev</string>
 	</array>
+	<key>com.apple.developer.healthkit</key>
+	<true/>
+	<key>com.apple.developer.healthkit.access</key>
+	<array/>
 </dict>
 </plist>

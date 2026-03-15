@@ -29,10 +29,10 @@ enum JARVISConfig {
     }
 
     enum Chat {
-        static var providers: String { "\(apiBaseURL)/chat/providers" }
-        static var conversations: String { "\(apiBaseURL)/chat/conversations" }
-        static var chat: String { "\(apiBaseURL)/chat/chat" }
-        static var stream: String { "\(apiBaseURL)/chat/chat/stream" }
+        static var providers: String { "\(apiBaseURL)/providers" }
+        static var conversations: String { "\(apiBaseURL)/conversations" }
+        static var chat: String { "\(apiBaseURL)/chat" }
+        static var stream: String { "\(apiBaseURL)/chat/stream" }
         static func conversation(_ id: String) -> String { "\(conversations)/\(id)" }
         static func messages(_ convId: String) -> String { "\(conversations)/\(convId)/messages" }
     }

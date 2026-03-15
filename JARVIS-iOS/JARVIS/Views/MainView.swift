@@ -177,9 +177,8 @@ struct HUDStatusBar: View {
                         .lineLimit(1)
                         .fixedSize(horizontal: true, vertical: false)
                 }
-                .padding(.horizontal, 10)
+                .padding(.horizontal, 6)
                 .padding(.vertical, 3)
-                .frame(minWidth: 80)
                 .background {
                     HexCornerShape(cutSize: 4)
                         .fill(providerColor.opacity(0.06))
@@ -211,10 +210,13 @@ struct HUDStatusBar: View {
                     Text(date)
                         .font(.system(size: 7, weight: .medium, design: .monospaced))
                         .foregroundColor(.jarvisTextDim.opacity(0.5))
+                        .lineLimit(1)
                     Text(time)
                         .font(.system(size: 9, weight: .medium, design: .monospaced))
                         .foregroundColor(.jarvisTextDim)
+                        .lineLimit(1)
                 }
+                .fixedSize()
 
                 // Security badge
                 HStack(spacing: 3) {
@@ -224,7 +226,9 @@ struct HUDStatusBar: View {
                     Text("SEC")
                         .font(.system(size: 7, weight: .bold, design: .monospaced))
                         .foregroundColor(.jarvisOnline.opacity(0.3))
+                        .lineLimit(1)
                 }
+                .fixedSize()
 
                 // Settings
                 Button {
