@@ -42,6 +42,10 @@
 	<string>JARVIS needs full access to reminders to create, read, and complete tasks for you.</string>
 	<key>NSCalendarsFullAccessUsageDescription</key>
 	<string>JARVIS needs full access to your calendar to create and manage events for you.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>JARVIS needs access to your contacts to help you communicate and look up people.</string>
+	<key>NSAppleMusicUsageDescription</key>
+	<string>JARVIS needs access to your music library to play songs and manage playback.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>JARVIS needs microphone access for voice commands and voice chat.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>

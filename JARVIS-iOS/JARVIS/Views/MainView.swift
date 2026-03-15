@@ -106,6 +106,12 @@ struct MainView: View {
                     }
                 }
         )
+        .onReceive(NotificationCenter.default.publisher(for: .openVoiceMode)) { _ in
+            showVoiceMode = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .openAtlas)) { _ in
+            showAtlas = true
+        }
         .task {
             await chatVM.loadProviders()
             await chatVM.loadConversations()

@@ -1,6 +1,8 @@
 import SwiftUI
 import UserNotifications
 import HealthKit
+import Contacts
+import MusicKit
 
 struct SettingsView: View {
     @Binding var isShowing: Bool
@@ -10,6 +12,8 @@ struct SettingsView: View {
     @State private var serverURL = JARVISConfig.baseURL
     @State private var healthStatus: HealthAuthStatus = .unknown
     @State private var notificationStatus: NotificationAuthStatus = .unknown
+    @State private var contactsStatus: ContactsAuthStatus = .unknown
+    @State private var musicStatus: MusicAuthStatus = .unknown
     @State private var isLoadingProviders = false
 
     enum HealthAuthStatus {
@@ -37,6 +41,32 @@ struct SettingsView: View {
             }
         }
         var isGranted: Bool { self == .authorized || self == .provisional }
+    }
+
+    enum ContactsAuthStatus {
+        case unknown, authorized, denied, restricted
+        var label: String {
+            switch self {
+            case .unknown: return "NOT DETERMINED"
+            case .authorized: return "AUTHORIZED"
+            case .denied: return "DENIED"
+            case .restricted: return "RESTRICTED"
+            }
+        }
+        var isGranted: Bool { self == .authorized }
+    }
+
+    enum MusicAuthStatus {
+        case unknown, authorized, denied, restricted
+        var label: String {
+            switch self {
+            case .unknown: return "NOT DETERMINED"
+            case .authorized: return "AUTHORIZED"
+            case .denied: return "DENIED"
+            case .restricted: return "RESTRICTED"
+            }
+        }
+        var isGranted: Bool { self == .authorized }
     }
 
     var body: some View {
@@ -376,6 +406,106 @@ struct SettingsView: View {
                                 }
                             }
                             .padding(.vertical, 2)
+
+                            // Contacts
+                            HStack {
+                                VStack(alignment: .leading, spacing: 3) {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "person.crop.circle.fill")
+                                            .font(.system(size: 11))
+                                            .foregroundColor(.jarvisBlue)
+                                        Text("Contacts")
+                                            .font(.system(size: 12, weight: .medium, design: .monospaced))
+                                            .foregroundColor(.jarvisText)
+                                    }
+
+                                    Text(contactsStatus.label)
+                                        .font(.system(size: 9, weight: .medium, design: .monospaced))
+                                        .foregroundColor(
+                                            contactsStatus.isGranted ? .jarvisOnline : .jarvisTextDim
+                                        )
+                                }
+
+                                Spacer()
+
+                                if !contactsStatus.isGranted && contactsStatus != .restricted {
+                                    Button {
+                                        Task {
+                                            let granted = await ContactsService.shared.requestAccess()
+                                            refreshContactsStatus()
+                                            if !granted {
+                                                contactsStatus = .denied
+                                            }
+                                        }
+                                    } label: {
+                                        Text("CONNECT")
+                                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                                            .tracking(1)
+                                            .foregroundColor(.jarvisBlue)
+                                            .padding(.horizontal, 10)
+                                            .padding(.vertical, 5)
+                                            .background {
+                                                HexCornerShape(cutSize: 4)
+                                                    .strokeBorder(Color.jarvisBlue.opacity(0.3), lineWidth: 0.5)
+                                            }
+                                    }
+                                } else if contactsStatus.isGranted {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .font(.system(size: 14))
+                                        .foregroundColor(.jarvisOnline)
+                                }
+                            }
+                            .padding(.vertical, 2)
+
+                            // Music Library
+                            HStack {
+                                VStack(alignment: .leading, spacing: 3) {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "music.note")
+                                            .font(.system(size: 11))
+                                            .foregroundColor(.purple)
+                                        Text("Music Library")
+                                            .font(.system(size: 12, weight: .medium, design: .monospaced))
+                                            .foregroundColor(.jarvisText)
+                                    }
+
+                                    Text(musicStatus.label)
+                                        .font(.system(size: 9, weight: .medium, design: .monospaced))
+                                        .foregroundColor(
+                                            musicStatus.isGranted ? .jarvisOnline : .jarvisTextDim
+                                        )
+                                }
+
+                                Spacer()
+
+                                if !musicStatus.isGranted && musicStatus != .restricted {
+                                    Button {
+                                        Task {
+                                            let granted = await MusicService.shared.requestAccess()
+                                            refreshMusicStatus()
+                                            if !granted {
+                                                musicStatus = .denied
+                                            }
+                                        }
+                                    } label: {
+                                        Text("CONNECT")
+                                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                                            .tracking(1)
+                                            .foregroundColor(.jarvisBlue)
+                                            .padding(.horizontal, 10)
+                                            .padding(.vertical, 5)
+                                            .background {
+                                                HexCornerShape(cutSize: 4)
+                                                    .strokeBorder(Color.jarvisBlue.opacity(0.3), lineWidth: 0.5)
+                                            }
+                                    }
+                                } else if musicStatus.isGranted {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .font(.system(size: 14))
+                                        .foregroundColor(.jarvisOnline)
+                                }
+                            }
+                            .padding(.vertical, 2)
                         }
 
                         // About
@@ -431,6 +561,8 @@ struct SettingsView: View {
                 await chatVM.loadProviders()
                 isLoadingProviders = false
                 refreshHealthStatus()
+                refreshContactsStatus()
+                refreshMusicStatus()
                 await refreshNotificationStatus()
             }
         }
@@ -471,6 +603,36 @@ struct SettingsView: View {
             notificationStatus = .authorized
         @unknown default:
             notificationStatus = .unknown
+        }
+    }
+
+    private func refreshContactsStatus() {
+        switch CNContactStore.authorizationStatus(for: .contacts) {
+        case .authorized:
+            contactsStatus = .authorized
+        case .denied:
+            contactsStatus = .denied
+        case .restricted:
+            contactsStatus = .restricted
+        case .notDetermined:
+            contactsStatus = .unknown
+        @unknown default:
+            contactsStatus = .unknown
+        }
+    }
+
+    private func refreshMusicStatus() {
+        switch MusicAuthorization.currentStatus {
+        case .authorized:
+            musicStatus = .authorized
+        case .denied:
+            musicStatus = .denied
+        case .restricted:
+            musicStatus = .restricted
+        case .notDetermined:
+            musicStatus = .unknown
+        @unknown default:
+            musicStatus = .unknown
         }
     }
 }

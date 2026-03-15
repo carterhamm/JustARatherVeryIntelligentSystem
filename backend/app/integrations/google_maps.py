@@ -42,6 +42,46 @@ class GoogleMapsClient:
             mode=mode,
         )
 
+    async def directions_with_waypoints(
+        self,
+        origin: str,
+        destination: str,
+        waypoints: list[str],
+        mode: str = "driving",
+        optimize: bool = True,
+    ) -> dict[str, Any]:
+        """Get directions with intermediate waypoints.
+
+        When optimize=True, Google Maps will reorder waypoints for the
+        shortest overall route and return the optimal order in
+        ``routes[0]["waypoint_order"]``.
+        """
+        wp_str = "|".join(waypoints)
+        if optimize:
+            wp_str = f"optimize:true|{wp_str}"
+        return await self._request(
+            "/directions/json",
+            origin=origin,
+            destination=destination,
+            waypoints=wp_str,
+            mode=mode,
+        )
+
+    async def nearby_search(
+        self,
+        location: str,
+        radius: int = 5000,
+        place_type: str | None = None,
+        keyword: str | None = None,
+    ) -> dict[str, Any]:
+        """Search for nearby places by type and/or keyword."""
+        params: dict[str, Any] = {"location": location, "radius": radius}
+        if place_type:
+            params["type"] = place_type
+        if keyword:
+            params["keyword"] = keyword
+        return await self._request("/place/nearbysearch/json", **params)
+
     async def places_search(
         self,
         query: str,

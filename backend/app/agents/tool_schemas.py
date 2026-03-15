@@ -827,6 +827,54 @@ _TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "required": ["request"],
         },
     },
+    # -- Maps Converter (Google → Apple) --------------------------------
+    {
+        "name": "convert_maps_link",
+        "description": (
+            "Convert a Google Maps URL or Plus Code to an Apple Maps deep link. "
+            "Supports Google Maps place URLs, directions URLs, short links "
+            "(goo.gl/maps, maps.app.goo.gl), and Open Location Codes (Plus Codes). "
+            "Can also convert raw lat/lng coordinates to Apple Maps URLs."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "url": {
+                    "type": "string",
+                    "description": (
+                        "A Google Maps URL to convert. Supports formats like "
+                        "google.com/maps/place/..., google.com/maps?q=..., "
+                        "goo.gl/maps/..., maps.app.goo.gl/..."
+                    ),
+                },
+                "plus_code": {
+                    "type": "string",
+                    "description": (
+                        "An Open Location Code (Plus Code) to convert, "
+                        "e.g. '85GQ2C22+2V'."
+                    ),
+                },
+                "lat": {
+                    "type": "number",
+                    "description": "Latitude for direct coordinate conversion.",
+                },
+                "lng": {
+                    "type": "number",
+                    "description": "Longitude for direct coordinate conversion.",
+                },
+                "name": {
+                    "type": "string",
+                    "description": "Optional place name to show on the Apple Maps pin.",
+                },
+                "directions": {
+                    "type": "boolean",
+                    "description": "If true, generate a driving directions link instead of a pin.",
+                    "default": False,
+                },
+            },
+            "required": [],
+        },
+    },
     # -- Mac Mini Remote Exec -------------------------------------------
     {
         "name": "mac_mini_exec",

@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import logging
 from typing import Any, Optional
+from urllib.parse import quote_plus
 
 from app.config import settings
 
@@ -73,12 +74,16 @@ async def plan_smart_route(request: str, user_id: str) -> dict[str, Any]:
     # Step 6: Format the itinerary
     itinerary = _format_itinerary(route, stops)
 
+    # Step 7: Generate Apple Maps deep links for each leg
+    apple_maps_legs = _build_apple_maps_legs(route, stops)
+
     return {
         "success": True,
         "origin": origin,
         "stops": stops,
         "route": route,
         "itinerary": itinerary,
+        "apple_maps_legs": apple_maps_legs,
     }
 
 
@@ -678,6 +683,11 @@ def _format_itinerary(route: dict[str, Any], stops: list[dict[str, Any]]) -> str
         else:
             lines.append(f"  {i}. {ordinal}: {name}{detail_str}")
 
+        # Apple Maps deep link for this leg
+        apple_url = _apple_maps_url_for_stop(place, leg)
+        if apple_url:
+            lines.append(f"     Navigate: {apple_url}")
+
         # Show alternatives if any
         alts = stop.get("alternatives", [])
         if alts:
@@ -693,3 +703,59 @@ def _format_itinerary(route: dict[str, Any], stops: list[dict[str, Any]]) -> str
         lines.append(f"\n  Total: {total_time}")
 
     return "\n".join(lines)
+
+
+def _apple_maps_url_for_stop(
+    place: Optional[dict[str, Any]], leg: dict[str, Any]
+) -> str:
+    """Generate an Apple Maps driving directions URL for a single stop.
+
+    Prefers lat/lng from the place data; falls back to the leg end address.
+    """
+    if place and place.get("lat") and place.get("lng"):
+        lat, lng = place["lat"], place["lng"]
+        name = place.get("name", "")
+        q_part = f"&q={quote_plus(name)}" if name else ""
+        return f"http://maps.apple.com/?daddr={lat},{lng}&dirflg=d{q_part}"
+
+    # Fallback: use end address from leg data
+    end_addr = leg.get("end", "")
+    if end_addr:
+        return f"http://maps.apple.com/?daddr={quote_plus(end_addr)}&dirflg=d"
+
+    return ""
+
+
+def _build_apple_maps_legs(
+    route: dict[str, Any], stops: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """Build a list of Apple Maps leg dicts for sequential navigation.
+
+    Each dict contains:
+      - stop_name: display name for the stop
+      - apple_maps_url: deep link for driving directions
+      - leg_number: 1-based index
+    """
+    if route.get("error"):
+        return []
+
+    legs = route.get("legs", [])
+    if not legs:
+        return []
+
+    wp_order = route.get("waypoint_order", list(range(len(stops))))
+    ordered_stops = [stops[i] for i in wp_order if i < len(stops)]
+
+    apple_legs: list[dict[str, Any]] = []
+    for i, (stop, leg) in enumerate(zip(ordered_stops, legs), 1):
+        place = stop.get("selected_place") or {}
+        name = place.get("name", stop["need"].title()) if place else stop["need"].title()
+        apple_url = _apple_maps_url_for_stop(place, leg)
+        if apple_url:
+            apple_legs.append({
+                "stop_name": name,
+                "apple_maps_url": apple_url,
+                "leg_number": i,
+            })
+
+    return apple_legs

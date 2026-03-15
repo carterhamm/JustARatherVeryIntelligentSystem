@@ -123,6 +123,37 @@ actor APIClient {
         }
     }
 
+    /// Variant that accepts pre-serialized JSON data instead of an Encodable body.
+    func requestVoid(
+        _ url: String,
+        method: String = "GET",
+        rawBody: Data,
+        authenticated: Bool = true
+    ) async throws {
+        guard let url = URL(string: url) else {
+            throw JARVISError.invalidURL
+        }
+
+        var req = URLRequest(url: url)
+        req.httpMethod = method
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        if authenticated, let token = accessToken {
+            req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+
+        req.httpBody = rawBody
+
+        let (_, response) = try await session.data(for: req)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw JARVISError.invalidResponse
+        }
+
+        guard (200...299).contains(httpResponse.statusCode) else {
+            throw JARVISError.httpError(httpResponse.statusCode)
+        }
+    }
+
     // MARK: - SSE Streaming
 
     nonisolated func streamRequest(

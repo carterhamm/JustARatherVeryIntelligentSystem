@@ -3030,6 +3030,74 @@ class SmartDirectionsTool(BaseTool):
 
 
 # ═════════════════════════════════════════════════════════════════════════
+# Maps Converter tool (Google Maps → Apple Maps)
+# ═════════════════════════════════════════════════════════════════════════
+
+class MapsConverterTool(BaseTool):
+    """Convert a Google Maps URL or Plus Code to an Apple Maps link."""
+
+    name = "convert_maps_link"
+    description = (
+        "Convert a Google Maps URL or Plus Code to an Apple Maps deep link. "
+        "Supports various Google Maps URL formats (place, directions, short "
+        "links) and Open Location Codes (Plus Codes). "
+        "Params: url? (str — Google Maps URL), plus_code? (str — OLC Plus Code), "
+        "lat? (float), lng? (float), name? (str), directions? (bool)."
+    )
+
+    async def execute(
+        self,
+        params: dict[str, Any],
+        *,
+        state: Optional[AgentState] = None,
+    ) -> str:
+        from app.services.maps_converter import (
+            coordinates_to_apple_maps_url,
+            google_maps_url_to_apple,
+            plus_code_to_apple_maps,
+        )
+
+        url = params.get("url", "").strip()
+        plus_code = params.get("plus_code", "").strip()
+        lat = params.get("lat")
+        lng = params.get("lng")
+        name = params.get("name", "")
+        directions = params.get("directions", False)
+
+        # Google Maps URL conversion
+        if url:
+            try:
+                result = await google_maps_url_to_apple(url)
+                return result
+            except Exception as exc:
+                logger.exception("MapsConverterTool URL conversion error")
+                return f"Failed to convert URL: {exc}"
+
+        # Plus Code conversion
+        if plus_code:
+            try:
+                result = plus_code_to_apple_maps(plus_code)
+                return result
+            except Exception as exc:
+                logger.exception("MapsConverterTool Plus Code error")
+                return f"Failed to convert Plus Code: {exc}"
+
+        # Direct coordinates
+        if lat is not None and lng is not None:
+            try:
+                return coordinates_to_apple_maps_url(
+                    float(lat), float(lng), name=name, directions=bool(directions)
+                )
+            except (ValueError, TypeError) as exc:
+                return f"Invalid coordinates: {exc}"
+
+        return (
+            "Provide one of: 'url' (Google Maps URL), 'plus_code' (OLC code), "
+            "or 'lat'+'lng' coordinates."
+        )
+
+
+# ═════════════════════════════════════════════════════════════════════════
 # Mac Mini Remote Exec tool
 # ═════════════════════════════════════════════════════════════════════════
 
@@ -4490,6 +4558,8 @@ def get_tool_registry() -> dict[str, BaseTool]:
             NavigateTool,
             # Smart multi-stop route planner
             SmartDirectionsTool,
+            # Google Maps → Apple Maps converter
+            MapsConverterTool,
             # Mac Mini remote control
             MacMiniExecTool,
             MacMiniClaudeCodeTool,
