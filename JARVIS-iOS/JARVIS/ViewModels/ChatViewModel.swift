@@ -134,6 +134,23 @@ class ChatViewModel: ObservableObject {
         )
         messages.append(userMsg)
 
+        // Classify intent locally for faster routing
+        let intent = await IntentDetector.shared.classify(text)
+
+        // Check for on-device LLM preference
+        let onDeviceLLM = OnDeviceLLMService.shared
+        if onDeviceLLM.preferOnDevice && onDeviceLLM.state == .ready && intent.intent == "general" {
+            do {
+                let response = try await onDeviceLLM.generate(prompt: text, systemPrompt: "You are JARVIS, a helpful AI assistant.")
+                let msg = ChatMessage(id: UUID().uuidString, role: .assistant, content: response, timestamp: Date(), isStreaming: false)
+                messages.append(msg)
+                isStreaming = false
+                return
+            } catch {
+                // Fall through to backend streaming if on-device fails
+            }
+        }
+
         // Check for local music commands (handle on-device via Apple Music)
         if let musicResponse = await handleLocalMusicCommand(text) {
             let msg = ChatMessage(

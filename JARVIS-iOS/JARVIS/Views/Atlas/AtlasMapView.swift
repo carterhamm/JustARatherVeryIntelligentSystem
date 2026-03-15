@@ -128,6 +128,8 @@ struct AtlasMapView: View {
     @State private var errorMessage: String?
     @State private var geocodedCount = 0
     @State private var totalToGeocode = 0
+    @State private var showContacts = true
+    @State private var showLandmarks = true
 
     // Group contacts by coordinate (same address → single pin with count)
     private var contactGroups: [(key: String, contacts: [AtlasContact])] {
@@ -150,6 +152,7 @@ struct AtlasMapView: View {
     }
 
     var body: some View {
+        NavigationStack {
         ZStack {
             Color.jarvisDeepDark.ignoresSafeArea()
 
@@ -161,34 +164,38 @@ struct AtlasMapView: View {
                 }
             )) {
                 // Contact markers (grouped by location)
-                ForEach(contactGroups, id: \.key) { group in
-                    let displayContact = group.contacts.first(where: { $0.id == selectedContact?.id }) ?? group.contacts[0]
-                    Annotation(displayContact.name, coordinate: displayContact.coordinate) {
-                        contactGroupPin(contacts: group.contacts, displayContact: displayContact)
+                if showContacts {
+                    ForEach(contactGroups, id: \.key) { group in
+                        let displayContact = group.contacts.first(where: { $0.id == selectedContact?.id }) ?? group.contacts[0]
+                        Annotation(displayContact.name, coordinate: displayContact.coordinate) {
+                            contactGroupPin(contacts: group.contacts, displayContact: displayContact)
+                        }
+                        .tag(displayContact.id)
                     }
-                    .tag(displayContact.id)
                 }
 
                 // Landmark markers (colored dots)
-                ForEach(landmarks) { landmark in
-                    Annotation(landmark.name, coordinate: landmark.coordinate) {
-                        Button {
-                            selectedContact = nil
-                            selectedSearchResult = nil
-                            selectedLandmark = landmark
-                            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-                            withAnimation(.easeInOut(duration: 0.5)) {
-                                position = .region(MKCoordinateRegion(
-                                    center: landmark.coordinate,
-                                    span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
-                                ))
+                if showLandmarks {
+                    ForEach(landmarks) { landmark in
+                        Annotation(landmark.name, coordinate: landmark.coordinate) {
+                            Button {
+                                selectedContact = nil
+                                selectedSearchResult = nil
+                                selectedLandmark = landmark
+                                UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                                withAnimation(.easeInOut(duration: 0.5)) {
+                                    position = .region(MKCoordinateRegion(
+                                        center: landmark.coordinate,
+                                        span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
+                                    ))
+                                }
+                            } label: {
+                                Circle()
+                                    .fill(Color(hex: landmark.color ?? "f0a500"))
+                                    .frame(width: 12, height: 12)
+                                    .overlay(Circle().strokeBorder(Color.white.opacity(0.3), lineWidth: 0.5))
+                                    .shadow(color: Color(hex: landmark.color ?? "f0a500").opacity(0.5), radius: 4)
                             }
-                        } label: {
-                            Circle()
-                                .fill(Color(hex: landmark.color ?? "f0a500"))
-                                .frame(width: 12, height: 12)
-                                .overlay(Circle().strokeBorder(Color.white.opacity(0.3), lineWidth: 0.5))
-                                .shadow(color: Color(hex: landmark.color ?? "f0a500").opacity(0.5), radius: 4)
                         }
                     }
                 }
@@ -223,11 +230,6 @@ struct AtlasMapView: View {
 
             // Overlays
             VStack(spacing: 0) {
-                // Top bar: close + search
-                topBar
-                    .padding(.horizontal, 12)
-                    .padding(.top, 8)
-
                 Spacer()
 
                 // Bottom: panels above search bar
@@ -312,40 +314,38 @@ struct AtlasMapView: View {
             await loadContacts()
             await loadLandmarks()
         }
-    }
-
-    // MARK: - Top Bar
-
-    private var topBar: some View {
-        HStack(spacing: 10) {
-            // Close button
-            Button {
-                isShowing = false
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(.jarvisBlue.opacity(0.7))
-                    .frame(width: 34, height: 34)
-                    .background {
-                        HexCornerShape(cutSize: 6)
-                            .fill(Color.jarvisPanelBg.opacity(0.8))
-                            .overlay {
-                                HexCornerShape(cutSize: 6)
-                                    .strokeBorder(Color.jarvisBlue.opacity(0.2), lineWidth: 0.5)
-                            }
-                    }
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button {
+                    isShowing = false
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.jarvisBlue)
+                }
             }
-            .padding(.top, 8)
-            .padding(.leading, 4)
 
-            // ATLAS label
-            Text("A.T.L.A.S.")
-                .font(.system(size: 10, weight: .bold, design: .monospaced))
-                .tracking(3)
-                .foregroundColor(.jarvisBlue.opacity(0.8))
+            ToolbarItem(placement: .topBarLeading) {
+                Text("A.T.L.A.S.")
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .tracking(3)
+                    .foregroundColor(.jarvisBlue.opacity(0.8))
+            }
 
-            Spacer()
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Toggle("Show Contacts", isOn: $showContacts)
+                    Toggle("Show Landmarks", isOn: $showLandmarks)
+                } label: {
+                    Image(systemName: "line.3.horizontal.decrease.circle")
+                        .font(.system(size: 14))
+                        .foregroundColor(.jarvisBlue)
+                }
+            }
         }
+        .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
+        } // NavigationStack
     }
 
     private var searchBar: some View {

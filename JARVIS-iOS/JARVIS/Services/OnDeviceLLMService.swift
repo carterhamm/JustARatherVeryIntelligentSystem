@@ -1,18 +1,12 @@
 import Foundation
 import os
+import MLXLLM
+import MLXLMCommon
+import MLX
 
 // MARK: - On-Device LLM Service
 //
 // Manages downloading, loading, and running a local Qwen3 model on-device via MLX.
-//
-// SETUP REQUIRED — Add these Swift Package dependencies in Xcode:
-//   1. https://github.com/ml-explore/mlx-swift-lm  (branch: main)
-//      Products: MLXLLM, MLXLMCommon
-//   2. Add "Increased Memory Limit" entitlement to JARVIS.entitlements
-//   3. Set MLX.GPU.set(cacheLimit: 20 * 1024 * 1024) at app launch
-//
-// Once the MLXLLM package is added, uncomment the marked sections below
-// to enable full inference. Download/delete/state management works without it.
 
 @MainActor
 final class OnDeviceLLMService: ObservableObject {
@@ -63,8 +57,7 @@ final class OnDeviceLLMService: ObservableObject {
 
     private let logger = Logger(subsystem: "dev.jarvis.malibupoint", category: "OnDeviceLLM")
 
-    // Placeholder for MLXLLM model container once package is added:
-    // private var modelContainer: ModelContainer?
+    private var modelContainer: ModelContainer?
 
     // MARK: - Paths
 
@@ -219,114 +212,76 @@ final class OnDeviceLLMService: ObservableObject {
     }
 
     // MARK: - Load Model
-    //
-    // Once MLXLLM SPM package is added, uncomment and use:
-    //
-    // func loadModel() async throws {
-    //     guard isDownloaded else { throw OnDeviceLLMError.notDownloaded }
-    //     guard state != .ready else { return }
-    //
-    //     state = .loading
-    //     logger.info("Loading model into memory...")
-    //
-    //     do {
-    //         // Configure MLX memory limits for iOS
-    //         MLX.GPU.set(cacheLimit: 20 * 1024 * 1024)
-    //
-    //         let config = ModelConfiguration(
-    //             id: Self.modelRepo,
-    //             defaultPrompt: "Hello"
-    //         )
-    //
-    //         modelContainer = try await LLMModelFactory.shared.loadContainer(
-    //             configuration: config
-    //         ) { progress in
-    //             Task { @MainActor in
-    //                 self.logger.debug("Load progress: \(progress.fractionCompleted)")
-    //             }
-    //         }
-    //
-    //         state = .ready
-    //         logger.info("Model loaded and ready")
-    //     } catch {
-    //         state = .error(error.localizedDescription)
-    //         logger.error("Model load failed: \(error.localizedDescription)")
-    //         throw error
-    //     }
-    // }
 
     func loadModel() async throws {
         guard isDownloaded else { throw OnDeviceLLMError.notDownloaded }
+        guard state != .ready else { return }
+
         state = .loading
         logger.info("Loading model into memory...")
 
-        // Placeholder: will be replaced with MLXLLM loading once SPM dependency is added
-        // For now, verify the files exist and mark as ready for testing UI
-        let configFile = modelDirectory.appendingPathComponent("config.json")
-        guard FileManager.default.fileExists(atPath: configFile.path) else {
-            state = .error("Model files missing")
-            throw OnDeviceLLMError.notDownloaded
-        }
+        do {
+            MLX.GPU.set(cacheLimit: 20 * 1024 * 1024)
 
-        state = .ready
-        logger.info("Model files verified, ready for inference (MLXLLM package required)")
+            let config = ModelConfiguration(
+                id: Self.modelRepo,
+                defaultPrompt: "Hello"
+            )
+
+            modelContainer = try await LLMModelFactory.shared.loadContainer(
+                configuration: config
+            ) { progress in
+                Task { @MainActor in
+                    self.logger.debug("Load progress: \(progress.fractionCompleted)")
+                }
+            }
+
+            state = .ready
+            logger.info("Model loaded and ready")
+        } catch {
+            state = .error(error.localizedDescription)
+            logger.error("Model load failed: \(error.localizedDescription)")
+            throw error
+        }
     }
 
     // MARK: - Generate Response
-    //
-    // Once MLXLLM SPM package is added, uncomment and use:
-    //
-    // func generate(
-    //     prompt: String,
-    //     systemPrompt: String? = nil,
-    //     maxTokens: Int = 512
-    // ) async throws -> String {
-    //     guard let container = modelContainer else {
-    //         throw OnDeviceLLMError.modelNotLoaded
-    //     }
-    //
-    //     let jarvisSystem = systemPrompt ?? """
-    //         You are JARVIS (Just A Rather Very Intelligent System), a personal AI assistant \
-    //         created for Mr. Stark. You speak with dry British wit, are efficient, and keep \
-    //         responses to 1-2 sentences. You are running locally on-device.
-    //         """
-    //
-    //     let messages: [[String: String]] = [
-    //         ["role": "system", "content": jarvisSystem],
-    //         ["role": "user", "content": prompt]
-    //     ]
-    //
-    //     let result = try await container.perform { context in
-    //         let input = try await context.processor.prepare(input: .init(messages: messages))
-    //         var output = ""
-    //         let params = GenerateParameters(temperature: 0.7, topP: 0.9)
-    //
-    //         for try await token in try MLXLMCommon.generate(
-    //             input: input,
-    //             parameters: params,
-    //             context: context
-    //         ) {
-    //             output += token
-    //             if output.count >= maxTokens { break }
-    //         }
-    //         return output
-    //     }
-    //
-    //     return result
-    // }
 
     func generate(
         prompt: String,
         systemPrompt: String? = nil,
         maxTokens: Int = 512
     ) async throws -> String {
-        guard state == .ready else {
+        guard let container = modelContainer else {
             throw OnDeviceLLMError.modelNotLoaded
         }
 
-        // Placeholder response until MLXLLM package is integrated
-        logger.info("Generate called (MLXLLM integration pending)")
-        throw OnDeviceLLMError.mlxPackageNotInstalled
+        let jarvisSystem = systemPrompt ?? """
+            You are JARVIS (Just A Rather Very Intelligent System), a personal AI assistant \
+            created for Mr. Stark. You speak with dry British wit, are efficient, and keep \
+            responses to 1-2 sentences. You are running locally on-device.
+            """
+
+        let chatMessages: [Chat.Message] = [
+            .system(jarvisSystem),
+            .user(prompt)
+        ]
+
+        let userInput = UserInput(prompt: .chat(chatMessages))
+        let lmInput = try await container.prepare(input: userInput)
+
+        var params = GenerateParameters(temperature: 0.7, topP: 0.9)
+        params.maxTokens = maxTokens
+
+        let stream = try await container.generate(input: lmInput, parameters: params)
+
+        var output = ""
+        for await generation in stream {
+            if let text = generation.chunk {
+                output += text
+            }
+        }
+        return output
     }
 
     // MARK: - Delete Model
@@ -337,7 +292,7 @@ final class OnDeviceLLMService: ObservableObject {
             if fm.fileExists(atPath: modelDirectory.path) {
                 try fm.removeItem(at: modelDirectory)
             }
-            // modelContainer = nil  // Uncomment when MLXLLM is added
+            modelContainer = nil
             state = .notDownloaded
             downloadProgress = 0
             logger.info("Model deleted")
@@ -350,7 +305,7 @@ final class OnDeviceLLMService: ObservableObject {
     // MARK: - Unload (free memory)
 
     func unloadModel() {
-        // modelContainer = nil  // Uncomment when MLXLLM is added
+        modelContainer = nil
         if isDownloaded {
             state = .downloaded
         }
@@ -364,7 +319,6 @@ enum OnDeviceLLMError: LocalizedError {
     case notDownloaded
     case modelNotLoaded
     case downloadFailed(String, Int)
-    case mlxPackageNotInstalled
 
     var errorDescription: String? {
         switch self {
@@ -374,8 +328,6 @@ enum OnDeviceLLMError: LocalizedError {
             return "Model is not loaded into memory."
         case .downloadFailed(let file, let code):
             return "Failed to download \(file) (HTTP \(code))."
-        case .mlxPackageNotInstalled:
-            return "MLXLLM Swift package not yet integrated. Add mlx-swift-lm via SPM."
         }
     }
 }

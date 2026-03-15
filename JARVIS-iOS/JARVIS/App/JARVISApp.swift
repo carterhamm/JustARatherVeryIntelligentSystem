@@ -1,4 +1,5 @@
 import SwiftUI
+import MLX
 
 @main
 struct JARVISApp: App {
@@ -8,6 +9,8 @@ struct JARVISApp: App {
     @Environment(\.scenePhase) private var scenePhase
 
     init() {
+        // Configure MLX GPU cache for on-device inference
+        MLX.GPU.set(cacheLimit: 20 * 1024 * 1024)
         // Register background task before scene setup
         HealthSyncService.registerBackgroundTask()
     }

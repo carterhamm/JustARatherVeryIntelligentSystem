@@ -7,6 +7,7 @@ struct VoiceModeView: View {
     @State private var phase: VoicePhase = .idle
     @State private var responseText = ""
     @State private var errorText: String?
+    @State private var processingTask: Task<Void, Never>?
 
     enum VoicePhase {
         case idle, listening, processing, responding
@@ -22,10 +23,7 @@ struct VoiceModeView: View {
                 HStack {
                     Spacer()
                     Button {
-                        if voiceService.isRecording {
-                            _ = voiceService.stopListening()
-                        }
-                        isShowing = false
+                        dismiss()
                     } label: {
                         Image(systemName: "xmark")
                             .font(.system(size: 16, weight: .medium))
@@ -96,19 +94,17 @@ struct VoiceModeView: View {
                 } label: {
                     ZStack {
                         HexCornerShape(cutSize: 12)
-                            .fill(phase == .listening ? Color.jarvisBlue.opacity(0.15) : Color.clear)
+                            .fill(micButtonFill)
                             .frame(width: 72, height: 72)
                             .overlay {
                                 HexCornerShape(cutSize: 12)
                                     .strokeBorder(
-                                        phase == .listening
-                                            ? Color.jarvisBlue.opacity(0.5)
-                                            : Color.jarvisBlue.opacity(0.2),
+                                        micButtonBorder,
                                         lineWidth: 1.5
                                     )
                             }
 
-                        Image(systemName: phase == .listening ? "stop.fill" : "mic.fill")
+                        Image(systemName: micIconName)
                             .font(.system(size: 24))
                             .foregroundColor(.jarvisBlue)
                     }
@@ -124,7 +120,19 @@ struct VoiceModeView: View {
                 errorText = "Microphone or speech recognition permission denied"
             }
         }
+        .onAppear {
+            // Wire up the silence detection callback
+            voiceService.onSilenceDetected = { [self] text in
+                handleAutoStop(text: text)
+            }
+        }
+        .onDisappear {
+            voiceService.onSilenceDetected = nil
+            processingTask?.cancel()
+        }
     }
+
+    // MARK: - Computed Properties
 
     private var orbPhaseBinding: JARVISVoiceOrb.OrbPhase {
         switch phase {
@@ -144,47 +152,111 @@ struct VoiceModeView: View {
         }
     }
 
+    private var micIconName: String {
+        switch phase {
+        case .idle: return "mic.fill"
+        case .listening: return "stop.fill"
+        case .processing: return "ellipsis"
+        case .responding: return "mic.fill"
+        }
+    }
+
+    private var micButtonFill: Color {
+        phase == .listening ? Color.jarvisBlue.opacity(0.15) : Color.clear
+    }
+
+    private var micButtonBorder: Color {
+        phase == .listening
+            ? Color.jarvisBlue.opacity(0.5)
+            : Color.jarvisBlue.opacity(0.2)
+    }
+
+    // MARK: - Actions
+
+    private func dismiss() {
+        processingTask?.cancel()
+        voiceService.stopSpeaking()
+        if voiceService.isRecording {
+            _ = voiceService.stopListening()
+        }
+        isShowing = false
+    }
+
     private func handleMicTap() {
         switch phase {
         case .idle:
-            phase = .listening
-            voiceService.startListening()
+            startListeningPhase()
 
         case .listening:
+            // Manual stop — process the transcription
             let text = voiceService.stopListening()
-            guard !text.isEmpty else {
-                phase = .idle
-                return
-            }
-            phase = .processing
-            Task {
-                await sendVoiceMessage(text)
-            }
+            processTranscription(text)
 
-        default:
+        case .processing:
             break
+
+        case .responding:
+            // Interruption — stop TTS, start listening again
+            processingTask?.cancel()
+            voiceService.stopSpeaking()
+            responseText = ""
+            startListeningPhase()
+        }
+    }
+
+    private func startListeningPhase() {
+        errorText = nil
+        responseText = ""
+        voiceService.startListening()
+        phase = .listening
+    }
+
+    private func handleAutoStop(text: String) {
+        guard phase == .listening else { return }
+        processTranscription(text)
+    }
+
+    private func processTranscription(_ text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            phase = .idle
+            voiceService.transcribedText = ""
+            return
+        }
+
+        phase = .processing
+        processingTask = Task {
+            await sendVoiceMessage(trimmed)
         }
     }
 
     private func sendVoiceMessage(_ text: String) async {
-        do {
-            // Use the chat stream
-            chatVM.inputText = text
-            await chatVM.sendMessage()
+        // Send via chat stream
+        chatVM.inputText = text
+        await chatVM.sendMessage()
 
-            if let lastAssistant = chatVM.messages.last(where: { $0.role == .assistant }) {
-                responseText = lastAssistant.content
-                phase = .responding
+        // Check for cancellation (interruption)
+        guard !Task.isCancelled else { return }
 
-                // Speak the response
-                await voiceService.speak(lastAssistant.content)
+        if let lastAssistant = chatVM.messages.last(where: { $0.role == .assistant }) {
+            responseText = lastAssistant.content
+            phase = .responding
 
-                try? await Task.sleep(for: .seconds(2))
-                responseText = ""
-                phase = .idle
-            } else {
-                phase = .idle
-            }
+            // Speak the response (ElevenLabs first, system TTS fallback)
+            await voiceService.speak(lastAssistant.content)
+
+            // Check for cancellation again after speaking
+            guard !Task.isCancelled else { return }
+
+            // Brief pause to show the response text, then reset
+            try? await Task.sleep(for: .seconds(1))
+            responseText = ""
+            voiceService.transcribedText = ""
+            phase = .idle
+        } else {
+            responseText = ""
+            voiceService.transcribedText = ""
+            phase = .idle
         }
     }
 }
